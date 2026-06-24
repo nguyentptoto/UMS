@@ -46,3 +46,32 @@ function run_tvn_uniform_management() {
     }
 }
 add_action( 'plugins_loaded', 'run_tvn_uniform_management' );
+
+/**
+ * Khóa đăng nhập cho tài khoản UMS đã đặt inactive trong wp_users.user_status.
+ */
+function ums_block_inactive_wp_user( $user, $username, $password ) {
+    if ( is_wp_error( $user ) || ! $user instanceof WP_User ) {
+        return $user;
+    }
+
+    global $wpdb;
+    $profile_table = $wpdb->prefix . 'uniform_user_profiles';
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $profile_table ) ) !== $profile_table ) {
+        return $user;
+    }
+
+    $profile_count = (int) $wpdb->get_var(
+        $wpdb->prepare( "SELECT COUNT(*) FROM $profile_table WHERE user_id = %d", $user->ID )
+    );
+
+    if ( $profile_count > 0 && (int) $user->user_status > 0 ) {
+        return new WP_Error(
+            'ums_inactive_account',
+            'Tài khoản của bạn đang bị khóa. Vui lòng liên hệ quản trị viên.'
+        );
+    }
+
+    return $user;
+}
+add_filter( 'authenticate', 'ums_block_inactive_wp_user', 30, 3 );

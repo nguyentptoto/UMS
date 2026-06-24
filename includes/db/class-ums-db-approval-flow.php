@@ -11,7 +11,6 @@ class UMS_DB_Approval_Flow extends UMS_DB_Base {
     public static function get_all( $args = array() ) {
         $table            = self::table();
         $department_table = UMS_DB_Department::table();
-        $profile_table    = UMS_DB_User::table();
 
         $defaults = array(
             'department_id' => '',
@@ -33,10 +32,9 @@ class UMS_DB_Approval_Flow extends UMS_DB_Base {
             $where[] = 'flow.is_active = 0';
         }
 
-        $sql = "SELECT flow.*, department.department_name, approver.employee_code, approver.full_name, approver.job_position
+        $sql = "SELECT flow.*, department.department_name
             FROM $table flow
             LEFT JOIN $department_table department ON department.department_id = flow.department_id
-            LEFT JOIN $profile_table approver ON approver.profile_id = flow.approver_profile_id
             WHERE " . implode( ' AND ', $where ) . '
             ORDER BY department.department_name ASC, flow.step_order ASC';
 
@@ -93,7 +91,7 @@ class UMS_DB_Approval_Flow extends UMS_DB_Base {
             'department_id'       => '%d',
             'step_order'          => '%d',
             'step_name'           => '%s',
-            'approver_profile_id' => '%d',
+            'approver_profile_ids'=> '%s',
             'is_active'           => '%d',
         );
     }

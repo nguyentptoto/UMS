@@ -14,6 +14,7 @@ $page_url   = admin_url( 'admin.php?page=tvn-uniform-management' );
 $grid_rows  = array();
 
 foreach ( $users as $user ) {
+    $account_status = ! empty( $user['user_status'] ) ? 'inactive' : 'active';
     $edit_url = add_query_arg(
         array(
             'page'            => 'tvn-uniform-management',
@@ -41,6 +42,7 @@ foreach ( $users as $user ) {
         'factory_location' => $user['factory_location'],
         'contract_type'    => $user['contract_type'],
         'date_joined'      => mysql2date( 'd/m/Y', $user['date_joined'] ),
+        'account_status'   => $account_status === 'inactive' ? 'Inactive' : 'Active',
         'status'           => empty( $user['resignation_date'] ) ? 'Đang làm việc' : 'Nghỉ từ ' . mysql2date( 'd/m/Y', $user['resignation_date'] ),
         'actions'          => '<a href="' . esc_url( $edit_url . '#ums-profile-form' ) . '">Sửa</a> | <a href="' . esc_url( $delete_url ) . '" class="ums-delete-link" data-confirm="Xóa hồ sơ ' . esc_attr( $user['employee_code'] ) . '?">Xóa</a>',
     );
@@ -55,6 +57,7 @@ $grid_columns = array(
     array( 'text' => 'Nhà máy', 'datafield' => 'factory_location', 'width' => '10%' ),
     array( 'text' => 'Hợp đồng', 'datafield' => 'contract_type', 'width' => '12%' ),
     array( 'text' => 'Ngày vào', 'datafield' => 'date_joined', 'width' => '9%' ),
+    array( 'text' => 'Tài khoản', 'datafield' => 'account_status', 'width' => '9%' ),
     array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '11%' ),
     array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '10%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
 );
@@ -215,6 +218,14 @@ $grid_columns = array(
                     <span>Ngày chuyển bộ phận</span>
                     <input type="date" name="ums_profile[transfer_date]" value="<?php echo esc_attr( $form_values['transfer_date'] ); ?>">
                 </label>
+
+                <label>
+                    <span>Trạng thái tài khoản <b>*</b></span>
+                    <select name="ums_profile[account_status]" required>
+                        <option value="active" <?php selected( $form_values['account_status'], 'active' ); ?>>Active</option>
+                        <option value="inactive" <?php selected( $form_values['account_status'], 'inactive' ); ?>>Inactive</option>
+                    </select>
+                </label>
             </div>
 
             <fieldset class="ums-checkboxes">
@@ -227,6 +238,14 @@ $grid_columns = array(
                     <input type="checkbox" name="ums_profile[is_outdoor_worker]" value="1" <?php checked( (int) $form_values['is_outdoor_worker'], 1 ); ?>>
                     Làm việc ngoài trời
                 </label>
+                <?php if ( $is_editing ) : ?>
+                    <label>
+                        <input type="checkbox" name="ums_profile[reset_password]" value="1">
+                        Đặt lại mật khẩu mặc định 12345678
+                    </label>
+                <?php else : ?>
+                    <p class="description">Mật khẩu mặc định khi tạo tài khoản: 12345678</p>
+                <?php endif; ?>
             </fieldset>
 
             <p class="submit">

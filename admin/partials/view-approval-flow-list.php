@@ -29,16 +29,22 @@ foreach ( $approval_flows as $flow ) {
         'ums_delete_approval_flow_' . absint( $flow['flow_id'] )
     );
 
-    $approver_label = trim( $flow['employee_code'] . ' - ' . $flow['full_name'] );
-    if ( ! empty( $flow['job_position'] ) ) {
-        $approver_label .= ' (' . $flow['job_position'] . ')';
+    $approver_ids = json_decode( $flow['approver_profile_ids'], true );
+    $approver_ids = is_array( $approver_ids ) ? array_map( 'absint', $approver_ids ) : array();
+    $approver_labels = array();
+    foreach ( $approver_ids as $approver_id ) {
+        $approver = UMS_DB_User::get_by_id( $approver_id );
+        if ( $approver ) {
+            $approver_labels[] = trim( $approver['employee_code'] . ' - ' . $approver['full_name'] );
+        }
     }
 
     $grid_rows[] = array(
         'department_name' => $flow['department_name'] ?: '-',
         'step_order'      => (int) $flow['step_order'],
+        'step_group'      => 'Bước ' . (int) $flow['step_order'] . ' - ' . $flow['step_name'],
         'step_name'       => $flow['step_name'],
-        'approver'        => $approver_label,
+        'approver'        => implode( ', ', $approver_labels ),
         'status'          => (int) $flow['is_active'] === 1 ? 'Đang sử dụng' : 'Ngừng sử dụng',
         'actions'         => '<a href="' . esc_url( $edit_url . '#ums-approval-flow-form' ) . '">Sửa</a> | <a href="' . esc_url( $delete_url ) . '" class="ums-delete-link" data-confirm="Xóa bước duyệt ' . esc_attr( $flow['step_name'] ) . '?">Xóa</a>',
     );
@@ -47,12 +53,13 @@ foreach ( $approval_flows as $flow ) {
 $grid_columns = array(
     array( 'text' => 'Phòng ban', 'datafield' => 'department_name', 'width' => '22%' ),
     array( 'text' => 'Thứ tự', 'datafield' => 'step_order', 'width' => '8%', 'cellsalign' => 'right' ),
+    array( 'text' => 'Nhóm bước', 'datafield' => 'step_group', 'width' => '20%' ),
     array( 'text' => 'Tên bước duyệt', 'datafield' => 'step_name', 'width' => '22%' ),
     array( 'text' => 'Người duyệt', 'datafield' => 'approver', 'width' => '28%' ),
     array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '10%' ),
     array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '10%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
 );
-$grid_groups = array( 'department_name' );
+$grid_groups = array( 'department_name', 'step_group' );
 ?>
 
 <div class="wrap ums-admin-wrap">
@@ -139,14 +146,14 @@ $grid_groups = array( 'department_name' );
 
                 <label>
                     <span>Người duyệt <b>*</b></span>
-                    <select name="ums_approval_flow[approver_profile_id]" required>
-                        <option value="">Chọn người duyệt</option>
+                    <select name="ums_approval_flow[approver_profile_ids][]" multiple size="8" required>
                         <?php foreach ( $approvers as $approver ) : ?>
-                            <option value="<?php echo esc_attr( $approver['profile_id'] ); ?>" <?php selected( (int) $form_values['approver_profile_id'], (int) $approver['profile_id'] ); ?>>
+                            <option value="<?php echo esc_attr( $approver['profile_id'] ); ?>" <?php selected( in_array( (int) $approver['profile_id'], $form_values['approver_profile_ids'], true ) ); ?>>
                                 <?php echo esc_html( $approver['employee_code'] . ' - ' . $approver['full_name'] . ' (' . $approver['department'] . ')' ); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <p class="description">Giữ Ctrl để chọn nhiều người duyệt trong cùng một bước.</p>
                 </label>
             </div>
 

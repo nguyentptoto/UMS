@@ -19,7 +19,8 @@ class UMS_DB_User extends UMS_DB_Base {
      * Lấy toàn bộ danh sách nhân viên
      */
     public static function get_all( $args = array() ) {
-        $table = self::table();
+        $table       = self::table();
+        $users_table = self::db()->users;
 
         $defaults = array(
             'search'     => '',
@@ -33,24 +34,29 @@ class UMS_DB_User extends UMS_DB_Base {
 
         if ( $args['search'] !== '' ) {
             $like    = '%' . self::db()->esc_like( $args['search'] ) . '%';
-            $where[] = '(employee_code LIKE %s OR full_name LIKE %s OR job_position LIKE %s)';
+            $where[] = '(profiles.employee_code LIKE %s OR profiles.full_name LIKE %s OR profiles.job_position LIKE %s)';
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
         }
 
         if ( $args['department'] !== '' ) {
-            $where[]  = 'department = %s';
+            $where[]  = 'profiles.department = %s';
             $params[] = $args['department'];
         }
 
         if ( $args['status'] === 'active' ) {
-            $where[] = 'resignation_date IS NULL';
+            $where[] = 'profiles.resignation_date IS NULL';
         } elseif ( $args['status'] === 'resigned' ) {
-            $where[] = 'resignation_date IS NOT NULL';
+            $where[] = 'profiles.resignation_date IS NOT NULL';
         }
 
-        $sql = "SELECT * FROM $table WHERE " . implode( ' AND ', $where ) . ' ORDER BY date_joined DESC, full_name ASC';
+        $sql = "
+            SELECT profiles.*, wp_users.user_login, wp_users.user_status
+            FROM $table profiles
+            LEFT JOIN $users_table wp_users ON profiles.user_id = wp_users.ID
+            WHERE " . implode( ' AND ', $where ) . '
+            ORDER BY profiles.date_joined DESC, profiles.full_name ASC';
 
         if ( ! empty( $params ) ) {
             $sql = self::db()->prepare( $sql, $params );
@@ -63,8 +69,36 @@ class UMS_DB_User extends UMS_DB_Base {
      * Lấy chi tiết một hồ sơ nhân sự theo mã hồ sơ.
      */
     public static function get_by_id( $profile_id ) {
-        $table = self::table();
-        $sql   = self::db()->prepare( "SELECT * FROM $table WHERE profile_id = %d", absint( $profile_id ) );
+        $table       = self::table();
+        $users_table = self::db()->users;
+        $sql         = self::db()->prepare(
+            "
+            SELECT profiles.*, wp_users.user_login, wp_users.user_status
+            FROM $table profiles
+            LEFT JOIN $users_table wp_users ON profiles.user_id = wp_users.ID
+            WHERE profiles.profile_id = %d
+            ",
+            absint( $profile_id )
+        );
+        return self::db()->get_row( $sql, ARRAY_A );
+    }
+
+    /**
+     * Lấy hồ sơ nhân sự theo tài khoản WordPress đang đăng nhập.
+     */
+    public static function get_by_wp_user_id( $user_id ) {
+        $table       = self::table();
+        $users_table = self::db()->users;
+        $sql         = self::db()->prepare(
+            "
+            SELECT profiles.*, wp_users.user_login, wp_users.user_status
+            FROM $table profiles
+            LEFT JOIN $users_table wp_users ON profiles.user_id = wp_users.ID
+            WHERE profiles.user_id = %d
+            ",
+            absint( $user_id )
+        );
+
         return self::db()->get_row( $sql, ARRAY_A );
     }
 

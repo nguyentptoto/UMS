@@ -4,7 +4,7 @@
  */
 class UMS_DB_Installer {
 
-    const DB_VERSION = '1.8.0';
+    const DB_VERSION = '2.2.0';
 
     /**
      * Chạy khi plugin được kích hoạt.
@@ -16,10 +16,12 @@ class UMS_DB_Installer {
         self::create_user_profiles_table();
         self::create_inventory_table();
         self::migrate_user_profiles_primary_key();
+        self::migrate_user_profiles_wp_users();
         self::migrate_product_category_parent_id();
         self::migrate_product_category_code_optional();
         self::migrate_inventory_category_id();
         self::migrate_inventory_base_price_precision();
+        self::migrate_approval_flow_approvers_json();
         update_option( 'ums_db_version', self::DB_VERSION );
     }
 
@@ -66,14 +68,13 @@ class UMS_DB_Installer {
             department_id INT NOT NULL,
             step_order INT NOT NULL,
             step_name VARCHAR(150) NOT NULL,
-            approver_profile_id INT NOT NULL,
+            approver_profile_ids JSON NOT NULL,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY  (flow_id),
             UNIQUE KEY idx_department_step (department_id, step_order),
             KEY idx_department_id (department_id),
-            KEY idx_approver_profile_id (approver_profile_id),
             KEY idx_is_active (is_active)
         ) $charset_collate;";
 
@@ -120,7 +121,7 @@ class UMS_DB_Installer {
 
         $sql = "CREATE TABLE $table_name (
             profile_id INT NOT NULL AUTO_INCREMENT,
-            user_id BIGINT(20) UNSIGNED DEFAULT NULL,
+            user_id BIGINT(20) UNSIGNED NOT NULL,
             employee_code VARCHAR(50) NOT NULL,
             full_name VARCHAR(255) NOT NULL,
             gender ENUM('Nam', 'Nữ') NOT NULL,
@@ -210,6 +211,77 @@ class UMS_DB_Installer {
     }
 
     /**
+     * Cho phép một bước duyệt có nhiều người, chỉ chặn trùng cùng người trong cùng bước.
+     */
+    private static function migrate_approval_flow_approvers_json() {
+        global $wpdb;
+
+        $table_name = $wpdb->prefix . 'uniform_department_approval_flows';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
+            return;
+        }
+
+        $json_column = $wpdb->get_var( "SHOW COLUMNS FROM $table_name LIKE 'approver_profile_ids'" );
+        if ( ! $json_column ) {
+            $wpdb->query( "ALTER TABLE $table_name ADD approver_profile_ids JSON NULL AFTER step_name" );
+        }
+
+        $old_single_column = $wpdb->get_var( "SHOW COLUMNS FROM $table_name LIKE 'approver_profile_id'" );
+        if ( $old_single_column ) {
+            $rows = $wpdb->get_results( "SELECT * FROM $table_name ORDER BY department_id ASC, step_order ASC, flow_id ASC", ARRAY_A );
+            $groups = array();
+            foreach ( $rows as $row ) {
+                $key = $row['department_id'] . ':' . $row['step_order'];
+                if ( ! isset( $groups[ $key ] ) ) {
+                    $groups[ $key ] = array(
+                        'keep_flow_id' => (int) $row['flow_id'],
+                        'approvers'    => array(),
+                        'delete_ids'   => array(),
+                    );
+                } else {
+                    $groups[ $key ]['delete_ids'][] = (int) $row['flow_id'];
+                }
+
+                $groups[ $key ]['approvers'][] = (int) $row['approver_profile_id'];
+            }
+
+            foreach ( $groups as $group ) {
+                $approvers_json = wp_json_encode( array_values( array_unique( array_filter( $group['approvers'] ) ) ) );
+                $wpdb->update(
+                    $table_name,
+                    array( 'approver_profile_ids' => $approvers_json ),
+                    array( 'flow_id' => $group['keep_flow_id'] ),
+                    array( '%s' ),
+                    array( '%d' )
+                );
+
+                foreach ( $group['delete_ids'] as $delete_id ) {
+                    $wpdb->delete( $table_name, array( 'flow_id' => $delete_id ), array( '%d' ) );
+                }
+            }
+
+            $old_approver_key = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'idx_approver_profile_id'" );
+            if ( $old_approver_key ) {
+                $wpdb->query( "ALTER TABLE $table_name DROP INDEX idx_approver_profile_id" );
+            }
+            $wpdb->query( "ALTER TABLE $table_name DROP COLUMN approver_profile_id" );
+        }
+
+        $old_multi_key = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'idx_department_step_approver'" );
+        if ( $old_multi_key ) {
+            $wpdb->query( "ALTER TABLE $table_name DROP INDEX idx_department_step_approver" );
+        }
+
+        $step_key = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'idx_department_step'" );
+        if ( ! $step_key ) {
+            $wpdb->query( "ALTER TABLE $table_name ADD UNIQUE KEY idx_department_step (department_id, step_order)" );
+        }
+
+        $wpdb->query( "UPDATE $table_name SET approver_profile_ids = '[]' WHERE approver_profile_ids IS NULL" );
+        $wpdb->query( "ALTER TABLE $table_name MODIFY approver_profile_ids JSON NOT NULL" );
+    }
+
+    /**
      * Chuẩn hóa danh mục cha bằng parent_id = 0.
      */
     private static function migrate_product_category_parent_id() {
@@ -262,6 +334,65 @@ class UMS_DB_Installer {
         $user_id_index = $wpdb->get_var( "SHOW INDEX FROM $table_name WHERE Key_name = 'idx_user_id'" );
         if ( ! $user_id_index ) {
             $wpdb->query( "ALTER TABLE $table_name ADD KEY idx_user_id (user_id)" );
+        }
+    }
+
+    /**
+     * Bổ sung trạng thái tài khoản nội bộ và mật khẩu hash mặc định cho hồ sơ nhân sự.
+     */
+    private static function migrate_user_profiles_wp_users() {
+        global $wpdb;
+
+        $table_name = $wpdb->prefix . 'uniform_user_profiles';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
+            return;
+        }
+
+        $rows = $wpdb->get_results( "SELECT * FROM $table_name WHERE user_id IS NULL OR user_id = 0", ARRAY_A );
+        foreach ( $rows as $row ) {
+            $user_login = sanitize_user( $row['employee_code'], true );
+            if ( $user_login === '' ) {
+                continue;
+            }
+
+            $existing_user_id = username_exists( $user_login );
+            if ( ! $existing_user_id ) {
+                $existing_user_id = wp_insert_user( array(
+                    'user_login'   => $user_login,
+                    'user_pass'    => '12345678',
+                    'display_name' => $row['full_name'],
+                    'nickname'     => $row['full_name'],
+                    'role'         => 'subscriber',
+                    'user_status'  => isset( $row['account_status'] ) && $row['account_status'] === 'inactive' ? 1 : 0,
+                ) );
+            }
+
+            if ( is_wp_error( $existing_user_id ) ) {
+                continue;
+            }
+
+            $wpdb->update(
+                $table_name,
+                array( 'user_id' => (int) $existing_user_id ),
+                array( 'profile_id' => (int) $row['profile_id'] ),
+                array( '%d' ),
+                array( '%d' )
+            );
+        }
+
+        $account_status_column = $wpdb->get_var( "SHOW COLUMNS FROM $table_name LIKE 'account_status'" );
+        if ( $account_status_column ) {
+            $wpdb->query( "ALTER TABLE $table_name DROP COLUMN account_status" );
+        }
+
+        $password_hash_column = $wpdb->get_var( "SHOW COLUMNS FROM $table_name LIKE 'password_hash'" );
+        if ( $password_hash_column ) {
+            $wpdb->query( "ALTER TABLE $table_name DROP COLUMN password_hash" );
+        }
+
+        $unlinked_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table_name WHERE user_id IS NULL OR user_id = 0" );
+        if ( $unlinked_count === 0 ) {
+            $wpdb->query( "ALTER TABLE $table_name MODIFY user_id BIGINT(20) UNSIGNED NOT NULL" );
         }
     }
 

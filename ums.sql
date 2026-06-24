@@ -18,21 +18,20 @@ CREATE TABLE `wp_uniform_department_approval_flows` (
     `department_id` INT NOT NULL,
     `step_order` INT NOT NULL,
     `step_name` VARCHAR(150) NOT NULL,
-    `approver_profile_id` INT NOT NULL,
+    `approver_profile_ids` JSON NOT NULL,
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`flow_id`),
     UNIQUE KEY `idx_department_step` (`department_id`, `step_order`),
     KEY `idx_department_id` (`department_id`),
-    KEY `idx_approver_profile_id` (`approver_profile_id`),
     KEY `idx_is_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. BẢNG HỒ SƠ NGƯỜI DÙNG MỞ RỘNG (Liên kết với tài khoản wp_users mặc định)
 CREATE TABLE `wp_uniform_user_profiles` (
     `profile_id` INT AUTO_INCREMENT NOT NULL,
-    `user_id` BIGINT(20) UNSIGNED DEFAULT NULL,
+    `user_id` BIGINT(20) UNSIGNED NOT NULL,
     `employee_code` VARCHAR(50) NOT NULL,
     `full_name` VARCHAR(255) NOT NULL,
     `gender` ENUM('Nam', 'Nữ') NOT NULL,

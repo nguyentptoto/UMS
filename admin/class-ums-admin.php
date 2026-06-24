@@ -294,6 +294,27 @@ class UMS_Admin {
         $profile_id = $data['profile_id'];
         unset( $data['profile_id'] );
 
+        $account_status = $data['account_status'];
+        unset( $data['account_status'] );
+
+        $existing_profile = $is_edit ? UMS_DB_User::get_by_id( $profile_id ) : null;
+        if ( $is_edit && ! $existing_profile ) {
+            self::redirect_to_profiles( array(
+                'notice'       => 'validation_error',
+                'notice_extra' => 'Không tìm thấy hồ sơ nhân sự cần cập nhật.',
+            ) );
+        }
+
+        $wp_user_id = self::ensure_wp_user_for_profile( $data, $account_status, $existing_profile, ! empty( $raw['reset_password'] ) );
+        if ( is_wp_error( $wp_user_id ) ) {
+            self::redirect_to_profiles( array(
+                'notice'       => 'validation_error',
+                'notice_extra' => $wp_user_id->get_error_message(),
+                'edit_profile_id' => $is_edit ? $profile_id : null,
+            ) );
+        }
+        $data['user_id'] = (int) $wp_user_id;
+
         $result = $is_edit
             ? UMS_DB_User::update( $profile_id, $data )
             : UMS_DB_User::insert( $data );
@@ -425,6 +446,7 @@ class UMS_Admin {
 
         $flow_id = $data['flow_id'];
         unset( $data['flow_id'] );
+        $data['approver_profile_ids'] = wp_json_encode( $data['approver_profile_ids'] );
 
         $result = $is_edit
             ? UMS_DB_Approval_Flow::update( $flow_id, $data )
@@ -609,6 +631,7 @@ class UMS_Admin {
             'transfer_date'    => ! empty( $raw['transfer_date'] ) ? sanitize_text_field( $raw['transfer_date'] ) : null,
             'is_maternity'     => ! empty( $raw['is_maternity'] ) ? 1 : 0,
             'is_outdoor_worker'=> ! empty( $raw['is_outdoor_worker'] ) ? 1 : 0,
+            'account_status'   => isset( $raw['account_status'] ) ? sanitize_key( $raw['account_status'] ) : 'active',
         );
     }
 
@@ -622,12 +645,20 @@ class UMS_Admin {
     }
 
     private static function sanitize_approval_flow_data( $raw ) {
+        $approver_ids = array();
+        if ( isset( $raw['approver_profile_ids'] ) && is_array( $raw['approver_profile_ids'] ) ) {
+            $approver_ids = array_map( 'absint', $raw['approver_profile_ids'] );
+        } elseif ( isset( $raw['approver_profile_id'] ) ) {
+            $approver_ids = array( absint( $raw['approver_profile_id'] ) );
+        }
+        $approver_ids = array_values( array_unique( array_filter( $approver_ids ) ) );
+
         return array(
             'flow_id'             => isset( $raw['flow_id'] ) ? absint( $raw['flow_id'] ) : 0,
             'department_id'       => isset( $raw['department_id'] ) ? absint( $raw['department_id'] ) : 0,
             'step_order'          => isset( $raw['step_order'] ) ? absint( $raw['step_order'] ) : 0,
             'step_name'           => isset( $raw['step_name'] ) ? sanitize_text_field( $raw['step_name'] ) : '',
-            'approver_profile_id' => isset( $raw['approver_profile_id'] ) ? absint( $raw['approver_profile_id'] ) : 0,
+            'approver_profile_ids'=> $approver_ids,
             'is_active'           => ! empty( $raw['is_active'] ) ? 1 : 0,
         );
     }
@@ -725,6 +756,10 @@ class UMS_Admin {
             $errors[] = 'Loại hợp đồng không hợp lệ.';
         }
 
+        if ( ! in_array( $data['account_status'], array( 'active', 'inactive' ), true ) ) {
+            $errors[] = 'Trạng thái tài khoản không hợp lệ.';
+        }
+
         if ( ! self::is_known_department( $data['department'] ) ) {
             $errors[] = 'Phòng ban chưa có trong danh mục hoặc đang ngừng sử dụng.';
         }
@@ -738,6 +773,10 @@ class UMS_Admin {
 
         if ( UMS_DB_User::employee_code_exists( $data['employee_code'], $is_edit ? $data['profile_id'] : 0 ) ) {
             $errors[] = 'Mã nhân viên đã tồn tại.';
+        }
+
+        if ( ! $is_edit && username_exists( $data['employee_code'] ) ) {
+            $errors[] = 'Mã nhân viên này đã tồn tại trong tài khoản WordPress.';
         }
 
         return array_unique( $errors );
@@ -780,8 +819,15 @@ class UMS_Admin {
             $errors[] = 'Vui lòng nhập tên bước duyệt.';
         }
 
-        if ( $data['approver_profile_id'] <= 0 || ! UMS_DB_User::get_by_id( $data['approver_profile_id'] ) ) {
-            $errors[] = 'Vui lòng chọn người duyệt hợp lệ.';
+        if ( empty( $data['approver_profile_ids'] ) ) {
+            $errors[] = 'Vui lòng chọn ít nhất một người duyệt.';
+        }
+
+        foreach ( $data['approver_profile_ids'] as $approver_profile_id ) {
+            if ( $approver_profile_id <= 0 || ! UMS_DB_User::get_by_id( $approver_profile_id ) ) {
+                $errors[] = 'Danh sách người duyệt có hồ sơ không hợp lệ.';
+                break;
+            }
         }
 
         if ( UMS_DB_Approval_Flow::step_order_exists( $data['department_id'], $data['step_order'], $is_edit ? $data['flow_id'] : 0 ) ) {
@@ -856,6 +902,75 @@ class UMS_Admin {
         return $parsed && $parsed->format( 'Y-m-d' ) === $date;
     }
 
+    private static function ensure_wp_user_for_profile( $data, $account_status, $existing_profile = null, $reset_password = false ) {
+        $user_id = $existing_profile && ! empty( $existing_profile['user_id'] ) ? (int) $existing_profile['user_id'] : 0;
+        $user    = $user_id ? get_user_by( 'id', $user_id ) : false;
+
+        if ( ! $user ) {
+            $user_login = sanitize_user( $data['employee_code'], true );
+            if ( $user_login === '' ) {
+                return new WP_Error( 'invalid_user_login', 'Mã nhân viên không thể dùng để tạo tài khoản WordPress.' );
+            }
+
+            if ( username_exists( $user_login ) ) {
+                return new WP_Error( 'user_login_exists', 'Mã nhân viên này đã tồn tại trong tài khoản WordPress.' );
+            }
+
+            $user_id = wp_insert_user( array(
+                'user_login'   => $user_login,
+                'user_pass'    => '12345678',
+                'display_name' => $data['full_name'],
+                'nickname'     => $data['full_name'],
+                'role'         => 'subscriber',
+                'user_status'  => $account_status === 'inactive' ? 1 : 0,
+            ) );
+
+            if ( is_wp_error( $user_id ) ) {
+                return $user_id;
+            }
+
+            return (int) $user_id;
+        }
+
+        $user_login = sanitize_user( $data['employee_code'], true );
+        if ( $user_login === '' ) {
+            return new WP_Error( 'invalid_user_login', 'Mã nhân viên không thể dùng để cập nhật tài khoản WordPress.' );
+        }
+
+        if ( $user->user_login !== $user_login ) {
+            $existing_user_id = username_exists( $user_login );
+            if ( $existing_user_id && (int) $existing_user_id !== $user_id ) {
+                return new WP_Error( 'user_login_exists', 'Mã nhân viên này đã tồn tại trong tài khoản WordPress.' );
+            }
+
+            global $wpdb;
+            $wpdb->update(
+                $wpdb->users,
+                array(
+                    'user_login'    => $user_login,
+                    'user_nicename' => sanitize_title( $user_login ),
+                ),
+                array( 'ID' => $user_id ),
+                array( '%s', '%s' ),
+                array( '%d' )
+            );
+        }
+
+        $update_data = array(
+            'ID'           => $user_id,
+            'display_name' => $data['full_name'],
+            'nickname'     => $data['full_name'],
+            'user_status'  => $account_status === 'inactive' ? 1 : 0,
+        );
+
+        if ( $reset_password ) {
+            $update_data['user_pass'] = '12345678';
+        }
+
+        $updated_user_id = wp_update_user( $update_data );
+        return is_wp_error( $updated_user_id ) ? $updated_user_id : (int) $updated_user_id;
+    }
+
     private static function get_default_profile_values( $profile = null ) {
         $defaults = array(
             'profile_id'        => 0,
@@ -872,9 +987,13 @@ class UMS_Admin {
             'transfer_date'     => '',
             'is_maternity'      => 0,
             'is_outdoor_worker' => 0,
+            'account_status'    => 'active',
         );
 
-        return $profile ? wp_parse_args( $profile, $defaults ) : $defaults;
+        $values = $profile ? wp_parse_args( $profile, $defaults ) : $defaults;
+        $values['account_status'] = ! empty( $values['user_status'] ) ? 'inactive' : 'active';
+
+        return $values;
     }
 
     private static function get_default_department_values( $department = null ) {
@@ -894,11 +1013,17 @@ class UMS_Admin {
             'department_id'       => 0,
             'step_order'          => 1,
             'step_name'           => '',
-            'approver_profile_id' => 0,
+            'approver_profile_ids'=> array(),
             'is_active'           => 1,
         );
 
-        return $flow ? wp_parse_args( $flow, $defaults ) : $defaults;
+        $values = $flow ? wp_parse_args( $flow, $defaults ) : $defaults;
+        if ( is_string( $values['approver_profile_ids'] ) ) {
+            $decoded = json_decode( $values['approver_profile_ids'], true );
+            $values['approver_profile_ids'] = is_array( $decoded ) ? array_map( 'absint', $decoded ) : array();
+        }
+
+        return $values;
     }
 
     private static function get_default_product_category_values( $category = null ) {
