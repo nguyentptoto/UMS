@@ -1,0 +1,161 @@
+.ums-admin-wrap .ums-panel {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    margin-top: 18px;
+    padding: 18px;
+}
+
+:root,
+.ums-admin-wrap {
+    --ums-icon-arrow-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%232f3a45' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --ums-icon-arrow-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M4 10l4-4 4 4' fill='none' stroke='%232f3a45' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --ums-icon-arrow-left: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M10 4L6 8l4 4' fill='none' stroke='%232f3a45' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --ums-icon-arrow-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M6 4l4 4-4 4' fill='none' stroke='%232f3a45' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --ums-icon-filter: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M2 3h12L9.3 8.4V13l-2.6-1.4V8.4z' fill='none' stroke='%232f3a45' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --ums-icon-menu: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M3 4h10M3 8h10M3 12h10' fill='none' stroke='%232f3a45' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+    --ums-icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='4' fill='none' stroke='%232f3a45' stroke-width='1.5'/%3E%3Cpath d='M10.2 10.2L14 14' fill='none' stroke='%232f3a45' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    --ums-icon-close: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M4 4l8 8M12 4l-8 8' fill='none' stroke='%232f3a45' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E");
+    --ums-icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.2l3 3.1 6-6.6' fill='none' stroke='%232f3a45' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --ums-icon-calendar: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='2.5' y='3.5' width='11' height='10' rx='1.5' fill='none' stroke='%232f3a45' stroke-width='1.3'/%3E%3Cpath d='M5 2v3M11 2v3M3 6.5h10' fill='none' stroke='%232f3a45' stroke-width='1.3' stroke-linecap='round'/%3E%3C/svg%3E");
+    --ums-icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='%232f3a45' stroke-width='1.4'/%3E%3Cpath d='M8 7.2v4M8 4.8h.01' fill='none' stroke='%232f3a45' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+    --jqx-icon-calendar: var(--ums-icon-calendar);
+    --jqx-icon-filter: var(--ums-icon-filter);
+    --jqx-icon-menu: var(--ums-icon-menu);
+    --jqx-icon-check: var(--ums-icon-check);
+    --jqx-icon-first-page: var(--ums-icon-arrow-left);
+    --jqx-icon-last-page: var(--ums-icon-arrow-right);
+    --jqx-icon-arrow-down: var(--ums-icon-arrow-down);
+    --jqx-icon-arrow-left: var(--ums-icon-arrow-left);
+    --jqx-icon-arrow-right: var(--ums-icon-arrow-right);
+    --jqx-icon-arrow-up: var(--ums-icon-arrow-up);
+    --jqx-icon-arrow-down-filled: var(--ums-icon-arrow-down);
+    --jqx-icon-arrow-left-filled: var(--ums-icon-arrow-left);
+    --jqx-icon-arrow-right-filled: var(--ums-icon-arrow-right);
+    --jqx-icon-arrow-up-filled: var(--ums-icon-arrow-up);
+    --jqx-icon-close: var(--ums-icon-close);
+    --jqx-icon-search: var(--ums-icon-search);
+    --jqx-icon-down: var(--ums-icon-arrow-down);
+    --jqx-icon-up: var(--ums-icon-arrow-up);
+    --jqx-icon-left: var(--ums-icon-arrow-left);
+    --jqx-icon-right: var(--ums-icon-arrow-right);
+    --jqx-icon-plus: var(--ums-icon-check);
+    --jqx-icon-filter-alt: var(--ums-icon-filter);
+    --jqx-icon-close-alt: var(--ums-icon-close);
+    --jqx-icon-check-alt: var(--ums-icon-check);
+    --jqx-icon-check-small: var(--ums-icon-check);
+    --jqx-icon-info: var(--ums-icon-info);
+    --jqx-icon-sort-menu-down: var(--ums-icon-arrow-down);
+    --jqx-icon-sort-menu-up: var(--ums-icon-arrow-up);
+    --jqx-icon-sort-up: var(--ums-icon-arrow-up);
+    --jqx-icon-sort-down: var(--ums-icon-arrow-down);
+    --jqx-icon-menu-alt: var(--ums-icon-menu);
+    --jqx-icon-calendar-up: var(--ums-icon-arrow-up);
+    --jqx-icon-calendar-down: var(--ums-icon-arrow-down);
+}
+
+.ums-admin-wrap .ums-panel h2 {
+    margin-top: 0;
+}
+
+.ums-filter-bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 16px;
+}
+
+.ums-filter-bar input,
+.ums-filter-bar select {
+    min-height: 32px;
+}
+
+.ums-user-table th,
+.ums-user-table td {
+    vertical-align: middle;
+}
+
+.ums-jqx-grid {
+    margin-top: 14px;
+}
+
+.ums-jqx-cell-html {
+    box-sizing: border-box;
+    line-height: 30px;
+    overflow: hidden;
+    padding: 0 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.ums-empty-state {
+    padding: 24px;
+    text-align: center;
+}
+
+.ums-status {
+    border-radius: 4px;
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.6;
+    padding: 2px 8px;
+}
+
+.ums-status-active {
+    background: #e7f5ee;
+    color: #0a6b3d;
+}
+
+.ums-status-resigned {
+    background: #fcf0f1;
+    color: #8a2424;
+}
+
+.ums-status-warning {
+    background: #fff4ce;
+    color: #7a4d00;
+}
+
+.ums-profile-form {
+    max-width: 1180px;
+}
+
+.ums-form-grid {
+    display: grid;
+    gap: 14px 18px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.ums-form-grid label span {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.ums-form-grid input,
+.ums-form-grid select {
+    max-width: 100%;
+    width: 100%;
+}
+
+.ums-form-grid b {
+    color: #b32d2e;
+}
+
+.ums-checkboxes {
+    border: 1px solid #dcdcde;
+    margin-top: 18px;
+    padding: 12px 14px;
+}
+
+.ums-checkboxes legend {
+    font-weight: 600;
+    padding: 0 6px;
+}
+
+.ums-checkboxes label {
+    display: inline-block;
+    margin-right: 20px;
+}

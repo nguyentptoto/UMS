@@ -1,0 +1,1372 @@
+:root {
+    --qims-primary: #2c3e50;
+    --qims-accent: #3498db;
+    --qims-bg: #f4f7f6;
+    --qims-text: #333;
+    --header-height: 70px;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--qims-bg);
+    color: var(--qims-text);
+}
+
+
+
+.qims-wrapper {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+    box-sizing: border-box;
+}
+
+.qims-wrapper h1.wp-heading-inline {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 15px 0;
+    color: var(--qims-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.qims-frontend-page .entry-content>.qims-wrapper,
+.qims-frontend-page .wp-block-post-content>.qims-wrapper,
+.qims-frontend-page .is-layout-constrained>.qims-wrapper {
+    max-width: 100% !important;
+}
+
+.qims-section {
+    margin-bottom: 30px;
+    border: 1px solid #ddd;
+    padding: 15px;
+}
+
+/* Increase height for the LÝ LỊCH (history) grid to improve readability */
+#qims-history-grid {
+    height: 280px !important;
+    min-height: 200px !important;
+    max-height: 420px !important;
+    overflow: hidden !important;
+}
+
+#qims-history-grid .jqx-grid-cell,
+#qims-history-grid .jqx-grid-cell-left-align,
+#qims-history-grid .jqx-grid-cell-center-align,
+#qims-history-grid .jqx-grid-cell-right-align {
+    white-space: normal !important;
+    line-height: 1.35 !important;
+}
+
+#qims-history-grid .jqx-grid-cell > div {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+
+/* Keep scrolling inside jqxGrid content panel instead of expanding full grid */
+#qims-history-grid .jqx-grid-content {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+#qims-history-grid .jqx-grid-row, #qims-history-grid .jqx-grid-table .jqx-grid-cell {
+    height: auto !important;
+    min-height: 36px !important;
+}
+
+.qims-section,
+.qims-section-title,
+.qims-table-input th,
+.qims-table-input td,
+.qims-form-footer,
+.qims-card-note {
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.qims-section-title {
+    font-weight: bold;
+    background: #f1f1f1;
+    padding: 8px 15px;
+    margin: -15px -15px 15px -15px;
+    border-bottom: 1px solid #ddd;
+}
+
+.qims-table-input {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.qims-table-input th {
+    text-align: left;
+    width: 15%;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+}
+
+.qims-table-input td {
+    width: 35%;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+}
+
+.qims-table-input td[colspan] {
+    width: auto;
+}
+
+.qims-table-input input,
+.qims-table-input select,
+.qims-table-input textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 12px;
+    line-height: 1.35;
+    padding: 6px 8px;
+    border: 1px solid #cfd8e3;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.qims-table-input textarea {
+    min-height: 84px;
+    resize: vertical;
+}
+
+.qims-wrapper .select2-container--default .select2-selection__placeholder,
+.qims-frontend-page .select2-container--default .select2-selection__placeholder {
+    font-size: 12px;
+    line-height: 1.3;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    font-size: 16px;
+    line-height: 1.3;
+}
+.qims-card-note {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: #fbfcfe;
+    border: 1px dashed #b9c8d6;
+    color: #2f3b48;
+}
+
+.qims-card-note strong {
+    display: inline-block;
+    margin-bottom: 6px;
+}
+
+.qims-full-width {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.grid-actions {
+    margin-top: 10px;
+}
+
+/* ===== BUTTON STYLING ===== */
+main#qims-main-content .button,
+main#qims-main-content button.button,
+.qims-card-container .button,
+.qims-card-container button.button,
+.qims-wrapper .button,
+.qims-wrapper button.button,
+.qims-periodic-check .button,
+.qims-periodic-check button.button,
+.calibration-report .button,
+.calibration-report button.button,
+.qims-master-ptd .button,
+.qims-master-ptd button.button,
+.qims-master-manufactures .button,
+.qims-master-manufactures button.button,
+.qims-dashboard-container .button,
+.qims-dashboard-container button.button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    min-height: 34px !important;
+    padding: 7px 15px !important;
+    border-radius: 8px !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #fff !important;
+    color: #334155 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    text-decoration: none !important;
+    text-shadow: none !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+    cursor: pointer !important;
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease !important;
+}
+
+main#qims-main-content .button:hover,
+main#qims-main-content button.button:hover,
+.qims-card-container .button:hover,
+.qims-card-container button.button:hover,
+.qims-wrapper .button:hover,
+.qims-wrapper button.button:hover,
+.qims-periodic-check .button:hover,
+.qims-periodic-check button.button:hover,
+.calibration-report .button:hover,
+.calibration-report button.button:hover,
+.qims-master-ptd .button:hover,
+.qims-master-ptd button.button:hover,
+.qims-master-manufactures .button:hover,
+.qims-master-manufactures button.button:hover,
+.qims-dashboard-container .button:hover,
+.qims-dashboard-container button.button:hover {
+    background: #f8fafc !important;
+    border-color: #94a3b8 !important;
+    color: #0f172a !important;
+    box-shadow: 0 5px 14px rgba(15, 23, 42, 0.12) !important;
+    transform: translateY(-1px) !important;
+}
+
+main#qims-main-content .button:active,
+main#qims-main-content button.button:active,
+.qims-card-container .button:active,
+.qims-card-container button.button:active,
+.qims-wrapper .button:active,
+.qims-wrapper button.button:active,
+.qims-periodic-check .button:active,
+.qims-periodic-check button.button:active,
+.calibration-report .button:active,
+.calibration-report button.button:active,
+.qims-master-ptd .button:active,
+.qims-master-ptd button.button:active,
+.qims-master-manufactures .button:active,
+.qims-master-manufactures button.button:active,
+.qims-dashboard-container .button:active,
+.qims-dashboard-container button.button:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+}
+
+main#qims-main-content .button-primary,
+main#qims-main-content button.button-primary,
+.qims-card-container .button-primary,
+.qims-card-container button.button-primary,
+.qims-wrapper .button-primary,
+.qims-wrapper button.button-primary,
+.qims-periodic-check .button-primary,
+.qims-periodic-check button.button-primary,
+.calibration-report .button-primary,
+.calibration-report button.button-primary,
+.qims-master-ptd .button-primary,
+.qims-master-ptd button.button-primary,
+.qims-master-manufactures .button-primary,
+.qims-master-manufactures button.button-primary,
+.qims-dashboard-container .button-primary,
+.qims-dashboard-container button.button-primary {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #fff !important;
+    box-shadow: 0 6px 14px rgba(37, 99, 235, 0.18) !important;
+}
+
+main#qims-main-content .button-primary:hover,
+main#qims-main-content button.button-primary:hover,
+.qims-card-container .button-primary:hover,
+.qims-card-container button.button-primary:hover,
+.qims-wrapper .button-primary:hover,
+.qims-wrapper button.button-primary:hover,
+.qims-periodic-check .button-primary:hover,
+.qims-periodic-check button.button-primary:hover,
+.calibration-report .button-primary:hover,
+.calibration-report button.button-primary:hover,
+.qims-master-ptd .button-primary:hover,
+.qims-master-ptd button.button-primary:hover,
+.qims-master-manufactures .button-primary:hover,
+.qims-master-manufactures button.button-primary:hover,
+.qims-dashboard-container .button-primary:hover,
+.qims-dashboard-container button.button-primary:hover {
+    background: #1d4ed8 !important;
+    border-color: #1d4ed8 !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24) !important;
+}
+
+main#qims-main-content .button-secondary,
+main#qims-main-content button.button-secondary,
+.qims-card-container .button-secondary,
+.qims-card-container button.button-secondary,
+.qims-wrapper .button-secondary,
+.qims-wrapper button.button-secondary,
+.qims-periodic-check .button-secondary,
+.qims-periodic-check button.button-secondary,
+.calibration-report .button-secondary,
+.calibration-report button.button-secondary,
+.qims-master-ptd .button-secondary,
+.qims-master-ptd button.button-secondary,
+.qims-master-manufactures .button-secondary,
+.qims-master-manufactures button.button-secondary,
+.qims-dashboard-container .button-secondary,
+.qims-dashboard-container button.button-secondary {
+    background: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #334155 !important;
+}
+
+main#qims-main-content .button-large,
+main#qims-main-content button.button-large,
+.qims-card-container .button-large,
+.qims-card-container button.button-large,
+.qims-wrapper .button-large,
+.qims-wrapper button.button-large,
+.qims-periodic-check .button-large,
+.qims-periodic-check button.button-large,
+.calibration-report .button-large,
+.calibration-report button.button-large,
+.qims-master-ptd .button-large,
+.qims-master-ptd button.button-large,
+.qims-master-manufactures .button-large,
+.qims-master-manufactures button.button-large,
+.qims-dashboard-container .button-large,
+.qims-dashboard-container button.button-large {
+    min-height: 40px !important;
+    padding: 9px 20px !important;
+    font-size: 13px !important;
+}
+
+main#qims-main-content .button:disabled,
+main#qims-main-content button.button:disabled,
+.qims-card-container .button:disabled,
+.qims-card-container button.button:disabled,
+.qims-wrapper .button:disabled,
+.qims-wrapper button.button:disabled,
+.qims-periodic-check .button:disabled,
+.qims-periodic-check button.button:disabled,
+.calibration-report .button:disabled,
+.calibration-report button.button:disabled,
+.qims-master-ptd .button:disabled,
+.qims-master-ptd button.button:disabled,
+.qims-master-manufactures .button:disabled,
+.qims-master-manufactures button.button:disabled,
+.qims-dashboard-container .button:disabled,
+.qims-dashboard-container button.button:disabled {
+    opacity: 0.58 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.qims-form-footer {
+    margin-top: 30px;
+    padding: 24px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    border-radius: 0 0 8px 8px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.qims-form-footer button,
+.qims-form-footer .button {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    padding: 10px 20px !important;
+    height: auto !important;
+    line-height: 1.5 !important;
+    border-radius: 9px !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Primary Submit Button */
+.qims-form-footer button[type="submit"],
+.qims-form-footer .button-primary {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #fff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.qims-form-footer button[type="submit"]:hover,
+.qims-form-footer .button-primary:hover {
+    background: #1d4ed8 !important;
+    border-color: #1d4ed8 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Approve Button */
+#qims-btn-approve-inline {
+    background: #10b981 !important;
+    border-color: #10b981 !important;
+    color: #fff !important;
+}
+
+#qims-btn-approve-inline:hover {
+    background: #059669 !important;
+    border-color: #059669 !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Reject Button */
+#qims-btn-reject-inline {
+    background: #ef4444 !important;
+    border-color: #ef4444 !important;
+    color: #fff !important;
+}
+
+#qims-btn-reject-inline:hover {
+    background: #dc2626 !important;
+    border-color: #dc2626 !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Secondary/Back Button */
+.qims-form-footer .button-secondary {
+    background: #fff !important;
+    border-color: #d1d5db !important;
+    color: #374151 !important;
+}
+
+.qims-form-footer .button-secondary:hover {
+    background: #f9fafb !important;
+    border-color: #9ca3af !important;
+    color: #111827 !important;
+}
+
+/* Loading state */
+.qims-form-footer button:disabled {
+    opacity: 0.7 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+}
+
+
+/* Header Styling */
+header.qims-header {
+    height: var(--header-height);
+    background: var(--qims-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 30px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.qims-logo {
+    font-size: 24px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+}
+
+.qims-logo span {
+    color: var(--qims-accent);
+    margin-right: 5px;
+}
+
+/* Navigation Menu */
+nav.qims-nav > ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+}
+
+nav.qims-nav > ul > li {
+    margin: 0 15px;
+}
+
+nav.qims-nav ul li a {
+    color: #bdc3c7;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 13px;
+    transition: 0.3s;
+    padding: 10px 5px;
+    border-bottom: 2px solid transparent;
+}
+
+nav.qims-nav ul li a:hover,
+nav.qims-nav ul li a.active {
+    color: white;
+    border-bottom: 2px solid var(--qims-accent);
+}
+
+nav.qims-nav ul li.qims-nav-dropdown {
+    position: relative;
+}
+
+nav.qims-nav ul li .qims-nav-label {
+    color: #bdc3c7;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 13px;
+    transition: 0.3s;
+    padding: 10px 5px;
+    border-bottom: 2px solid transparent;
+    display: inline-block;
+    cursor: default;
+}
+
+nav.qims-nav ul li.qims-nav-dropdown:hover .qims-nav-label,
+nav.qims-nav ul li.qims-nav-dropdown.is-active .qims-nav-label {
+    color: white;
+    border-bottom: 2px solid var(--qims-accent);
+}
+
+nav.qims-nav ul li .qims-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100px;
+    max-width: 100px;
+    background: #1f2f3f;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    z-index: 1200;
+    padding: 6px 0;
+    list-style: none;
+    margin: 0;
+}
+
+nav.qims-nav ul li .qims-dropdown-menu li {
+    margin: 0;
+}
+
+nav.qims-nav ul li .qims-dropdown-menu li a {
+    display: block;
+    padding: 8px 12px;
+    border-bottom: 0;
+    color: #d6dde4;
+    font-size: 12px;
+}
+
+nav.qims-nav ul li .qims-dropdown-menu li a:hover,
+nav.qims-nav ul li .qims-dropdown-menu li a.active {
+    color: #fff;
+    border-bottom: 0;
+    background: rgba(52, 152, 219, 0.2);
+}
+
+nav.qims-nav ul li.qims-nav-dropdown:hover .qims-dropdown-menu {
+    display: block;
+}
+
+@media (max-width: 1024px) {
+    header.qims-header {
+        padding: 0 16px;
+    }
+
+    nav.qims-nav > ul > li {
+        margin: 0 8px;
+    }
+
+    nav.qims-nav ul li a,
+    nav.qims-nav ul li .qims-nav-label {
+        font-size: 12px;
+        padding: 8px 4px;
+    }
+
+    nav.qims-nav ul li .qims-dropdown-menu {
+        left: auto;
+        right: 0;
+        width: 100px;
+        max-width: 100px;
+    }
+}
+
+@media (max-width: 768px) {
+    header.qims-header {
+        height: auto;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 12px;
+    }
+
+    .qims-logo {
+        font-size: 20px;
+    }
+
+    nav.qims-nav {
+        width: 100%;
+    }
+
+    nav.qims-nav > ul {
+        flex-wrap: wrap;
+    }
+
+    nav.qims-nav > ul > li {
+        margin: 2px 8px 2px 0;
+    }
+
+    nav.qims-nav ul li .qims-dropdown-menu {
+        position: static;
+        margin-top: 4px;
+    }
+
+    main#qims-main-content {
+        padding: 12px;
+    }
+    
+}
+
+/* Main Content Area */
+main#qims-main-content {
+    padding: 18px 24px 28px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.qims-image-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.qims-image-item {
+    position: relative;
+    width: 112px !important;
+    height: 112px !important;
+    max-width: 112px !important;
+    max-height: 112px !important;
+    flex: 0 0 112px;
+    border: 1px solid #d9e2ec;
+    border-radius: 10px;
+    padding: 4px;
+    background: #ffffff;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+
+.qims-image-item a,
+.qims-image-item img {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+}
+
+.qims-image-item img {
+    object-fit: cover !important;
+    border-radius: 7px;
+}
+
+.qims-new-image-preview {
+    margin-top: 10px;
+}
+
+.qims-new-image-item::after {
+    content: "Mới chọn";
+    position: absolute;
+    left: 7px;
+    bottom: 7px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.78);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.qims-card-container {
+    background: white;
+    width: 100%;
+    max-width: 100%;
+    min-height: calc(100vh - 180px);
+    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+    main#qims-main-content {
+        padding: 12px;
+    }
+}
+
+/* Footer */
+footer.qims-footer {
+    text-align: center;
+    padding: 20px;
+    font-size: 12px;
+    color: #95a5a6;
+}
+
+.page {
+    background: #fff;
+    max-width: 1920px;
+    margin: 0 auto;
+    padding: 20px 24px 30px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ===== HEADER TOP RIGHT ===== */
+.header-top {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 6px;
+}
+
+.sign-table {
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 340px;
+}
+
+.sign-table td {
+    border: 1px solid #000;
+    padding: 4px 12px;
+    text-align: center;
+    min-width: 160px;
+}
+
+.sign-table .date-row td {
+    text-align: left;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+/* ===== TITLE ===== */
+.title-block {
+    text-align: center;
+    margin: 10px 0 14px;
+}
+
+.title-block h1 {
+    font-size: 18px;
+    font-weight: bold;
+    text-decoration: underline;
+    letter-spacing: 1px;
+    
+}
+
+/* ===== META INFO ===== */
+.meta-bar {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.9fr) minmax(240px, 1.2fr) minmax(260px, 1.4fr) minmax(240px, 1fr);
+    gap: 12px;
+    margin: 14px 0 16px;
+    padding: 14px;
+    border: 1px solid #dbe3ec;
+    border-radius: 10px;
+    background: #f8fafc;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.meta-bar .col-dept,
+.meta-bar .col-name,
+.meta-bar .col-code,
+.meta-bar .col-dates {
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.meta-bar .col-dept > div:first-child,
+.meta-bar .col-name > div:first-child,
+.meta-bar .col-code,
+.meta-bar .col-dates p {
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.meta-bar .col-name {
+    text-align: left;
+}
+
+.meta-bar .col-code {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.meta-bar .col-dates p {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+}
+
+.meta-bar .col-dates p:last-child {
+    margin-bottom: 0;
+}
+
+.meta-bar .meta-input {
+    width: 100%;
+    min-height: 34px;
+    margin-top: 6px;
+    padding: 7px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #fff;
+    color: #0f172a;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.meta-bar .col-code .meta-input,
+.meta-bar .col-dates .meta-input {
+    margin-top: 0;
+}
+
+.meta-bar .meta-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    outline: none;
+}
+
+.meta-bar .meta-input[readonly] {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+@media (max-width: 1200px) {
+    .meta-bar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .meta-bar {
+        grid-template-columns: 1fr;
+        padding: 10px;
+    }
+
+    .meta-bar .col-code,
+    .meta-bar .col-dates p {
+        display: block;
+    }
+
+    .meta-bar .col-code .meta-input,
+    .meta-bar .col-dates .meta-input {
+        margin-top: 6px;
+    }
+}
+
+/* ===== MASTER BOOK GRID ===== */
+.qims-master-book .qims-master-book-toolbar {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #dbe3ec;
+    border-radius: 8px;
+}
+
+.qims-master-book .qims-master-book-toolbar button,
+.qims-master-book .qims-master-book-toolbar .button {
+    border-radius: 8px !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #fff !important;
+    color: #334155 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease !important;
+}
+
+.qims-master-book .qims-master-book-toolbar button:hover,
+.qims-master-book .qims-master-book-toolbar .button:hover {
+    background: #f8fafc !important;
+    border-color: #94a3b8 !important;
+    color: #0f172a !important;
+    box-shadow: 0 5px 14px rgba(15, 23, 42, 0.12) !important;
+    transform: translateY(-1px) !important;
+}
+
+.qims-master-book .qims-master-book-toolbar #btn-save {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #fff !important;
+}
+
+.qims-master-book #jqxgrid .jqx-grid-column-header div,
+.qims-master-book #jqxgrid .jqx-grid-columngroup-header div {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    writing-mode: horizontal-tb !important;
+    transform: none !important;
+    text-orientation: mixed !important;
+    white-space: normal !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    word-break: break-word !important;
+    line-height: 1.2 !important;
+}
+
+.qims-master-book #jqxgrid .jqx-grid-column-header,
+.qims-master-book #jqxgrid .jqx-grid-columngroup-header {
+    line-height: normal !important;
+    background: #f8fafc !important;
+}
+
+.qims-master-book #jqxgrid .jqx-grid-columngroup-header {
+    font-size: 12px;
+    line-height: 1.2;
+    padding-top: 0;
+    padding-bottom: 0;
+    text-align: center !important;
+}
+
+.qims-master-book #jqxgrid .jqx-grid-cell {
+    white-space: normal !important;
+    line-height: 1.35 !important;
+}
+
+.qims-master-book #jqxgrid .jqx-grid-cell-left-align,
+.qims-master-book #jqxgrid .jqx-grid-cell-center-align,
+.qims-master-book #jqxgrid .jqx-grid-cell-right-align {
+    margin: 0 !important;
+    padding: 6px 8px !important;
+    white-space: normal !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    line-height: 1.35 !important;
+    box-sizing: border-box !important;
+}
+
+.qims-master-book #jqxgrid .jqx-grid-cell > div {
+    white-space: normal !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+}
+
+/* ===== COMPOSITE MANAGEMENT CODE BUILDER ===== */
+.qims-management-code-builder {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+}
+
+/* ===== APPROVAL SECTION ===== */
+.qims-approval-section {
+    margin-top: 30px;
+}
+
+.qims-approval-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.qims-approval-table th {
+    background: #f1f5f9;
+    padding: 8px;
+    border: 1px solid #cbd5e1;
+    text-align: center;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: #475569;
+}
+
+.qims-approval-table td {
+    padding: 15px;
+    border: 1px solid #cbd5e1;
+    text-align: center;
+    min-height: 80px;
+    vertical-align: middle;
+}
+
+.qims-sign-row td {
+    height: 100px;
+}
+
+.qims-sign-placeholder {
+    font-style: italic;
+    color: #94a3b8;
+    font-size: 11px;
+}
+
+.qims-date-row td {
+    padding: 5px 10px;
+    background: #f8fafc;
+    font-size: 11px;
+    color: #64748b;
+    height: auto !important;
+}
+
+.qims-sign-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.qims-sign-box .sign-name {
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 2px;
+}
+
+.qims-sign-box .sign-status {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 99px;
+    background: #dcfce7;
+    color: #166534;
+    text-transform: uppercase;
+}
+
+.qims-sign-box .sign-status.is-rejected {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.qims-reject-reason-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: none;
+}
+
+.qims-reject-reason-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+}
+
+.qims-reject-reason-dialog {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(92vw, 520px);
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+    overflow: hidden;
+}
+
+.qims-reject-reason-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8fafc;
+}
+
+.qims-reject-reason-close {
+    border: 0;
+    background: transparent;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    color: #475569;
+}
+
+.qims-reject-reason-body {
+    padding: 16px;
+}
+
+.qims-reject-reason-input {
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.qims-reject-reason-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.qims-reject-reason-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 16px 16px;
+}
+
+.qims-code-component {
+    display: flex;
+    flex-direction: column;
+}
+
+.qims-code-component label {
+    font-weight: 600;
+    font-size: 11px;
+    margin-bottom: 4px;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.qims-code-input {
+    padding: 6px 8px !important;
+    font-size: 12px;
+    border: 1px solid #d1d5db !important;
+    background: #fff !important;
+    color: #666 !important;
+}
+
+.qims-code-input:read-only {
+    background: #f3f4f6 !important;
+    color: #4b5563 !important;
+}
+
+.qims-code-display {
+    padding: 12px;
+    background: #f0f9ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.qims-code-display strong {
+    display: block;
+    font-size: 11px;
+    margin-bottom: 6px;
+    color: #0c4a6e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.qims-code-display input {
+    font-weight: 600;
+    font-size: 13px;
+    color: #064e3b !important;
+    background: #d1fae5 !important;
+    border: 1px solid #86efac !important;
+}
+
+/* DASHBOARD MODERN TOOLBAR */
+.qims-toolbar-modern {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin: 20px 0;
+    padding: 15px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    border: 1px solid #e2e8f0;
+}
+
+.qims-toolbar-left, .qims-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.qims-filter-pill-group {
+    display: flex;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 10px;
+    gap: 4px;
+}
+
+.qims-filter-pill {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+}
+
+.qims-filter-pill:focus-within {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.qims-filter-pill i {
+    color: #64748b;
+    margin-right: 6px;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.qims-filter-pill select {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 13px !important;
+    color: #1e293b !important;
+    min-height: auto !important;
+    box-shadow: none !important;
+}
+
+.qims-btn-icon {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.qims-btn-icon:hover {
+    background: #f8fafc;
+    color: #3b82f6;
+    border-color: #3b82f6;
+}
+
+.qims-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: none;
+    color: #fff !important;
+    white-space: nowrap;
+    text-decoration: none !important;
+}
+
+.qims-btn i {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
+.qims-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    opacity: 0.9;
+}
+
+.qims-btn:active {
+    transform: translateY(0);
+}
+
+.qims-btn-cyan {
+    background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%) !important;
+}
+
+.qims-btn-emerald {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+.qims-btn-indigo {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+}
+
+.qims-btn-violet {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+}
+
+.qims-btn-amber {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+}
+
+.qims-action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.qims-select-locked + .select2-container .select2-selection {
+    background: #f3f6fa;
+    border-color: #d5dde8;
+    cursor: not-allowed;
+}
+
+.qims-select-locked + .select2-container .select2-selection__arrow {
+    opacity: 0.35;
+}
+
+@media (max-width: 1024px) {
+    .qims-toolbar-modern {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .qims-toolbar-right {
+        justify-content: flex-end;
+    }
+}
+
+/* QIMS Global Loading Overlay */
+#qims-global-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    z-index: 999999;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+}
+#qims-global-loading .qims-spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #e2e8f0;
+    border-top-color: #4f46e5;
+    border-radius: 50%;
+    animation: qims-spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+#qims-global-loading .qims-loading-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+    font-family: inherit;
+}
+@keyframes qims-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* SweetAlert overrides for QIMS */
+.swal2-container {
+    z-index: 9999999 !important;
+}
