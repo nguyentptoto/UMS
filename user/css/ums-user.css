@@ -1,0 +1,275 @@
+.ums-user-shell {
+    background: #f6f8fb;
+    color: #1f2937;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0 auto;
+    max-width: 1180px;
+    padding: 24px;
+}
+
+.ums-user-header {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #dde3ea;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    padding: 20px;
+}
+
+.ums-user-kicker {
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+}
+
+.ums-user-header h2,
+.ums-user-panel h3 {
+    color: #111827;
+    margin: 0;
+}
+
+.ums-user-header p,
+.ums-user-panel p,
+.ums-user-muted {
+    color: #64748b;
+}
+
+.ums-user-account {
+    align-items: flex-end;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.ums-user-account span {
+    font-weight: 700;
+}
+
+.ums-user-account a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.ums-user-metrics {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 14px 0;
+}
+
+.ums-user-metrics div,
+.ums-user-panel,
+.ums-user-empty {
+    background: #ffffff;
+    border: 1px solid #dde3ea;
+}
+
+.ums-user-metrics div {
+    min-height: 74px;
+    padding: 14px;
+}
+
+.ums-user-metrics span,
+.ums-user-label,
+.ums-user-request-form label span {
+    color: #64748b;
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.ums-user-metrics strong {
+    color: #111827;
+    font-size: 15px;
+}
+
+.ums-user-layout {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.ums-user-panel {
+    padding: 18px;
+}
+
+.ums-user-panel + .ums-user-panel {
+    margin-top: 14px;
+}
+
+.ums-user-panel-head {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.ums-user-badge {
+    background: #e0f2fe;
+    color: #075985;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 8px;
+}
+
+.ums-user-request-form {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ums-user-request-form input,
+.ums-user-request-form select,
+.ums-user-request-form textarea {
+    border: 1px solid #cbd5e1;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: 8px 10px;
+    width: 100%;
+}
+
+.ums-user-request-form textarea {
+    resize: vertical;
+}
+
+.ums-user-wide,
+.ums-user-actions {
+    grid-column: 1 / -1;
+}
+
+.ums-user-product-list {
+    border: 1px solid #dde3ea;
+    display: grid;
+    max-height: 320px;
+    overflow: auto;
+}
+
+.ums-user-product {
+    align-items: center;
+    border-bottom: 1px solid #edf2f7;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 20px minmax(0, 1fr) 48px;
+    padding: 10px 12px;
+}
+
+.ums-user-product:last-child {
+    border-bottom: 0;
+}
+
+.ums-user-product strong {
+    display: block;
+}
+
+.ums-user-product em {
+    background: #eef2ff;
+    color: #3730a3;
+    font-style: normal;
+    font-weight: 700;
+    padding: 4px 6px;
+    text-align: center;
+}
+
+.ums-user-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.ums-user-button {
+    background: #1d4ed8;
+    border: 0;
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-block;
+    font-weight: 700;
+    min-height: 40px;
+    padding: 10px 16px;
+    text-decoration: none;
+}
+
+.ums-user-flow {
+    list-style: none;
+    margin: 14px 0 0;
+    padding: 0;
+}
+
+.ums-user-flow li {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 32px minmax(0, 1fr);
+    margin-bottom: 14px;
+}
+
+.ums-user-flow li > span {
+    align-items: center;
+    background: #dcfce7;
+    color: #166534;
+    display: flex;
+    font-weight: 800;
+    height: 32px;
+    justify-content: center;
+}
+
+.ums-user-flow strong {
+    color: #111827;
+}
+
+.ums-user-flow p {
+    margin: 4px 0 0;
+}
+
+.ums-user-profile-list {
+    margin: 12px 0 0;
+}
+
+.ums-user-profile-list div {
+    border-bottom: 1px solid #edf2f7;
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+}
+
+.ums-user-profile-list dt {
+    color: #64748b;
+    font-weight: 700;
+}
+
+.ums-user-profile-list dd {
+    margin: 0;
+}
+
+.ums-user-empty {
+    padding: 28px;
+    text-align: center;
+}
+
+.ums-user-previewing .ums-user-product input:checked + span {
+    color: #1d4ed8;
+}
+
+@media (max-width: 900px) {
+    .ums-user-layout,
+    .ums-user-metrics,
+    .ums-user-request-form {
+        grid-template-columns: 1fr;
+    }
+
+    .ums-user-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .ums-user-account {
+        align-items: flex-start;
+    }
+}

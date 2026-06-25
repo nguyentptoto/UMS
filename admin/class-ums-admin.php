@@ -24,6 +24,7 @@ class UMS_Admin {
         add_action( 'admin_post_ums_delete_product_category', array( __CLASS__, 'handle_delete_product_category' ) );
         add_action( 'admin_post_ums_save_inventory_item', array( __CLASS__, 'handle_save_inventory_item' ) );
         add_action( 'admin_post_ums_delete_inventory_item', array( __CLASS__, 'handle_delete_inventory_item' ) );
+        add_action( 'wp_ajax_ums_sync_user_password', array( __CLASS__, 'handle_sync_user_password' ) );
     }
 
     /**
@@ -138,6 +139,15 @@ class UMS_Admin {
             array( 'jquery', 'ums-jqx-all' ),
             '1.0.0', 
             true 
+        );
+
+        wp_localize_script(
+            'ums-admin-js',
+            'umsAdmin',
+            array(
+                'ajaxUrl'           => admin_url( 'admin-ajax.php' ),
+                'passwordSyncNonce' => wp_create_nonce( 'ums_sync_user_password' ),
+            )
         );
     }
 
@@ -352,6 +362,72 @@ class UMS_Admin {
     /**
      * Lưu danh mục phòng ban.
      */
+    public static function handle_sync_user_password() {
+        if ( ! current_user_can( 'promote_users' ) ) {
+            wp_send_json_error( array( 'message' => 'Bạn không có quyền đồng bộ mật khẩu người dùng.' ), 403 );
+        }
+
+        check_ajax_referer( 'ums_sync_user_password', 'security' );
+
+        $user_ids = array();
+        if ( isset( $_POST['user_ids'] ) && is_array( $_POST['user_ids'] ) ) {
+            $user_ids = array_map( 'absint', wp_unslash( $_POST['user_ids'] ) );
+        } elseif ( isset( $_POST['user_id'] ) ) {
+            $user_ids = array( absint( $_POST['user_id'] ) );
+        }
+        $user_ids = array_values( array_unique( array_filter( $user_ids ) ) );
+
+        if ( empty( $user_ids ) ) {
+            wp_send_json_error( array( 'message' => 'Không có tài khoản WordPress nào để đồng bộ.' ), 400 );
+        }
+
+        $summary = array(
+            'external' => 0,
+            'default'  => 0,
+            'failed'   => 0,
+            'messages' => array(),
+        );
+
+        foreach ( $user_ids as $user_id ) {
+            $result = UMS_Password_Sync::sync_user_password_with_default_fallback( $user_id );
+
+            if ( is_wp_error( $result ) ) {
+                $summary['failed']++;
+                $summary['messages'][] = $result->get_error_message();
+                continue;
+            }
+
+            if ( isset( $result['source'] ) && $result['source'] === 'default' ) {
+                $summary['default']++;
+            } else {
+                $summary['external']++;
+            }
+        }
+
+        if ( $summary['failed'] > 0 && $summary['external'] === 0 && $summary['default'] === 0 ) {
+            wp_send_json_error(
+                array(
+                    'message' => implode( ' ', array_unique( $summary['messages'] ) ),
+                    'summary' => $summary,
+                ),
+                400
+            );
+        }
+
+        wp_send_json_success(
+            array(
+                'message' => sprintf(
+                    'Đã xử lý %d tài khoản. Đồng bộ nguồn: %d. Mật khẩu mặc định: %d. Lỗi: %d.',
+                    count( $user_ids ),
+                    $summary['external'],
+                    $summary['default'],
+                    $summary['failed']
+                ),
+                'summary' => $summary,
+            )
+        );
+    }
+
     public static function handle_save_department() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );

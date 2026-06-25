@@ -10,6 +10,56 @@
             }
         });
 
+        $(document).on('click', '.ums-sync-password-button', function (event) {
+            event.preventDefault();
+
+            var $button = $(this);
+            var userIds = $button.data('user-ids') || [];
+            var userId = parseInt($button.data('user-id'), 10) || 0;
+
+            if (typeof userIds === 'string') {
+                try {
+                    userIds = JSON.parse(userIds || '[]');
+                } catch (error) {
+                    userIds = [];
+                }
+            }
+
+            if (!Array.isArray(userIds) || userIds.length === 0) {
+                userIds = userId ? [userId] : [];
+            }
+
+            if (!userIds.length || !window.umsAdmin) {
+                window.alert('Không tìm thấy tài khoản WordPress cần đồng bộ.');
+                return;
+            }
+
+            if (!window.confirm('Đồng bộ mật khẩu cho ' + userIds.length + ' tài khoản đang hiển thị? Nếu DB nguồn lỗi, hệ thống sẽ đặt mật khẩu mặc định.')) {
+                return;
+            }
+
+            $button.prop('disabled', true).text('Đang đồng bộ...');
+
+            $.post(window.umsAdmin.ajaxUrl, {
+                action: 'ums_sync_user_password',
+                security: window.umsAdmin.passwordSyncNonce,
+                user_ids: userIds
+            }).done(function (response) {
+                var message = response && response.data && response.data.message
+                    ? response.data.message
+                    : 'Đã đồng bộ mật khẩu.';
+                window.alert(message);
+            }).fail(function (xhr) {
+                var response = xhr.responseJSON || {};
+                var message = response.data && response.data.message
+                    ? response.data.message
+                    : 'Không đồng bộ được mật khẩu.';
+                window.alert(message);
+            }).always(function () {
+                $button.prop('disabled', false).text('Đồng bộ mật khẩu');
+            });
+        });
+
         $('.ums-jqx-grid').each(function () {
             var $grid = $(this);
             var rows = $grid.data('rows') || [];

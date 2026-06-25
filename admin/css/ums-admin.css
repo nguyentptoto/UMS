@@ -89,6 +89,12 @@
     width: 100%;
 }
 
+.ums-jqx-cell-html .ums-sync-password-button {
+    line-height: 1.4;
+    min-height: 0;
+    padding: 0;
+}
+
 .ums-empty-state {
     padding: 24px;
     text-align: center;

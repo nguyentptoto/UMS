@@ -21,9 +21,6 @@ register_activation_hook( __FILE__, array( 'UMS_DB_Installer', 'activate' ) );
  * Khởi tạo và nạp các phân hệ chính của hệ thống
  */
 function run_tvn_uniform_management() {
-    if ( get_option( 'ums_db_version' ) !== UMS_DB_Installer::DB_VERSION ) {
-        UMS_DB_Installer::activate();
-    }
     
     // 1. Nạp Tầng Database Layer (Theo kiến trúc mô-đun phân tách)
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-base.php';
@@ -32,11 +29,16 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-product-category.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-user.php';
+
+    if ( get_option( 'ums_db_version' ) !== UMS_DB_Installer::DB_VERSION ) {
+        UMS_DB_Installer::activate();
+    }
     // Sau này thêm kho hay phiếu chỉ cần require thêm tại đây:
     // require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory.php';
     
     // 2. Nạp helper chứa các hàm tiện ích
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-helper.php';
+    require_once UMS_PLUGIN_DIR . 'includes/class-ums-password-sync.php';
     
     // 3. Kích hoạt phân hệ Admin
     if ( is_admin() ) {
@@ -44,6 +46,9 @@ function run_tvn_uniform_management() {
         $ums_admin = new UMS_Admin();
         $ums_admin->init();
     }
+
+    require_once UMS_PLUGIN_DIR . 'user/class-ums-user.php';
+    UMS_User::init();
 }
 add_action( 'plugins_loaded', 'run_tvn_uniform_management' );
 

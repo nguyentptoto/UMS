@@ -108,4 +108,21 @@ class UMS_User {
             )
         );
     }
+
+    public static function format_approver_names( $approver_profile_ids ) {
+        $approver_ids = json_decode( $approver_profile_ids, true );
+        if ( ! is_array( $approver_ids ) || empty( $approver_ids ) ) {
+            return 'Chưa chọn người duyệt';
+        }
+
+        $names = array();
+        foreach ( $approver_ids as $approver_id ) {
+            $approver = UMS_DB_User::get_by_id( absint( $approver_id ) );
+            if ( $approver ) {
+                $names[] = $approver['full_name'];
+            }
+        }
+
+        return ! empty( $names ) ? implode( ', ', $names ) : 'Chưa chọn người duyệt';
+    }
 }

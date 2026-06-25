@@ -12,9 +12,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 $is_editing = ! empty( $editing_user );
 $page_url   = admin_url( 'admin.php?page=tvn-uniform-management' );
 $grid_rows  = array();
+$sync_user_ids = array();
 
 foreach ( $users as $user ) {
     $account_status = ! empty( $user['user_status'] ) ? 'inactive' : 'active';
+    if ( ! empty( $user['user_id'] ) ) {
+        $sync_user_ids[] = absint( $user['user_id'] );
+    }
     $edit_url = add_query_arg(
         array(
             'page'            => 'tvn-uniform-management',
@@ -34,6 +38,7 @@ foreach ( $users as $user ) {
     );
 
     $grid_rows[] = array(
+        'user_id'          => absint( $user['user_id'] ),
         'employee_code'    => $user['employee_code'],
         'full_name'        => $user['full_name'],
         'gender'           => $user['gender'],
@@ -112,6 +117,13 @@ $grid_columns = array(
 
             <button type="submit" class="button">Lọc</button>
             <a href="<?php echo esc_url( $page_url ); ?>" class="button button-link">Xóa lọc</a>
+            <button
+                type="button"
+                class="button ums-sync-password-button"
+                data-user-ids="<?php echo esc_attr( wp_json_encode( array_values( array_unique( $sync_user_ids ) ) ) ); ?>"
+            >
+                Đồng bộ mật khẩu
+            </button>
         </form>
 
         <div
