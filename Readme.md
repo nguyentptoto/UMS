@@ -183,8 +183,8 @@ Logic đồng bộ:
 SELECT password FROM users WHERE manv = ? AND active = 1 LIMIT 1
 ```
 
-4. Ghi giá trị `password` lấy được vào `wp_users.user_pass`.
-5. Nếu không kết nối được DB nguồn, không tìm thấy bản ghi active, hoặc hash nguồn không hợp lệ, hệ thống đặt mật khẩu mặc định `12345678`.
+4. Ghi nguyên giá trị `password` lấy được vào `wp_users.user_pass`, không hash lại vì DB nguồn đã lưu hash.
+5. Nếu không kết nối được DB nguồn, không tìm thấy bản ghi active, hoặc hash nguồn không hợp lệ, hệ thống đặt mật khẩu mặc định `12345678` bằng hàm hash của WordPress.
 6. Lưu meta:
    - `ums_password_synced_at`
    - `ums_password_synced_by`
@@ -216,3 +216,7 @@ Nếu không khai báo hằng số, plugin dùng default host/user/database như
 - Cần bổ sung lớp dữ liệu cho phiếu yêu cầu cấp phát để User Portal lưu form tạo yêu cầu.
 - Cần bổ sung bảng/lớp xử lý lịch sử duyệt thực tế nếu muốn chuyển luồng duyệt từ cấu hình sang xử lý phiếu.
 - Có thể mở rộng thông báo email/Zalo sau khi module phiếu yêu cầu hoàn chỉnh.
+
+
+
+Nếu đã gửi duyệt rồi thì phải cho vào luồng duyệt luôn. Tất cả các user ở bước 1 thì sẽ có quyền tạo yêu cầu.  Ngoài bước 1 sẽ không hiển thị module tạo yêu cầu

@@ -28,6 +28,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-department.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-product-category.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory.php';
+    require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-request.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-user.php';
 
     if ( get_option( 'ums_db_version' ) !== UMS_DB_Installer::DB_VERSION ) {

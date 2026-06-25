@@ -4,7 +4,7 @@
  */
 class UMS_DB_Installer {
 
-    const DB_VERSION = '2.2.0';
+    const DB_VERSION = '2.3.0';
 
     /**
      * Chạy khi plugin được kích hoạt.
@@ -15,6 +15,9 @@ class UMS_DB_Installer {
         self::create_product_categories_table();
         self::create_user_profiles_table();
         self::create_inventory_table();
+        self::create_requests_table();
+        self::create_request_details_table();
+        self::create_approval_logs_table();
         self::migrate_user_profiles_primary_key();
         self::migrate_user_profiles_wp_users();
         self::migrate_product_category_parent_id();
@@ -166,6 +169,81 @@ class UMS_DB_Installer {
             KEY idx_category_id (category_id),
             KEY idx_item_type (item_type),
             KEY idx_stock_qty (stock_qty)
+        ) $charset_collate;";
+
+        dbDelta( $sql );
+    }
+
+    private static function create_requests_table() {
+        global $wpdb;
+
+        $table_name      = $wpdb->prefix . 'uniform_requests';
+        $charset_collate = $wpdb->get_charset_collate();
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE $table_name (
+            request_id INT NOT NULL AUTO_INCREMENT,
+            creator_id BIGINT(20) UNSIGNED NOT NULL,
+            target_user_id BIGINT(20) UNSIGNED NOT NULL,
+            request_type VARCHAR(50) NOT NULL DEFAULT 'Phát sinh',
+            reason_type TINYINT(1) NOT NULL,
+            reason_detail TEXT DEFAULT NULL,
+            payment_method TINYINT(1) NOT NULL DEFAULT 0,
+            current_status VARCHAR(50) NOT NULL DEFAULT 'pending_step_1',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY  (request_id),
+            KEY idx_creator (creator_id),
+            KEY idx_target_user (target_user_id),
+            KEY idx_current_status (current_status)
+        ) $charset_collate;";
+
+        dbDelta( $sql );
+    }
+
+    private static function create_request_details_table() {
+        global $wpdb;
+
+        $table_name      = $wpdb->prefix . 'uniform_request_details';
+        $charset_collate = $wpdb->get_charset_collate();
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE $table_name (
+            detail_id INT NOT NULL AUTO_INCREMENT,
+            request_id INT NOT NULL,
+            item_id INT NOT NULL,
+            quantity INT NOT NULL DEFAULT 1,
+            price_at_request DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            PRIMARY KEY  (detail_id),
+            KEY idx_request (request_id),
+            KEY idx_item (item_id)
+        ) $charset_collate;";
+
+        dbDelta( $sql );
+    }
+
+    private static function create_approval_logs_table() {
+        global $wpdb;
+
+        $table_name      = $wpdb->prefix . 'uniform_approval_logs';
+        $charset_collate = $wpdb->get_charset_collate();
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql = "CREATE TABLE $table_name (
+            log_id INT NOT NULL AUTO_INCREMENT,
+            request_id INT NOT NULL,
+            step_order INT NOT NULL,
+            approver_id BIGINT(20) UNSIGNED DEFAULT NULL,
+            action VARCHAR(50) NOT NULL,
+            comment TEXT DEFAULT NULL,
+            action_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (log_id),
+            KEY idx_request_log (request_id),
+            KEY idx_step_order (step_order),
+            KEY idx_action (action)
         ) $charset_collate;";
 
         dbDelta( $sql );
