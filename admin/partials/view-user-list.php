@@ -168,13 +168,22 @@ $grid_columns = array(
 
                 <label>
                     <span>Nhà máy <b>*</b></span>
-                    <select name="ums_profile[factory_location]" required>
-                        <?php foreach ( UMS_DB_User::FACTORY_LOCATIONS as $location ) : ?>
-                            <option value="<?php echo esc_attr( $location ); ?>" <?php selected( $form_values['factory_location'], $location ); ?>>
-                                <?php echo esc_html( $location ); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <?php if ( ! empty( $factory_location_options ) ) : ?>
+                        <select name="ums_profile[factory_location]" required>
+                            <option value="">Chọn nhà máy</option>
+                            <?php foreach ( $factory_location_options as $factory_location_option ) : ?>
+                                <option
+                                    value="<?php echo esc_attr( $factory_location_option['factory_location_name'] ); ?>"
+                                    <?php selected( $form_values['factory_location'], $factory_location_option['factory_location_name'] ); ?>
+                                >
+                                    <?php echo esc_html( $factory_location_option['factory_location_name'] ); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else : ?>
+                        <input type="text" name="ums_profile[factory_location]" value="<?php echo esc_attr( $form_values['factory_location'] ); ?>" required>
+                        <p class="description">Chưa có danh mục nhà máy. Hãy thêm dữ liệu vào bảng <code>wp_uniform_factory_locations</code>.</p>
+                    <?php endif; ?>
                 </label>
 
                 <label>
@@ -202,18 +211,45 @@ $grid_columns = array(
 
                 <label>
                     <span>Chức danh <b>*</b></span>
-                    <input type="text" name="ums_profile[job_position]" value="<?php echo esc_attr( $form_values['job_position'] ); ?>" required>
+                    <?php if ( ! empty( $position_options ) ) : ?>
+                        <select name="ums_profile[job_position]" required>
+                            <option value="">Chọn chức danh</option>
+                            <?php foreach ( $position_options as $position_option ) : ?>
+                                <option
+                                    value="<?php echo esc_attr( $position_option['position_name'] ); ?>"
+                                    <?php selected( $form_values['job_position'], $position_option['position_name'] ); ?>
+                                >
+                                    <?php echo esc_html( $position_option['position_name'] ); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else : ?>
+                        <input type="text" name="ums_profile[job_position]" value="<?php echo esc_attr( $form_values['job_position'] ); ?>" required>
+                        <p class="description">
+                            Chưa có danh mục chức danh. Có thể thêm tại
+                            <a href="<?php echo esc_url( admin_url( 'admin.php?page=tvn-ums-positions' ) ); ?>">Quản lý Chức danh</a>.
+                        </p>
+                    <?php endif; ?>
                 </label>
 
                 <label>
                     <span>Loại hợp đồng <b>*</b></span>
-                    <select name="ums_profile[contract_type]" required>
-                        <?php foreach ( UMS_DB_User::CONTRACT_TYPES as $contract_type ) : ?>
-                            <option value="<?php echo esc_attr( $contract_type ); ?>" <?php selected( $form_values['contract_type'], $contract_type ); ?>>
-                                <?php echo esc_html( $contract_type ); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <?php if ( ! empty( $contract_type_options ) ) : ?>
+                        <select name="ums_profile[contract_type]" required>
+                            <option value="">Chọn loại hợp đồng</option>
+                            <?php foreach ( $contract_type_options as $contract_type_option ) : ?>
+                                <option
+                                    value="<?php echo esc_attr( $contract_type_option['contract_type_name'] ); ?>"
+                                    <?php selected( $form_values['contract_type'], $contract_type_option['contract_type_name'] ); ?>
+                                >
+                                    <?php echo esc_html( $contract_type_option['contract_type_name'] ); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else : ?>
+                        <input type="text" name="ums_profile[contract_type]" value="<?php echo esc_attr( $form_values['contract_type'] ); ?>" required>
+                        <p class="description">Chưa có danh mục loại hợp đồng. Hãy thêm dữ liệu vào bảng <code>wp_uniform_contract_types</code>.</p>
+                    <?php endif; ?>
                 </label>
 
                 <label>

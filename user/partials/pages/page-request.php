@@ -111,7 +111,10 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
     <span class="ums-user-badge">Bản giao diện</span>
 </section>
 
-<form class="ums-request-page" data-ums-user-form>
+<form class="ums-request-page" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-ums-user-form>
+    <?php wp_nonce_field( 'ums_submit_uniform_request' ); ?>
+    <input type="hidden" name="action" value="ums_submit_uniform_request">
+    <input type="hidden" name="portal_url" value="<?php echo esc_url( $portal_url ); ?>">
     <section class="ums-user-panel">
         <div class="ums-user-panel-head">
             <div>
@@ -253,7 +256,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
     </section>
 
     <div class="ums-user-actions">
-        <button type="button" class="ums-user-button" data-ums-submit-approval>Gửi duyệt</button>
+        <button type="submit" class="ums-user-button" data-ums-submit-approval>Gửi duyệt</button>
         <p class="ums-user-muted" data-ums-user-message>Phiếu sẽ được gửi vào luồng duyệt sau khi bổ sung lớp dữ liệu phiếu yêu cầu.</p>
     </div>
 </form>

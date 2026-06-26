@@ -14,9 +14,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'UMS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'UMS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
-require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-installer.php';
-register_activation_hook( __FILE__, array( 'UMS_DB_Installer', 'activate' ) );
-
 /**
  * Khởi tạo và nạp các phân hệ chính của hệ thống
  */
@@ -26,14 +23,15 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-base.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-approval-flow.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-department.php';
+    require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-position.php';
+    require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-factory-location.php';
+    require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-contract-type.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-product-category.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory.php';
+    require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory-movement.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-request.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-user.php';
 
-    if ( get_option( 'ums_db_version' ) !== UMS_DB_Installer::DB_VERSION ) {
-        UMS_DB_Installer::activate();
-    }
     // Sau này thêm kho hay phiếu chỉ cần require thêm tại đây:
     // require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory.php';
     

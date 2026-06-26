@@ -18,6 +18,12 @@ class UMS_Admin {
         add_action( 'admin_post_ums_delete_user_profile', array( __CLASS__, 'handle_delete_user_profile' ) );
         add_action( 'admin_post_ums_save_department', array( __CLASS__, 'handle_save_department' ) );
         add_action( 'admin_post_ums_delete_department', array( __CLASS__, 'handle_delete_department' ) );
+        add_action( 'admin_post_ums_save_position', array( __CLASS__, 'handle_save_position' ) );
+        add_action( 'admin_post_ums_delete_position', array( __CLASS__, 'handle_delete_position' ) );
+        add_action( 'admin_post_ums_save_factory_location', array( __CLASS__, 'handle_save_factory_location' ) );
+        add_action( 'admin_post_ums_delete_factory_location', array( __CLASS__, 'handle_delete_factory_location' ) );
+        add_action( 'admin_post_ums_save_contract_type', array( __CLASS__, 'handle_save_contract_type' ) );
+        add_action( 'admin_post_ums_delete_contract_type', array( __CLASS__, 'handle_delete_contract_type' ) );
         add_action( 'admin_post_ums_save_approval_flow', array( __CLASS__, 'handle_save_approval_flow' ) );
         add_action( 'admin_post_ums_delete_approval_flow', array( __CLASS__, 'handle_delete_approval_flow' ) );
         add_action( 'admin_post_ums_save_product_category', array( __CLASS__, 'handle_save_product_category' ) );
@@ -61,6 +67,33 @@ class UMS_Admin {
 
         add_submenu_page(
             'tvn-uniform-management',
+            'Quản lý Chức danh',
+            'Chức danh',
+            'manage_options',
+            'tvn-ums-positions',
+            array( __CLASS__, 'render_position_page' )
+        );
+
+        add_submenu_page(
+            'tvn-uniform-management',
+            'Quản lý Nhà máy',
+            'Nhà máy',
+            'manage_options',
+            'tvn-ums-factory-locations',
+            array( __CLASS__, 'render_factory_location_page' )
+        );
+
+        add_submenu_page(
+            'tvn-uniform-management',
+            'Quản lý Hợp đồng',
+            'Hợp đồng',
+            'manage_options',
+            'tvn-ums-contract-types',
+            array( __CLASS__, 'render_contract_type_page' )
+        );
+
+        add_submenu_page(
+            'tvn-uniform-management',
             'Quản lý Luồng duyệt',
             'Luồng duyệt',
             'manage_options',
@@ -85,6 +118,15 @@ class UMS_Admin {
             'tvn-ums-product-categories',
             array( __CLASS__, 'render_product_category_page' )
         );
+
+        add_submenu_page(
+            'tvn-uniform-management',
+            'Lịch sử nhập xuất kho',
+            'Lịch sử kho',
+            'manage_options',
+            'tvn-ums-inventory-movements',
+            array( __CLASS__, 'render_inventory_movement_page' )
+        );
     }
 
     /**
@@ -92,7 +134,7 @@ class UMS_Admin {
      */
     public static function enqueue_admin_assets( $hook ) {
         // Chỉ nạp CSS/JS khi Admin đang đứng đúng trong trang của plugin UMS
-        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false ) {
+        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false ) {
             return;
         }
 
@@ -107,13 +149,13 @@ class UMS_Admin {
         wp_enqueue_style( 
             'ums-admin-css', 
             UMS_PLUGIN_URL . 'admin/css/ums-admin.css', 
-            array( 'ums-jqx-fluent-css' ), 
+            array( 'ums-jqx-energyblue-css' ), 
             '1.0.0' 
         );
 
         wp_enqueue_style(
-            'ums-jqx-fluent-css',
-            UMS_PLUGIN_URL . 'assets/css/jqx.fluent.ums.css',
+            'ums-jqx-energyblue-css',
+            UMS_PLUGIN_URL . 'assets/css/jqx.energyblue.css',
             array( 'ums-jqx-base-css' ),
             '1.0.0'
         );
@@ -165,6 +207,9 @@ class UMS_Admin {
         $editing_user    = $edit_profile_id ? UMS_DB_User::get_by_id( $edit_profile_id ) : null;
         $departments  = UMS_DB_User::get_departments();
         $department_options = UMS_DB_Department::get_active();
+        $position_options = UMS_DB_Position::get_active();
+        $factory_location_options = UMS_DB_Factory_Location::get_active();
+        $contract_type_options = UMS_DB_Contract_Type::get_active();
         $users        = UMS_DB_User::get_all( $filters );
         $notice       = self::get_notice();
         $form_values  = self::get_default_profile_values( $editing_user );
@@ -196,6 +241,66 @@ class UMS_Admin {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-department-list.php';
         } else {
             echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-department-list.php</p></div>';
+        }
+    }
+
+    /**
+     * Hàm gọi file giao diện quản lý chức danh.
+     */
+    public static function render_position_page() {
+        $filters = array(
+            'search' => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
+            'status' => isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '',
+        );
+
+        $edit_position_id = isset( $_GET['edit_position_id'] ) ? absint( $_GET['edit_position_id'] ) : 0;
+        $editing_position = $edit_position_id ? UMS_DB_Position::get_by_id( $edit_position_id ) : null;
+        $positions        = UMS_DB_Position::get_all( $filters );
+        $notice           = self::get_notice();
+        $form_values      = self::get_default_position_values( $editing_position );
+
+        if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-position-list.php' ) ) {
+            include_once UMS_PLUGIN_DIR . 'admin/partials/view-position-list.php';
+        } else {
+            echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-position-list.php</p></div>';
+        }
+    }
+
+    public static function render_factory_location_page() {
+        $filters = array(
+            'search' => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
+            'status' => isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '',
+        );
+
+        $edit_factory_location_id = isset( $_GET['edit_factory_location_id'] ) ? absint( $_GET['edit_factory_location_id'] ) : 0;
+        $editing_factory_location = $edit_factory_location_id ? UMS_DB_Factory_Location::get_by_id( $edit_factory_location_id ) : null;
+        $factory_locations        = UMS_DB_Factory_Location::get_all( $filters );
+        $notice                   = self::get_notice();
+        $form_values              = self::get_default_factory_location_values( $editing_factory_location );
+
+        if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-factory-location-list.php' ) ) {
+            include_once UMS_PLUGIN_DIR . 'admin/partials/view-factory-location-list.php';
+        } else {
+            echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-factory-location-list.php</p></div>';
+        }
+    }
+
+    public static function render_contract_type_page() {
+        $filters = array(
+            'search' => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
+            'status' => isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '',
+        );
+
+        $edit_contract_type_id = isset( $_GET['edit_contract_type_id'] ) ? absint( $_GET['edit_contract_type_id'] ) : 0;
+        $editing_contract_type = $edit_contract_type_id ? UMS_DB_Contract_Type::get_by_id( $edit_contract_type_id ) : null;
+        $contract_types        = UMS_DB_Contract_Type::get_all( $filters );
+        $notice                = self::get_notice();
+        $form_values           = self::get_default_contract_type_values( $editing_contract_type );
+
+        if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-contract-type-list.php' ) ) {
+            include_once UMS_PLUGIN_DIR . 'admin/partials/view-contract-type-list.php';
+        } else {
+            echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-contract-type-list.php</p></div>';
         }
     }
 
@@ -246,6 +351,23 @@ class UMS_Admin {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php';
         } else {
             echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-inventory-list.php</p></div>';
+        }
+    }
+
+    public static function render_inventory_movement_page() {
+        $filters = array(
+            'search'        => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
+            'movement_type' => isset( $_GET['movement_type'] ) ? sanitize_key( wp_unslash( $_GET['movement_type'] ) ) : '',
+            'date_from'     => isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '',
+            'date_to'       => isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '',
+        );
+
+        $movements = UMS_DB_Inventory_Movement::get_all( $filters );
+
+        if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-inventory-movement-list.php' ) ) {
+            include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-movement-list.php';
+        } else {
+            echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-inventory-movement-list.php</p></div>';
         }
     }
 
@@ -498,6 +620,210 @@ class UMS_Admin {
     }
 
     /**
+     * Lưu danh mục chức danh.
+     */
+    public static function handle_save_position() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        check_admin_referer( 'ums_save_position' );
+
+        $raw     = isset( $_POST['ums_position'] ) && is_array( $_POST['ums_position'] ) ? wp_unslash( $_POST['ums_position'] ) : array();
+        $data    = self::sanitize_position_data( $raw );
+        $is_edit = ! empty( $raw['is_edit'] );
+        $errors  = self::validate_position_data( $data, $is_edit );
+
+        if ( ! empty( $errors ) ) {
+            self::redirect_to_positions( array(
+                'notice'           => 'validation_error',
+                'notice_extra'     => implode( ' ', $errors ),
+                'edit_position_id' => $is_edit ? $data['position_id'] : null,
+            ) );
+        }
+
+        $position_id = $data['position_id'];
+        unset( $data['position_id'] );
+
+        $result = $is_edit
+            ? UMS_DB_Position::update( $position_id, $data )
+            : UMS_DB_Position::insert( $data );
+
+        if ( $result === false ) {
+            self::redirect_to_positions( array(
+                'notice'           => 'db_error',
+                'notice_extra'     => UMS_DB_Position::get_last_error(),
+                'edit_position_id' => $is_edit ? $position_id : null,
+            ) );
+        }
+
+        self::redirect_to_positions( array( 'notice' => $is_edit ? 'position_updated' : 'position_created' ) );
+    }
+
+    /**
+     * Xóa danh mục chức danh.
+     */
+    public static function handle_delete_position() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        $position_id = isset( $_GET['position_id'] ) ? absint( $_GET['position_id'] ) : 0;
+        check_admin_referer( 'ums_delete_position_' . $position_id );
+
+        if ( $position_id <= 0 ) {
+            self::redirect_to_positions( array( 'notice' => 'invalid_position' ) );
+        }
+
+        $position = UMS_DB_Position::get_by_id( $position_id );
+        if ( ! $position ) {
+            self::redirect_to_positions( array( 'notice' => 'invalid_position' ) );
+        }
+
+        if ( UMS_DB_User::get_all( array( 'position' => $position['position_name'] ) ) ) {
+            self::redirect_to_positions( array(
+                'notice'       => 'validation_error',
+                'notice_extra' => 'Chức danh đang có hồ sơ nhân sự, hãy chuyển nhân sự sang chức danh khác trước khi xóa.',
+            ) );
+        }
+
+        $result = UMS_DB_Position::delete( $position_id );
+        self::redirect_to_positions( array( 'notice' => $result === false ? 'db_error' : 'position_deleted' ) );
+    }
+
+    public static function handle_save_factory_location() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        check_admin_referer( 'ums_save_factory_location' );
+
+        $raw     = isset( $_POST['ums_factory_location'] ) && is_array( $_POST['ums_factory_location'] ) ? wp_unslash( $_POST['ums_factory_location'] ) : array();
+        $data    = self::sanitize_factory_location_data( $raw );
+        $is_edit = ! empty( $raw['is_edit'] );
+        $errors  = self::validate_factory_location_data( $data, $is_edit );
+
+        if ( ! empty( $errors ) ) {
+            self::redirect_to_factory_locations( array(
+                'notice'                   => 'validation_error',
+                'notice_extra'             => implode( ' ', $errors ),
+                'edit_factory_location_id' => $is_edit ? $data['factory_location_id'] : null,
+            ) );
+        }
+
+        $factory_location_id = $data['factory_location_id'];
+        unset( $data['factory_location_id'] );
+
+        $result = $is_edit
+            ? UMS_DB_Factory_Location::update( $factory_location_id, $data )
+            : UMS_DB_Factory_Location::insert( $data );
+
+        if ( $result === false ) {
+            self::redirect_to_factory_locations( array(
+                'notice'                   => 'db_error',
+                'notice_extra'             => UMS_DB_Factory_Location::get_last_error(),
+                'edit_factory_location_id' => $is_edit ? $factory_location_id : null,
+            ) );
+        }
+
+        self::redirect_to_factory_locations( array( 'notice' => $is_edit ? 'factory_location_updated' : 'factory_location_created' ) );
+    }
+
+    public static function handle_delete_factory_location() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        $factory_location_id = isset( $_GET['factory_location_id'] ) ? absint( $_GET['factory_location_id'] ) : 0;
+        check_admin_referer( 'ums_delete_factory_location_' . $factory_location_id );
+
+        if ( $factory_location_id <= 0 ) {
+            self::redirect_to_factory_locations( array( 'notice' => 'invalid_factory_location' ) );
+        }
+
+        $factory_location = UMS_DB_Factory_Location::get_by_id( $factory_location_id );
+        if ( ! $factory_location ) {
+            self::redirect_to_factory_locations( array( 'notice' => 'invalid_factory_location' ) );
+        }
+
+        if ( UMS_DB_User::get_all( array( 'factory_location' => $factory_location['factory_location_name'] ) ) ) {
+            self::redirect_to_factory_locations( array(
+                'notice'       => 'validation_error',
+                'notice_extra' => 'Nhà máy đang có hồ sơ nhân sự, hãy chuyển nhân sự sang nhà máy khác trước khi xóa.',
+            ) );
+        }
+
+        $result = UMS_DB_Factory_Location::delete( $factory_location_id );
+        self::redirect_to_factory_locations( array( 'notice' => $result === false ? 'db_error' : 'factory_location_deleted' ) );
+    }
+
+    public static function handle_save_contract_type() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        check_admin_referer( 'ums_save_contract_type' );
+
+        $raw     = isset( $_POST['ums_contract_type'] ) && is_array( $_POST['ums_contract_type'] ) ? wp_unslash( $_POST['ums_contract_type'] ) : array();
+        $data    = self::sanitize_contract_type_data( $raw );
+        $is_edit = ! empty( $raw['is_edit'] );
+        $errors  = self::validate_contract_type_data( $data, $is_edit );
+
+        if ( ! empty( $errors ) ) {
+            self::redirect_to_contract_types( array(
+                'notice'                => 'validation_error',
+                'notice_extra'          => implode( ' ', $errors ),
+                'edit_contract_type_id' => $is_edit ? $data['contract_type_id'] : null,
+            ) );
+        }
+
+        $contract_type_id = $data['contract_type_id'];
+        unset( $data['contract_type_id'] );
+
+        $result = $is_edit
+            ? UMS_DB_Contract_Type::update( $contract_type_id, $data )
+            : UMS_DB_Contract_Type::insert( $data );
+
+        if ( $result === false ) {
+            self::redirect_to_contract_types( array(
+                'notice'                => 'db_error',
+                'notice_extra'          => UMS_DB_Contract_Type::get_last_error(),
+                'edit_contract_type_id' => $is_edit ? $contract_type_id : null,
+            ) );
+        }
+
+        self::redirect_to_contract_types( array( 'notice' => $is_edit ? 'contract_type_updated' : 'contract_type_created' ) );
+    }
+
+    public static function handle_delete_contract_type() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        $contract_type_id = isset( $_GET['contract_type_id'] ) ? absint( $_GET['contract_type_id'] ) : 0;
+        check_admin_referer( 'ums_delete_contract_type_' . $contract_type_id );
+
+        if ( $contract_type_id <= 0 ) {
+            self::redirect_to_contract_types( array( 'notice' => 'invalid_contract_type' ) );
+        }
+
+        $contract_type = UMS_DB_Contract_Type::get_by_id( $contract_type_id );
+        if ( ! $contract_type ) {
+            self::redirect_to_contract_types( array( 'notice' => 'invalid_contract_type' ) );
+        }
+
+        if ( UMS_DB_User::get_all( array( 'contract_type' => $contract_type['contract_type_name'] ) ) ) {
+            self::redirect_to_contract_types( array(
+                'notice'       => 'validation_error',
+                'notice_extra' => 'Loại hợp đồng đang có hồ sơ nhân sự, hãy chuyển nhân sự sang loại hợp đồng khác trước khi xóa.',
+            ) );
+        }
+
+        $result = UMS_DB_Contract_Type::delete( $contract_type_id );
+        self::redirect_to_contract_types( array( 'notice' => $result === false ? 'db_error' : 'contract_type_deleted' ) );
+    }
+
+    /**
      * Lưu một bước trong chuỗi luồng duyệt động.
      */
     public static function handle_save_approval_flow() {
@@ -655,7 +981,9 @@ class UMS_Admin {
             ) );
         }
 
-        $item_id = $data['item_id'];
+        $item_id      = $data['item_id'];
+        $old_item     = $is_edit ? UMS_DB_Inventory::get_by_id( $item_id ) : null;
+        $old_stock    = $old_item ? (int) $old_item['stock_qty'] : 0;
         unset( $data['item_id'] );
 
         $result = $is_edit
@@ -669,6 +997,9 @@ class UMS_Admin {
                 'edit_item_id' => $is_edit ? $item_id : null,
             ) );
         }
+
+        $saved_item_id = $is_edit ? $item_id : UMS_DB_Inventory::get_last_insert_id();
+        self::record_inventory_admin_movement( $saved_item_id, $old_stock, (int) $data['stock_qty'], (float) $data['base_price'], $is_edit );
 
         self::redirect_to_inventory( array( 'notice' => $is_edit ? 'inventory_updated' : 'inventory_created' ) );
     }
@@ -690,6 +1021,47 @@ class UMS_Admin {
 
         $result = UMS_DB_Inventory::delete( $item_id );
         self::redirect_to_inventory( array( 'notice' => $result === false ? 'db_error' : 'inventory_deleted' ) );
+    }
+
+    private static function record_inventory_admin_movement( $item_id, $before_qty, $after_qty, $unit_price, $is_edit ) {
+        if ( $item_id <= 0 ) {
+            return;
+        }
+
+        $diff = (int) $after_qty - (int) $before_qty;
+        if ( ! $is_edit ) {
+            $movement_type = 'in';
+            $quantity      = max( 0, (int) $after_qty );
+            $note          = 'Admin tạo mới sản phẩm/tồn kho.';
+        } elseif ( $diff > 0 ) {
+            $movement_type = 'in';
+            $quantity      = $diff;
+            $note          = 'Admin tăng số lượng tồn kho.';
+        } elseif ( $diff < 0 ) {
+            $movement_type = 'out';
+            $quantity      = abs( $diff );
+            $note          = 'Admin giảm số lượng tồn kho.';
+        } else {
+            $movement_type = 'adjust';
+            $quantity      = 0;
+            $note          = 'Admin cập nhật thông tin sản phẩm/tồn kho.';
+        }
+
+        UMS_DB_Inventory_Movement::insert(
+            array(
+                'item_id'        => $item_id,
+                'request_id'     => null,
+                'movement_type'  => $movement_type,
+                'quantity'       => $quantity,
+                'before_qty'     => (int) $before_qty,
+                'after_qty'      => (int) $after_qty,
+                'unit_price'     => (float) $unit_price,
+                'total_price'    => (float) $unit_price * $quantity,
+                'actor_user_id'  => get_current_user_id(),
+                'target_user_id' => null,
+                'note'           => $note,
+            )
+        );
     }
 
     private static function sanitize_profile_data( $raw ) {
@@ -716,6 +1088,33 @@ class UMS_Admin {
             'department_id'      => isset( $raw['department_id'] ) ? absint( $raw['department_id'] ) : 0,
             'department_code'    => isset( $raw['department_code'] ) ? sanitize_key( $raw['department_code'] ) : '',
             'department_name'    => isset( $raw['department_name'] ) ? sanitize_text_field( $raw['department_name'] ) : '',
+            'is_active'          => ! empty( $raw['is_active'] ) ? 1 : 0,
+        );
+    }
+
+    private static function sanitize_position_data( $raw ) {
+        return array(
+            'position_id'   => isset( $raw['position_id'] ) ? absint( $raw['position_id'] ) : 0,
+            'position_code' => isset( $raw['position_code'] ) ? sanitize_key( $raw['position_code'] ) : '',
+            'position_name' => isset( $raw['position_name'] ) ? sanitize_text_field( $raw['position_name'] ) : '',
+            'is_active'     => ! empty( $raw['is_active'] ) ? 1 : 0,
+        );
+    }
+
+    private static function sanitize_factory_location_data( $raw ) {
+        return array(
+            'factory_location_id'   => isset( $raw['factory_location_id'] ) ? absint( $raw['factory_location_id'] ) : 0,
+            'factory_location_code' => isset( $raw['factory_location_code'] ) ? sanitize_key( $raw['factory_location_code'] ) : '',
+            'factory_location_name' => isset( $raw['factory_location_name'] ) ? sanitize_text_field( $raw['factory_location_name'] ) : '',
+            'is_active'             => ! empty( $raw['is_active'] ) ? 1 : 0,
+        );
+    }
+
+    private static function sanitize_contract_type_data( $raw ) {
+        return array(
+            'contract_type_id'   => isset( $raw['contract_type_id'] ) ? absint( $raw['contract_type_id'] ) : 0,
+            'contract_type_code' => isset( $raw['contract_type_code'] ) ? sanitize_key( $raw['contract_type_code'] ) : '',
+            'contract_type_name' => isset( $raw['contract_type_name'] ) ? sanitize_text_field( $raw['contract_type_name'] ) : '',
             'is_active'          => ! empty( $raw['is_active'] ) ? 1 : 0,
         );
     }
@@ -824,20 +1223,24 @@ class UMS_Admin {
             $errors[] = 'Giới tính không hợp lệ.';
         }
 
-        if ( ! in_array( $data['factory_location'], UMS_DB_User::FACTORY_LOCATIONS, true ) ) {
-            $errors[] = 'Nhà máy không hợp lệ.';
-        }
-
-        if ( ! in_array( $data['contract_type'], UMS_DB_User::CONTRACT_TYPES, true ) ) {
-            $errors[] = 'Loại hợp đồng không hợp lệ.';
-        }
-
         if ( ! in_array( $data['account_status'], array( 'active', 'inactive' ), true ) ) {
             $errors[] = 'Trạng thái tài khoản không hợp lệ.';
         }
 
         if ( ! self::is_known_department( $data['department'] ) ) {
             $errors[] = 'Phòng ban chưa có trong danh mục hoặc đang ngừng sử dụng.';
+        }
+
+        if ( ! self::is_known_position( $data['job_position'] ) ) {
+            $errors[] = 'Chức danh chưa có trong danh mục hoặc đang ngừng sử dụng.';
+        }
+
+        if ( ! self::is_known_factory_location( $data['factory_location'] ) ) {
+            $errors[] = 'Nhà máy chưa có trong danh mục hoặc đang ngừng sử dụng.';
+        }
+
+        if ( ! self::is_known_contract_type( $data['contract_type'] ) ) {
+            $errors[] = 'Loại hợp đồng chưa có trong danh mục hoặc đang ngừng sử dụng.';
         }
 
         foreach ( array( 'date_joined', 'resignation_date', 'transfer_date' ) as $date_field ) {
@@ -871,6 +1274,60 @@ class UMS_Admin {
 
         if ( UMS_DB_Department::code_exists( $data['department_code'], $is_edit ? $data['department_id'] : 0 ) ) {
             $errors[] = 'Mã phòng ban đã tồn tại.';
+        }
+
+        return array_unique( $errors );
+    }
+
+    private static function validate_position_data( $data, $is_edit ) {
+        $errors = array();
+
+        if ( $is_edit && $data['position_id'] <= 0 ) {
+            $errors[] = 'Không tìm thấy chức danh cần cập nhật.';
+        }
+
+        if ( $data['position_code'] === '' || $data['position_name'] === '' ) {
+            $errors[] = 'Vui lòng nhập đầy đủ mã chức danh và tên chức danh.';
+        }
+
+        if ( UMS_DB_Position::code_exists( $data['position_code'], $is_edit ? $data['position_id'] : 0 ) ) {
+            $errors[] = 'Mã chức danh đã tồn tại.';
+        }
+
+        return array_unique( $errors );
+    }
+
+    private static function validate_factory_location_data( $data, $is_edit ) {
+        $errors = array();
+
+        if ( $is_edit && $data['factory_location_id'] <= 0 ) {
+            $errors[] = 'Không tìm thấy nhà máy cần cập nhật.';
+        }
+
+        if ( $data['factory_location_code'] === '' || $data['factory_location_name'] === '' ) {
+            $errors[] = 'Vui lòng nhập đầy đủ mã nhà máy và tên nhà máy.';
+        }
+
+        if ( UMS_DB_Factory_Location::code_exists( $data['factory_location_code'], $is_edit ? $data['factory_location_id'] : 0 ) ) {
+            $errors[] = 'Mã nhà máy đã tồn tại.';
+        }
+
+        return array_unique( $errors );
+    }
+
+    private static function validate_contract_type_data( $data, $is_edit ) {
+        $errors = array();
+
+        if ( $is_edit && $data['contract_type_id'] <= 0 ) {
+            $errors[] = 'Không tìm thấy loại hợp đồng cần cập nhật.';
+        }
+
+        if ( $data['contract_type_code'] === '' || $data['contract_type_name'] === '' ) {
+            $errors[] = 'Vui lòng nhập đầy đủ mã hợp đồng và tên loại hợp đồng.';
+        }
+
+        if ( UMS_DB_Contract_Type::code_exists( $data['contract_type_code'], $is_edit ? $data['contract_type_id'] : 0 ) ) {
+            $errors[] = 'Mã hợp đồng đã tồn tại.';
         }
 
         return array_unique( $errors );
@@ -1048,16 +1505,19 @@ class UMS_Admin {
     }
 
     private static function get_default_profile_values( $profile = null ) {
+        $factory_locations = UMS_DB_Factory_Location::get_active();
+        $contract_types    = UMS_DB_Contract_Type::get_active();
+
         $defaults = array(
             'profile_id'        => 0,
             'user_id'           => null,
             'employee_code'     => '',
             'full_name'         => '',
             'gender'            => 'Nam',
-            'factory_location'  => 'Đông Anh',
+            'factory_location'  => ! empty( $factory_locations[0]['factory_location_name'] ) ? $factory_locations[0]['factory_location_name'] : '',
             'department'        => '',
             'job_position'      => '',
-            'contract_type'     => 'Hợp đồng lao động',
+            'contract_type'     => ! empty( $contract_types[0]['contract_type_name'] ) ? $contract_types[0]['contract_type_name'] : '',
             'date_joined'       => current_time( 'Y-m-d' ),
             'resignation_date'  => '',
             'transfer_date'     => '',
@@ -1081,6 +1541,39 @@ class UMS_Admin {
         );
 
         return $department ? wp_parse_args( $department, $defaults ) : $defaults;
+    }
+
+    private static function get_default_position_values( $position = null ) {
+        $defaults = array(
+            'position_id'   => 0,
+            'position_code' => '',
+            'position_name' => '',
+            'is_active'     => 1,
+        );
+
+        return $position ? wp_parse_args( $position, $defaults ) : $defaults;
+    }
+
+    private static function get_default_factory_location_values( $factory_location = null ) {
+        $defaults = array(
+            'factory_location_id'   => 0,
+            'factory_location_code' => '',
+            'factory_location_name' => '',
+            'is_active'             => 1,
+        );
+
+        return $factory_location ? wp_parse_args( $factory_location, $defaults ) : $defaults;
+    }
+
+    private static function get_default_contract_type_values( $contract_type = null ) {
+        $defaults = array(
+            'contract_type_id'   => 0,
+            'contract_type_code' => '',
+            'contract_type_name' => '',
+            'is_active'          => 1,
+        );
+
+        return $contract_type ? wp_parse_args( $contract_type, $defaults ) : $defaults;
     }
 
     private static function get_default_approval_flow_values( $flow = null ) {
@@ -1152,6 +1645,54 @@ class UMS_Admin {
         return false;
     }
 
+    private static function is_known_position( $position_name ) {
+        $positions = UMS_DB_Position::get_active();
+
+        if ( empty( $positions ) ) {
+            return true;
+        }
+
+        foreach ( $positions as $position ) {
+            if ( $position['position_name'] === $position_name ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function is_known_factory_location( $factory_location_name ) {
+        $factory_locations = UMS_DB_Factory_Location::get_active();
+
+        if ( empty( $factory_locations ) ) {
+            return true;
+        }
+
+        foreach ( $factory_locations as $factory_location ) {
+            if ( $factory_location['factory_location_name'] === $factory_location_name ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function is_known_contract_type( $contract_type_name ) {
+        $contract_types = UMS_DB_Contract_Type::get_active();
+
+        if ( empty( $contract_types ) ) {
+            return true;
+        }
+
+        foreach ( $contract_types as $contract_type ) {
+            if ( $contract_type['contract_type_name'] === $contract_type_name ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static function get_notice() {
         $code = isset( $_GET['notice'] ) ? sanitize_key( wp_unslash( $_GET['notice'] ) ) : '';
         if ( $code === '' ) {
@@ -1165,6 +1706,15 @@ class UMS_Admin {
             'department_created' => array( 'success', 'Đã thêm phòng ban mới.' ),
             'department_updated' => array( 'success', 'Đã cập nhật phòng ban.' ),
             'department_deleted' => array( 'success', 'Đã xóa phòng ban.' ),
+            'position_created' => array( 'success', 'Đã thêm chức danh mới.' ),
+            'position_updated' => array( 'success', 'Đã cập nhật chức danh.' ),
+            'position_deleted' => array( 'success', 'Đã xóa chức danh.' ),
+            'factory_location_created' => array( 'success', 'Đã thêm nhà máy mới.' ),
+            'factory_location_updated' => array( 'success', 'Đã cập nhật nhà máy.' ),
+            'factory_location_deleted' => array( 'success', 'Đã xóa nhà máy.' ),
+            'contract_type_created' => array( 'success', 'Đã thêm loại hợp đồng mới.' ),
+            'contract_type_updated' => array( 'success', 'Đã cập nhật loại hợp đồng.' ),
+            'contract_type_deleted' => array( 'success', 'Đã xóa loại hợp đồng.' ),
             'approval_flow_created' => array( 'success', 'Đã thêm bước duyệt mới.' ),
             'approval_flow_updated' => array( 'success', 'Đã cập nhật bước duyệt.' ),
             'approval_flow_deleted' => array( 'success', 'Đã xóa bước duyệt.' ),
@@ -1176,6 +1726,9 @@ class UMS_Admin {
             'inventory_deleted'  => array( 'success', 'Đã xóa sản phẩm khỏi danh mục kho.' ),
             'invalid_user'     => array( 'error', 'Không tìm thấy nhân sự cần xử lý.' ),
             'invalid_department' => array( 'error', 'Không tìm thấy phòng ban cần xử lý.' ),
+            'invalid_position' => array( 'error', 'Không tìm thấy chức danh cần xử lý.' ),
+            'invalid_factory_location' => array( 'error', 'Không tìm thấy nhà máy cần xử lý.' ),
+            'invalid_contract_type' => array( 'error', 'Không tìm thấy loại hợp đồng cần xử lý.' ),
             'invalid_approval_flow' => array( 'error', 'Không tìm thấy bước duyệt cần xử lý.' ),
             'invalid_product_category' => array( 'error', 'Không tìm thấy danh mục sản phẩm cần xử lý.' ),
             'invalid_inventory_item' => array( 'error', 'Không tìm thấy sản phẩm cần xử lý.' ),
@@ -1218,6 +1771,60 @@ class UMS_Admin {
             array_filter(
                 array_merge(
                     array( 'page' => 'tvn-ums-departments' ),
+                    $args
+                ),
+                function( $value ) {
+                    return $value !== null && $value !== '';
+                }
+            ),
+            admin_url( 'admin.php' )
+        );
+
+        wp_safe_redirect( $url );
+        exit;
+    }
+
+    private static function redirect_to_positions( $args = array() ) {
+        $url = add_query_arg(
+            array_filter(
+                array_merge(
+                    array( 'page' => 'tvn-ums-positions' ),
+                    $args
+                ),
+                function( $value ) {
+                    return $value !== null && $value !== '';
+                }
+            ),
+            admin_url( 'admin.php' )
+        );
+
+        wp_safe_redirect( $url );
+        exit;
+    }
+
+    private static function redirect_to_factory_locations( $args = array() ) {
+        $url = add_query_arg(
+            array_filter(
+                array_merge(
+                    array( 'page' => 'tvn-ums-factory-locations' ),
+                    $args
+                ),
+                function( $value ) {
+                    return $value !== null && $value !== '';
+                }
+            ),
+            admin_url( 'admin.php' )
+        );
+
+        wp_safe_redirect( $url );
+        exit;
+    }
+
+    private static function redirect_to_contract_types( $args = array() ) {
+        $url = add_query_arg(
+            array_filter(
+                array_merge(
+                    array( 'page' => 'tvn-ums-contract-types' ),
                     $args
                 ),
                 function( $value ) {

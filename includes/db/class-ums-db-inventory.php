@@ -155,6 +155,10 @@ class UMS_DB_Inventory extends UMS_DB_Base {
         return self::db()->last_error;
     }
 
+    public static function get_last_insert_id() {
+        return (int) self::db()->insert_id;
+    }
+
     private static function format_map() {
         return array(
             'item_id'      => '%d',

@@ -1,195 +1,94 @@
 # UMS - Uniform Management System
 
-UMS là plugin WordPress quản lý hồ sơ nhân sự, danh mục phòng ban, danh mục sản phẩm đồng phục, tổng kho và luồng duyệt cấp phát theo phòng ban.
+UMS là plugin WordPress quản lý hồ sơ nhân sự, phòng ban, danh mục sản phẩm đồng phục, tổng kho, phiếu yêu cầu cấp phát và luồng duyệt động theo phòng ban.
 
-## Nền tảng
+## Nguyên tắc Database
 
-- WordPress plugin thuần PHP.
-- Dữ liệu nghiệp vụ chính lưu trong custom tables có prefix WordPress.
-- Tài khoản đăng nhập dùng bảng chuẩn `wp_users`.
-- Hồ sơ nhân sự lưu ở `wp_uniform_user_profiles` và liên kết với `wp_users` qua `user_id`.
-- Giao diện Admin dùng WordPress Admin + jqxGrid.
-- Giao diện User dùng shortcode frontend: `[ums_user_portal]`.
+Toàn bộ cấu trúc bảng nằm trong `ums.sql`.
 
-## Chức năng hiện có
+Plugin không tự tạo bảng, không tự migrate bảng, không chạy `CREATE TABLE`, `ALTER TABLE` hoặc `dbDelta`. Trước khi dùng plugin, hãy import thủ công `ums.sql` vào database WordPress.
 
-### Admin
+File `ums.sql` hiện dùng prefix mặc định `wp_`. Nếu site dùng prefix khác, cần đổi prefix trong file SQL trước khi import.
 
-- Hồ sơ Nhân sự
-  - Tạo, sửa, xóa hồ sơ nhân sự.
-  - Khi tạo hồ sơ sẽ tạo tài khoản WordPress tương ứng.
-  - `user_login` mặc định là mã nhân viên.
-  - Mật khẩu mặc định khi tạo/reset: `12345678`.
-  - Có thể đồng bộ hash mật khẩu từ DB nguồn bên ngoài theo `user_login`/`manv`.
-  - Active/Inactive tài khoản lưu bằng `wp_users.user_status`.
-  - Tài khoản inactive bị chặn đăng nhập nếu có hồ sơ UMS liên kết.
+Các bảng nghiệp vụ chính:
 
-- Phòng ban
-  - Quản lý mã phòng ban, tên phòng ban, trạng thái sử dụng.
+- `wp_uniform_departments`
+- `wp_uniform_positions`
+- `wp_uniform_factory_locations`
+- `wp_uniform_contract_types`
+- `wp_uniform_department_approval_flows`
+- `wp_uniform_user_profiles`
+- `wp_uniform_product_categories`
+- `wp_uniform_inventory`
+- `wp_uniform_inventory_movements`
+- `wp_uniform_requests`
+- `wp_uniform_request_details`
+- `wp_uniform_approval_logs`
+- `wp_uniform_returns`
 
-- Luồng duyệt phòng ban
-  - Cấu hình chuỗi duyệt động theo phòng ban.
-  - Không cố định 4 cấp.
-  - Một bước duyệt có thể có nhiều người duyệt, lưu trong một dòng bằng JSON `approver_profile_ids`.
+## Chức năng Admin
 
-- Danh mục Sản phẩm
-  - Quản lý danh mục cha và danh mục con.
-  - Không dùng `category_code`.
-  - Bảng danh mục hiển thị theo nhóm cha/con.
+- Quản lý Hồ sơ Nhân sự
+- Quản lý Phòng ban
+- Quản lý Chức danh
+- Quản lý Nhà máy
+- Quản lý Hợp đồng
+- Quản lý Luồng duyệt phòng ban
+- Quản lý Danh mục sản phẩm cha/con
+- Quản lý Sản phẩm & Tổng kho
+- Xem Lịch sử nhập xuất kho chi tiết
+- Đồng bộ mật khẩu từ DB ngoài vào `wp_users.user_pass`
 
-- Sản phẩm & Tổng kho
-  - Quản lý sản phẩm theo danh mục con, biến thể, size, màu/mã màu, tồn kho, đơn giá gốc.
-  - Màu/mã màu không bắt buộc ở giao diện.
-  - Đơn giá hỗ trợ số lớn và chuẩn hóa định dạng nhập.
+Hồ sơ nhân sự liên kết với tài khoản WordPress qua `wp_uniform_user_profiles.user_id`. Khi tạo hồ sơ, hệ thống tạo tài khoản WordPress tương ứng, `user_login` mặc định là mã nhân viên và mật khẩu mặc định là `12345678`.
 
-### User Portal
+## User Portal
 
-Shortcode:
+Tạo một page WordPress và chèn shortcode:
 
 ```text
 [ums_user_portal]
 ```
 
-Portal frontend hiện có:
+Portal hiển thị độc lập bằng layout của plugin, nhưng vẫn gọi các hook chuẩn `wp_head()`, `wp_body_open()` và `wp_footer()`.
 
-- Kiểm tra đăng nhập.
-- Kiểm tra tài khoản đã có hồ sơ UMS hay chưa.
-- Chặn hiển thị nếu tài khoản UMS inactive.
-- Hiển thị thông tin hồ sơ cá nhân.
-- Hiển thị người nhận cùng phòng ban, đang active.
-- Hiển thị sản phẩm khả dụng trong kho.
-- Hiển thị luồng duyệt đang active của phòng ban.
-- Có giao diện nháp tạo yêu cầu đồng phục. Phần lưu phiếu sẽ cần bổ sung lớp dữ liệu riêng cho phiếu yêu cầu.
+Các trang portal hiện có:
 
-## Cấu trúc thư mục chính
+- Tổng quan
+- Tạo yêu cầu
+- Luồng duyệt
+- Hồ sơ của tôi
 
-```text
-UMS/
-├── admin/
-│   ├── class-ums-admin.php
-│   ├── css/ums-admin.css
-│   ├── js/ums-admin.js
-│   └── partials/
-├── includes/
-│   ├── class-ums-helper.php
-│   └── db/
-│       ├── class-ums-db-base.php
-│       ├── class-ums-db-installer.php
-│       ├── class-ums-db-user.php
-│       ├── class-ums-db-department.php
-│       ├── class-ums-db-approval-flow.php
-│       ├── class-ums-db-product-category.php
-│       └── class-ums-db-inventory.php
-├── user/
-│   ├── class-ums-user.php
-│   ├── css/ums-user.css
-│   ├── js/ums-user.js
-│   └── partials/
-├── assets/
-│   ├── css/
-│   └── js/
-├── tvn-uniform-management.php
-├── ums.sql
-└── Readme.md
-```
+Module `Tạo yêu cầu` chỉ hiển thị cho user có `profile_id` nằm trong `approver_profile_ids` của bước duyệt `step_order = 1` thuộc phòng ban hiện tại. User ngoài bước 1 không thấy module này.
 
-## Database chính
+## Luồng tạo yêu cầu
 
-### `wp_uniform_user_profiles`
+Khi user hợp lệ bấm `Gửi duyệt`:
 
-Lưu hồ sơ nhân sự, không lưu mật khẩu hoặc trạng thái tài khoản trùng với WordPress.
+1. Phiếu được lưu vào `wp_uniform_requests`.
+2. Trạng thái ban đầu là `pending_step_1`.
+3. Chi tiết đồng phục được lưu vào `wp_uniform_request_details`.
+4. Giá được tính lại từ dữ liệu kho: `base_price * quantity`.
+5. Hệ thống tạo log `submitted` trong `wp_uniform_approval_logs` tại `step_order = 1`.
+6. Hệ thống ghi một dòng `request_out` vào `wp_uniform_inventory_movements` để Admin nhìn thấy yêu cầu xuất kho theo từng vật tư.
 
-Các trường chính:
+Luồng duyệt là chuỗi động theo bảng `wp_uniform_department_approval_flows`, không cố định 4 cấp.
 
-- `profile_id`
-- `user_id`
-- `employee_code`
-- `full_name`
-- `gender`
-- `factory_location`
-- `department`
-- `job_position`
-- `contract_type`
-- `date_joined`
-- `resignation_date`
-- `transfer_date`
-- `is_maternity`
-- `is_outdoor_worker`
+## Lịch sử nhập xuất kho
 
-### `wp_uniform_departments`
+Admin xem tại menu `Lịch sử kho`.
 
-Danh mục phòng ban:
+Nguồn dữ liệu nằm ở `wp_uniform_inventory_movements`:
 
-- `department_id`
-- `department_code`
-- `department_name`
-- `is_active`
+- `in`: nhập kho hoặc tăng tồn kho từ Admin.
+- `out`: giảm tồn kho từ Admin.
+- `adjust`: cập nhật thông tin sản phẩm/tồn kho nhưng không đổi số lượng.
+- `request_out`: user gửi yêu cầu xuất kho, có liên kết `request_id`, người tạo và người nhận.
 
-### `wp_uniform_department_approval_flows`
+Trang lịch sử hiển thị thời gian, loại phát sinh, mã phiếu, sản phẩm, size, số lượng, tồn trước/sau, đơn giá, thành tiền, người thao tác, người nhận và ghi chú.
 
-Luồng duyệt động theo phòng ban:
+## Đồng bộ mật khẩu ngoài
 
-- `flow_id`
-- `department_id`
-- `step_order`
-- `step_name`
-- `approver_profile_ids`
-- `is_active`
-
-### `wp_uniform_product_categories`
-
-Danh mục sản phẩm cha/con:
-
-- `category_id`
-- `parent_id`
-- `category_name`
-- `is_active`
-
-### `wp_uniform_inventory`
-
-Sản phẩm và tổng kho:
-
-- `item_id`
-- `category_id`
-- `item_type`
-- `item_variant`
-- `size`
-- `color_code`
-- `stock_qty`
-- `base_price`
-
-## Luồng tài khoản nhân sự
-
-1. Admin tạo hồ sơ nhân sự.
-2. Plugin tạo tài khoản trong `wp_users`.
-3. `wp_uniform_user_profiles.user_id` lưu ID tài khoản WordPress.
-4. Khi cập nhật hồ sơ:
-   - Họ tên đồng bộ sang `display_name`.
-   - Mã nhân viên đồng bộ sang `user_login` nếu chưa bị trùng.
-   - Active/Inactive đồng bộ sang `user_status`.
-   - Reset password đặt lại mật khẩu thành `12345678`.
-
-## Đồng bộ mật khẩu từ DB ngoài
-
-Admin có quyền `promote_users` có thể bấm nút `Đồng bộ mật khẩu` trên thanh lọc của bảng Hồ sơ Nhân sự. Nút này xử lý toàn bộ tài khoản đang nằm trong kết quả lọc hiện tại.
-
-Logic đồng bộ:
-
-1. Lấy `wp_users.user_login` của tài khoản đang chọn.
-2. Kết nối DB nguồn.
-3. Query:
-
-```sql
-SELECT password FROM users WHERE manv = ? AND active = 1 LIMIT 1
-```
-
-4. Ghi nguyên giá trị `password` lấy được vào `wp_users.user_pass`, không hash lại vì DB nguồn đã lưu hash.
-5. Nếu không kết nối được DB nguồn, không tìm thấy bản ghi active, hoặc hash nguồn không hợp lệ, hệ thống đặt mật khẩu mặc định `12345678` bằng hàm hash của WordPress.
-6. Lưu meta:
-   - `ums_password_synced_at`
-   - `ums_password_synced_by`
-
-Cấu hình DB nguồn có thể đặt bằng hằng số trong `wp-config.php`:
+Có thể cấu hình DB nguồn bằng hằng số trong `wp-config.php`:
 
 ```php
 define( 'UMS_PASSWORD_SYNC_DB_HOST', '172.30.134.15' );
@@ -198,25 +97,31 @@ define( 'UMS_PASSWORD_SYNC_DB_PASSWORD', 'your-password' );
 define( 'UMS_PASSWORD_SYNC_DB_NAME', 'tvnias' );
 ```
 
-Nếu không khai báo hằng số, plugin dùng default host/user/database như trên và password rỗng.
+Hash lấy từ DB nguồn được ghi trực tiếp vào `wp_users.user_pass`, không hash lại. Nếu đồng bộ thất bại, hệ thống đặt mật khẩu về mặc định `12345678` bằng hàm hash của WordPress.
 
-## Cài đặt User Portal
-
-1. Tạo một page WordPress, ví dụ `UMS Portal`.
-2. Chèn shortcode:
+## Cấu trúc thư mục chính
 
 ```text
-[ums_user_portal]
+UMS/
+├── admin/
+├── assets/
+├── includes/
+│   ├── class-ums-helper.php
+│   ├── class-ums-password-sync.php
+│   └── db/
+│       ├── class-ums-db-base.php
+│       ├── class-ums-db-user.php
+│       ├── class-ums-db-department.php
+│       ├── class-ums-db-position.php
+│       ├── class-ums-db-factory-location.php
+│       ├── class-ums-db-contract-type.php
+│       ├── class-ums-db-approval-flow.php
+│       ├── class-ums-db-product-category.php
+│       ├── class-ums-db-inventory.php
+│       ├── class-ums-db-inventory-movement.php
+│       └── class-ums-db-request.php
+├── user/
+├── tvn-uniform-management.php
+├── ums.sql
+└── Readme.md
 ```
-
-3. Gán quyền đăng nhập cho user đã được tạo từ Hồ sơ Nhân sự.
-
-## Ghi chú phát triển tiếp
-
-- Cần bổ sung lớp dữ liệu cho phiếu yêu cầu cấp phát để User Portal lưu form tạo yêu cầu.
-- Cần bổ sung bảng/lớp xử lý lịch sử duyệt thực tế nếu muốn chuyển luồng duyệt từ cấu hình sang xử lý phiếu.
-- Có thể mở rộng thông báo email/Zalo sau khi module phiếu yêu cầu hoàn chỉnh.
-
-
-
-Nếu đã gửi duyệt rồi thì phải cho vào luồng duyệt luôn. Tất cả các user ở bước 1 thì sẽ có quyền tạo yêu cầu.  Ngoài bước 1 sẽ không hiển thị module tạo yêu cầu

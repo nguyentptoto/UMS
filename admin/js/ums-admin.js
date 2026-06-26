@@ -99,7 +99,7 @@
                 autoheight: true,
                 source: dataAdapter,
                 columns: columns,
-                theme: 'fluent',
+                theme: 'energyblue',
                 pageable: true,
                 pagesize: 20,
                 pagesizeoptions: ['10', '20', '50', '100'],
