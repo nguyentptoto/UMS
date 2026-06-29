@@ -333,6 +333,23 @@ class UMS_DB_Request extends UMS_DB_Base {
 		);
 	}
 
+	public static function get_logs( $request_id ) {
+		$table       = self::log_table();
+		$users_table = self::db()->users;
+		$sql         = self::db()->prepare(
+			"
+			SELECT logs.*, users.display_name, users.user_login
+			FROM $table logs
+			LEFT JOIN $users_table users ON logs.approver_id = users.ID
+			WHERE logs.request_id = %d
+			ORDER BY logs.action_date ASC, logs.log_id ASC
+			",
+			absint( $request_id )
+		);
+
+		return self::db()->get_results( $sql, ARRAY_A );
+	}
+
 	public static function delete_request( $request_id ) {
 		$wpdb       = self::db();
 		$request_id = absint( $request_id );

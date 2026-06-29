@@ -35,7 +35,7 @@ class UMS_User {
             'ums-user-css',
             UMS_PLUGIN_URL . 'user/css/ums-user.css',
             array( 'ums-jqx-energyblue-css' ),
-            '1.1.8'
+            '1.1.9'
         );
 
         wp_register_script(
@@ -198,7 +198,7 @@ class UMS_User {
         $request_data    = array(
             'creator_id'     => $current_user_id,
             'target_user_id' => (int) $target_profile['user_id'],
-            'request_type'   => 'Phát sinh',
+            'request_type'   => 'Yêu cầu cấp đồng phục',
             'reason_type'    => $reason_type,
             'reason_detail'  => isset( $_POST['reason_detail'] ) ? sanitize_textarea_field( wp_unslash( $_POST['reason_detail'] ) ) : '',
             'payment_method' => $payment_method,
@@ -349,18 +349,23 @@ class UMS_User {
 
         $current_user_id = get_current_user_id();
         $profile         = UMS_DB_User::get_by_wp_user_id( $current_user_id );
+        $is_admin_view   = current_user_can( 'manage_options' );
 
-        if ( ! $profile ) {
+        if ( ! $profile && ! $is_admin_view ) {
             return self::render_missing_profile();
         }
 
-        if ( ! empty( $profile['user_status'] ) ) {
+        if ( ! $profile && $is_admin_view ) {
+            $profile = self::get_admin_virtual_profile( $current_user_id );
+        }
+
+        if ( ! $is_admin_view && ! empty( $profile['user_status'] ) ) {
             return self::render_inactive_account();
         }
 
-        $department      = self::get_department_by_name( $profile['department'] );
+        $department      = ! empty( $profile['department'] ) ? self::get_department_by_name( $profile['department'] ) : null;
         $department_id   = $department ? (int) $department['department_id'] : 0;
-        $teammates       = self::get_active_teammates( $profile );
+        $teammates       = $is_admin_view ? UMS_DB_User::get_all( array( 'status' => 'active' ) ) : self::get_active_teammates( $profile );
         $inventory_items = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
         $category_tree   = self::get_active_product_category_tree();
         $approval_flows  = $department_id ? UMS_DB_Approval_Flow::get_all(
@@ -377,9 +382,9 @@ class UMS_User {
         $portal_url         = get_permalink();
         $current_user       = wp_get_current_user();
         $portal_notice      = self::get_portal_notice();
-        $approval_requests  = self::get_pending_requests_for_portal_tab( $current_user_id, $profile, $approval_flows );
-        $completed_requests = self::get_completed_requests_for_profile( $current_user_id, $profile, $approval_flows );
-        $dashboard_stats    = self::get_dashboard_stats( $current_user_id, $profile, $approval_flows );
+        $approval_requests  = $is_admin_view ? self::get_admin_pending_requests() : self::get_pending_requests_for_portal_tab( $current_user_id, $profile, $approval_flows );
+        $completed_requests = $is_admin_view ? self::get_admin_completed_requests() : self::get_completed_requests_for_profile( $current_user_id, $profile, $approval_flows );
+        $dashboard_stats    = $is_admin_view ? self::get_admin_dashboard_stats() : self::get_dashboard_stats( $current_user_id, $profile, $approval_flows );
         $editing_request    = self::get_editing_request_for_form( $current_user_id );
         $detail_request     = self::get_detail_request_for_page( $current_user_id, $profile );
         $detail_can_approve = $detail_request ? self::can_current_user_approve_request( $detail_request, $profile ) : false;
@@ -617,6 +622,72 @@ class UMS_User {
         return $stats;
     }
 
+    private static function get_admin_pending_requests() {
+        $requests = UMS_DB_Request::get_all( array( 'limit' => 0 ) );
+
+        $requests = array_values(
+            array_filter(
+                $requests,
+                function ( $request ) {
+                    return ! empty( $request['current_status'] )
+                        && preg_match( '/^pending_step_\d+$/', (string) $request['current_status'] );
+                }
+            )
+        );
+
+        foreach ( $requests as $index => $request ) {
+            $requests[ $index ]['_ums_action_mode'] = 'view';
+        }
+
+        return $requests;
+    }
+
+    private static function get_admin_completed_requests() {
+        $requests = UMS_DB_Request::get_all(
+            array(
+                'status_in' => array( 'completed', 'rejected' ),
+                'limit'     => 0,
+            )
+        );
+
+        foreach ( $requests as $index => $request ) {
+            $requests[ $index ]['_ums_action_mode'] = 'view';
+        }
+
+        return $requests;
+    }
+
+    private static function get_admin_dashboard_stats() {
+        $requests = UMS_DB_Request::get_all( array( 'limit' => 0 ) );
+        $stats    = array(
+            'created_total'    => count( $requests ),
+            'created_pending'  => 0,
+            'created_done'     => 0,
+            'created_rejected' => 0,
+            'waiting_approval' => 0,
+        );
+
+        foreach ( $requests as $request ) {
+            $status = (string) $request['current_status'];
+            if ( $status === 'completed' ) {
+                $stats['created_done']++;
+                continue;
+            }
+
+            if ( $status === 'rejected' ) {
+                $stats['created_rejected']++;
+                continue;
+            }
+
+            if ( preg_match( '/^pending_step_\d+$/', $status ) ) {
+                $stats['created_pending']++;
+                $stats['waiting_approval']++;
+            }
+        }
+
+        return $stats;
+    }
+
     private static function get_completed_requests_for_profile( $current_user_id, $profile, $approval_flows ) {
         $requests = UMS_DB_Request::get_all(
             array(
@@ -654,6 +725,28 @@ class UMS_User {
         return array_values( $unique );
     }
 
+    private static function get_admin_virtual_profile( $user_id ) {
+        $user = get_userdata( (int) $user_id );
+
+        return array(
+            'profile_id'         => 0,
+            'user_id'            => (int) $user_id,
+            'employee_code'      => 'ADMIN',
+            'full_name'          => $user ? ( $user->display_name ?: $user->user_login ) : 'Administrator',
+            'gender'             => '-',
+            'factory_location'   => 'Tất cả nhà máy',
+            'department'         => 'Tất cả phòng ban',
+            'job_position'       => 'Quản trị hệ thống',
+            'contract_type'      => '-',
+            'date_joined'        => current_time( 'Y-m-d' ),
+            'resignation_date'   => null,
+            'transfer_date'      => null,
+            'is_maternity'       => 0,
+            'is_outdoor_worker'  => 0,
+            'user_status'        => 0,
+        );
+    }
+
     private static function get_editing_request_for_form( $current_user_id ) {
         $edit_request_id = isset( $_GET['edit_request_id'] ) ? absint( $_GET['edit_request_id'] ) : 0;
         if ( $edit_request_id <= 0 ) {
@@ -685,7 +778,15 @@ class UMS_User {
     }
 
     private static function can_view_request_detail( $request, $current_user_id, $profile ) {
-        if ( ! $request || empty( $profile['profile_id'] ) ) {
+        if ( ! $request ) {
+            return false;
+        }
+
+        if ( current_user_can( 'manage_options' ) ) {
+            return true;
+        }
+
+        if ( empty( $profile['profile_id'] ) ) {
             return false;
         }
 

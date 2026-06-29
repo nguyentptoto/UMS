@@ -70,7 +70,6 @@ $grid_groups = array( 'parent_name' );
 
 <div class="wrap ums-admin-wrap">
     <h1 class="wp-heading-inline">UMS - Quản lý Danh mục Sản phẩm</h1>
-    <a href="<?php echo esc_url( $page_url . '#ums-product-category-form' ); ?>" class="page-title-action">Thêm danh mục mới</a>
     <hr class="wp-header-end">
 
     <?php if ( ! empty( $notice ) ) : ?>

@@ -141,9 +141,39 @@
 }
 
 .ums-form-grid input,
-.ums-form-grid select {
+.ums-form-grid select,
+.ums-form-grid textarea {
     max-width: 100%;
     width: 100%;
+}
+
+.ums-form-grid textarea {
+    min-height: 82px;
+}
+
+.ums-field-wide {
+    grid-column: 1 / -1;
+}
+
+.ums-field-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.ums-month-quantity-grid {
+    display: grid;
+    gap: 10px 12px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.ums-month-quantity-grid label {
+    margin: 0;
+}
+
+.ums-month-quantity-grid label span {
+    font-size: 12px;
+    margin-bottom: 4px;
 }
 
 .ums-form-grid b {

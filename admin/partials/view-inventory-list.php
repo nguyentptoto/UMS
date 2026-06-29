@@ -69,7 +69,6 @@ $grid_columns = array(
 
 <div class="wrap ums-admin-wrap">
     <h1 class="wp-heading-inline">UMS - Quản lý Sản phẩm & Tổng kho</h1>
-    <a href="<?php echo esc_url( $page_url . '#ums-inventory-form' ); ?>" class="page-title-action">Thêm sản phẩm mới</a>
     <hr class="wp-header-end">
 
     <?php if ( ! empty( $notice ) ) : ?>
@@ -137,6 +136,61 @@ $grid_columns = array(
             data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows ) ); ?>"
             data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
         ></div>
+    </div>
+
+    <div class="ums-panel" id="ums-manual-inventory-out">
+        <h2>Xuất kho chủ động</h2>
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ums-profile-form">
+            <?php wp_nonce_field( 'ums_manual_inventory_out' ); ?>
+            <input type="hidden" name="action" value="ums_manual_inventory_out">
+
+            <div class="ums-form-grid">
+                <label>
+                    <span>Sản phẩm / biến thể <b>*</b></span>
+                    <select name="ums_manual_out[item_id]" required>
+                        <option value="">Chọn sản phẩm còn tồn</option>
+                        <?php foreach ( $available_items as $item ) : ?>
+                            <?php
+                            $item_label = trim( ( $item['parent_category_name'] ?: '' ) . ' / ' . ( $item['category_name'] ?: $item['item_type'] ), ' /' );
+                            if ( ! empty( $item['item_variant'] ) ) {
+                                $item_label .= ' - ' . $item['item_variant'];
+                            }
+                            $item_label .= ' - Size ' . $item['size'] . ' - Tồn ' . (int) $item['stock_qty'];
+                            ?>
+                            <option value="<?php echo esc_attr( $item['item_id'] ); ?>">
+                                <?php echo esc_html( $item_label ); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Người nhận</span>
+                    <select name="ums_manual_out[target_user_id]">
+                        <option value="">Không gắn người nhận</option>
+                        <?php foreach ( $recipient_options as $recipient ) : ?>
+                            <option value="<?php echo esc_attr( $recipient['user_id'] ); ?>">
+                                <?php echo esc_html( $recipient['employee_code'] . ' - ' . $recipient['full_name'] ); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Số lượng xuất <b>*</b></span>
+                    <input type="number" name="ums_manual_out[quantity]" value="1" min="1" step="1" required>
+                </label>
+
+                <label class="ums-field-wide">
+                    <span>Ghi chú</span>
+                    <textarea name="ums_manual_out[note]" rows="3" placeholder="Ví dụ: xuất bổ sung, cấp trực tiếp, điều chuyển nội bộ..."></textarea>
+                </label>
+            </div>
+
+            <p class="submit">
+                <button type="submit" class="button button-primary">Ghi nhận xuất kho</button>
+            </p>
+        </form>
     </div>
 
     <div class="ums-panel" id="ums-inventory-form">

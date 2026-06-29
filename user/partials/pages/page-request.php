@@ -282,6 +282,12 @@ $render_request_item_row = function ( $index, $is_template = false, $selected_de
         </div>
     </section>
 
+    <?php
+    $signature_request = $editing_request;
+    $signature_profile = $profile;
+    include UMS_PLUGIN_DIR . 'user/partials/components/approval-signature-grid.php';
+    ?>
+
     <div class="ums-user-actions">
         <button type="submit" class="ums-user-button" data-ums-submit-approval><?php echo $editing_request ? 'Cập nhật phiếu' : 'Gửi duyệt'; ?></button>
         <p class="ums-user-muted" data-ums-user-message>Phiếu sẽ được lưu và chuyển theo đúng bước duyệt hiện tại của phòng ban.</p>

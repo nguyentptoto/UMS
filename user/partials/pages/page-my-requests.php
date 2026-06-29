@@ -68,7 +68,7 @@ $grid_columns = array(
 	array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => 230, 'cellsrenderer' => 'html' ),
 );
 
-$build_grid_rows = function ( $requests, $mode = 'owner' ) use ( $status_label, $owner_action, $approval_action ) {
+$build_grid_rows = function ( $requests, $mode = 'owner' ) use ( $status_label, $owner_action, $approval_action, $view_link ) {
 	$rows = array();
 
 	foreach ( $requests as $index => $request ) {
@@ -81,7 +81,7 @@ $build_grid_rows = function ( $requests, $mode = 'owner' ) use ( $status_label, 
 			'department'  => $request['target_department'],
 			'status'      => $status_label( $request['current_status'] ),
 			'created_at'  => mysql2date( 'd/m/Y H:i', $request['created_at'] ),
-			'actions'     => $action_mode === 'approval' ? $approval_action( $request ) : $owner_action( $request ),
+			'actions'     => $action_mode === 'approval' ? $approval_action( $request ) : ( $action_mode === 'owner' ? $owner_action( $request ) : $view_link( $request_id ) ),
 		);
 	}
 

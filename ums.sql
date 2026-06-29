@@ -121,7 +121,30 @@ CREATE TABLE `wp_uniform_inventory` (
     KEY `idx_stock_qty` (`stock_qty`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 9. BANG LICH SU NHAP/XUAT/DIEU CHINH KHO
+-- 9. BANG DINH MUC CAP PHAT HANG NAM
+CREATE TABLE `wp_uniform_annual_allowance_rules` (
+    `rule_id` INT AUTO_INCREMENT NOT NULL,
+    `apply_type` VARCHAR(20) NOT NULL DEFAULT 'item' COMMENT 'category, item',
+    `category_id` INT DEFAULT NULL,
+    `item_id` INT DEFAULT NULL,
+    `target_type` VARCHAR(30) NOT NULL DEFAULT 'all' COMMENT 'all, position',
+    `position_id` INT DEFAULT NULL,
+    `frequency_count` INT NOT NULL DEFAULT 1,
+    `frequency_years` INT NOT NULL DEFAULT 1,
+    `monthly_quantities` JSON NOT NULL,
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`rule_id`),
+    KEY `idx_apply_type` (`apply_type`),
+    KEY `idx_category_id` (`category_id`),
+    KEY `idx_item_id` (`item_id`),
+    KEY `idx_target_type` (`target_type`),
+    KEY `idx_position_id` (`position_id`),
+    KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 10. BANG LICH SU NHAP/XUAT/DIEU CHINH KHO
 CREATE TABLE `wp_uniform_inventory_movements` (
     `movement_id` INT AUTO_INCREMENT NOT NULL,
     `item_id` INT NOT NULL,
@@ -143,12 +166,12 @@ CREATE TABLE `wp_uniform_inventory_movements` (
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 10. BANG PHIEU YEU CAU CAP PHAT
+-- 11. BANG PHIEU YEU CAU CAP PHAT
 CREATE TABLE `wp_uniform_requests` (
     `request_id` INT AUTO_INCREMENT NOT NULL,
     `creator_id` BIGINT(20) UNSIGNED NOT NULL,
     `target_user_id` BIGINT(20) UNSIGNED NOT NULL,
-    `request_type` VARCHAR(50) NOT NULL DEFAULT 'Phát sinh',
+    `request_type` VARCHAR(50) NOT NULL DEFAULT 'Yêu cầu cấp đồng phục',
     `reason_type` TINYINT(1) NOT NULL COMMENT '1: Thay doi vi tri, 2: Do cong viec, 3: Loi ca nhan/khac',
     `reason_detail` TEXT DEFAULT NULL,
     `payment_method` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0: Mien phi, 1: Khau tru luong, 2: Tien mat/Chuyen khoan',
@@ -161,7 +184,7 @@ CREATE TABLE `wp_uniform_requests` (
     KEY `idx_current_status` (`current_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 11. BANG CHI TIET PHIEU YEU CAU CAP PHAT
+-- 12. BANG CHI TIET PHIEU YEU CAU CAP PHAT
 CREATE TABLE `wp_uniform_request_details` (
     `detail_id` INT AUTO_INCREMENT NOT NULL,
     `request_id` INT NOT NULL,
@@ -173,7 +196,7 @@ CREATE TABLE `wp_uniform_request_details` (
     KEY `idx_item` (`item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 12. BANG NHAT KY PHE DUYET THEO CHUOI LUONG DONG
+-- 13. BANG NHAT KY PHE DUYET THEO CHUOI LUONG DONG
 CREATE TABLE `wp_uniform_approval_logs` (
     `log_id` INT AUTO_INCREMENT NOT NULL,
     `request_id` INT NOT NULL,
@@ -188,7 +211,7 @@ CREATE TABLE `wp_uniform_approval_logs` (
     KEY `idx_action` (`action`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 13. BANG BIEN BAN HOAN TRA VA THU HOI DONG PHUC
+-- 14. BANG BIEN BAN HOAN TRA VA THU HOI DONG PHUC
 CREATE TABLE `wp_uniform_returns` (
     `return_id` INT AUTO_INCREMENT NOT NULL,
     `return_type` ENUM('Nghỉ việc', 'Chuyển bộ phận') NOT NULL,

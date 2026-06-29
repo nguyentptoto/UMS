@@ -64,7 +64,6 @@ $grid_groups = array( 'department_name', 'step_group' );
 
 <div class="wrap ums-admin-wrap">
     <h1 class="wp-heading-inline">UMS - Quản lý Luồng duyệt</h1>
-    <a href="<?php echo esc_url( $page_url . '#ums-approval-flow-form' ); ?>" class="page-title-action">Thêm bước duyệt</a>
     <hr class="wp-header-end">
 
     <?php if ( ! empty( $notice ) ) : ?>

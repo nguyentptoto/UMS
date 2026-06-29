@@ -30,6 +30,9 @@ class UMS_Admin {
         add_action( 'admin_post_ums_delete_product_category', array( __CLASS__, 'handle_delete_product_category' ) );
         add_action( 'admin_post_ums_save_inventory_item', array( __CLASS__, 'handle_save_inventory_item' ) );
         add_action( 'admin_post_ums_delete_inventory_item', array( __CLASS__, 'handle_delete_inventory_item' ) );
+        add_action( 'admin_post_ums_manual_inventory_out', array( __CLASS__, 'handle_manual_inventory_out' ) );
+        add_action( 'admin_post_ums_save_annual_allowance', array( __CLASS__, 'handle_save_annual_allowance' ) );
+        add_action( 'admin_post_ums_delete_annual_allowance', array( __CLASS__, 'handle_delete_annual_allowance' ) );
         add_action( 'wp_ajax_ums_sync_user_password', array( __CLASS__, 'handle_sync_user_password' ) );
     }
 
@@ -127,6 +130,15 @@ class UMS_Admin {
             'tvn-ums-inventory-movements',
             array( __CLASS__, 'render_inventory_movement_page' )
         );
+
+        add_submenu_page(
+            'tvn-uniform-management',
+            'Định mức cấp phát hàng năm',
+            'Định mức năm',
+            'manage_options',
+            'tvn-ums-annual-allowances',
+            array( __CLASS__, 'render_annual_allowance_page' )
+        );
     }
 
     /**
@@ -134,7 +146,7 @@ class UMS_Admin {
      */
     public static function enqueue_admin_assets( $hook ) {
         // Chỉ nạp CSS/JS khi Admin đang đứng đúng trong trang của plugin UMS
-        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false ) {
+        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false ) {
             return;
         }
 
@@ -150,7 +162,7 @@ class UMS_Admin {
             'ums-admin-css', 
             UMS_PLUGIN_URL . 'admin/css/ums-admin.css', 
             array( 'ums-jqx-energyblue-css' ), 
-            '1.0.0' 
+            '1.0.2' 
         );
 
         wp_enqueue_style(
@@ -344,8 +356,10 @@ class UMS_Admin {
         $inventory      = UMS_DB_Inventory::get_all( $filters );
         $category_tree  = UMS_DB_Product_Category::get_tree();
         $child_categories = UMS_DB_Product_Category::get_child_categories();
-        $notice         = self::get_notice();
-        $form_values    = self::get_default_inventory_values( $editing_item );
+        $notice            = self::get_notice();
+        $form_values       = self::get_default_inventory_values( $editing_item );
+        $available_items   = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
+        $recipient_options = UMS_DB_User::get_all( array( 'status' => 'active' ) );
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php';
@@ -368,6 +382,30 @@ class UMS_Admin {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-movement-list.php';
         } else {
             echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-inventory-movement-list.php</p></div>';
+        }
+    }
+
+    public static function render_annual_allowance_page() {
+        $filters = array(
+            'search'      => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
+            'apply_type'  => isset( $_GET['apply_type'] ) ? sanitize_key( wp_unslash( $_GET['apply_type'] ) ) : '',
+            'target_type' => isset( $_GET['target_type'] ) ? sanitize_key( wp_unslash( $_GET['target_type'] ) ) : '',
+            'status'      => isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '',
+        );
+
+        $edit_rule_id  = isset( $_GET['edit_rule_id'] ) ? absint( $_GET['edit_rule_id'] ) : 0;
+        $editing_rule  = $edit_rule_id ? UMS_DB_Annual_Allowance::get_by_id( $edit_rule_id ) : null;
+        $rules         = UMS_DB_Annual_Allowance::get_all( $filters );
+        $inventory     = UMS_DB_Inventory::get_all();
+        $categories    = UMS_DB_Product_Category::get_all( array( 'status' => 'active' ) );
+        $positions     = UMS_DB_Position::get_active();
+        $notice        = self::get_notice();
+        $form_values   = self::get_default_annual_allowance_values( $editing_rule );
+
+        if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php' ) ) {
+            include_once UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php';
+        } else {
+            echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-annual-allowance-list.php</p></div>';
         }
     }
 
@@ -1023,6 +1061,141 @@ class UMS_Admin {
         self::redirect_to_inventory( array( 'notice' => $result === false ? 'db_error' : 'inventory_deleted' ) );
     }
 
+    public static function handle_save_annual_allowance() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        check_admin_referer( 'ums_save_annual_allowance' );
+
+        $raw     = isset( $_POST['ums_annual_allowance'] ) && is_array( $_POST['ums_annual_allowance'] ) ? wp_unslash( $_POST['ums_annual_allowance'] ) : array();
+        $data    = self::sanitize_annual_allowance_data( $raw );
+        $is_edit = ! empty( $raw['is_edit'] );
+        $errors  = self::validate_annual_allowance_data( $data, $is_edit );
+
+        if ( ! empty( $errors ) ) {
+            self::redirect_to_annual_allowances( array(
+                'notice'       => 'validation_error',
+                'notice_extra' => implode( ' ', $errors ),
+                'edit_rule_id' => $is_edit ? $data['rule_id'] : null,
+            ) );
+        }
+
+        $rule_id = $data['rule_id'];
+        unset( $data['rule_id'] );
+
+        $result = $is_edit
+            ? UMS_DB_Annual_Allowance::update( $rule_id, $data )
+            : UMS_DB_Annual_Allowance::insert( $data );
+
+        if ( $result === false ) {
+            self::redirect_to_annual_allowances( array(
+                'notice'       => 'db_error',
+                'notice_extra' => UMS_DB_Annual_Allowance::get_last_error(),
+                'edit_rule_id' => $is_edit ? $rule_id : null,
+            ) );
+        }
+
+        self::redirect_to_annual_allowances( array( 'notice' => $is_edit ? 'annual_allowance_updated' : 'annual_allowance_created' ) );
+    }
+
+    public static function handle_delete_annual_allowance() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        $rule_id = isset( $_GET['rule_id'] ) ? absint( $_GET['rule_id'] ) : 0;
+        check_admin_referer( 'ums_delete_annual_allowance_' . $rule_id );
+
+        if ( $rule_id <= 0 ) {
+            self::redirect_to_annual_allowances( array( 'notice' => 'invalid_annual_allowance' ) );
+        }
+
+        $result = UMS_DB_Annual_Allowance::delete( $rule_id );
+        self::redirect_to_annual_allowances( array( 'notice' => $result === false ? 'db_error' : 'annual_allowance_deleted' ) );
+    }
+
+    public static function handle_manual_inventory_out() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        check_admin_referer( 'ums_manual_inventory_out' );
+
+        $raw            = isset( $_POST['ums_manual_out'] ) && is_array( $_POST['ums_manual_out'] ) ? wp_unslash( $_POST['ums_manual_out'] ) : array();
+        $item_id        = isset( $raw['item_id'] ) ? absint( $raw['item_id'] ) : 0;
+        $quantity       = isset( $raw['quantity'] ) ? absint( $raw['quantity'] ) : 0;
+        $target_user_id = isset( $raw['target_user_id'] ) ? absint( $raw['target_user_id'] ) : 0;
+        $note           = isset( $raw['note'] ) ? sanitize_textarea_field( $raw['note'] ) : '';
+
+        if ( $item_id <= 0 || $quantity <= 0 ) {
+            self::redirect_to_inventory( array(
+                'notice'       => 'validation_error',
+                'notice_extra' => 'Vui lòng chọn sản phẩm và nhập số lượng xuất kho hợp lệ.',
+            ) );
+        }
+
+        $item = UMS_DB_Inventory::get_by_id( $item_id );
+        if ( ! $item ) {
+            self::redirect_to_inventory( array( 'notice' => 'invalid_inventory_item' ) );
+        }
+
+        $before_qty = (int) $item['stock_qty'];
+        if ( $before_qty < $quantity ) {
+            self::redirect_to_inventory( array(
+                'notice'       => 'validation_error',
+                'notice_extra' => 'Số lượng xuất kho vượt quá tồn kho hiện tại.',
+            ) );
+        }
+
+        $after_qty = $before_qty - $quantity;
+        global $wpdb;
+        $wpdb->query( 'START TRANSACTION' );
+
+        $updated = UMS_DB_Inventory::update(
+            $item_id,
+            array(
+                'stock_qty' => $after_qty,
+            )
+        );
+
+        if ( $updated === false ) {
+            $wpdb->query( 'ROLLBACK' );
+            self::redirect_to_inventory( array(
+                'notice'       => 'db_error',
+                'notice_extra' => UMS_DB_Inventory::get_last_error(),
+            ) );
+        }
+
+        $unit_price = (float) $item['base_price'];
+        $inserted   = UMS_DB_Inventory_Movement::insert(
+            array(
+                'item_id'        => $item_id,
+                'request_id'     => null,
+                'movement_type'  => 'out',
+                'quantity'       => $quantity,
+                'before_qty'     => $before_qty,
+                'after_qty'      => $after_qty,
+                'unit_price'     => $unit_price,
+                'total_price'    => $unit_price * $quantity,
+                'actor_user_id'  => get_current_user_id(),
+                'target_user_id' => $target_user_id > 0 ? $target_user_id : null,
+                'note'           => $note !== '' ? $note : 'Admin xuất kho chủ động.',
+            )
+        );
+
+        if ( ! $inserted ) {
+            $wpdb->query( 'ROLLBACK' );
+            self::redirect_to_inventory( array(
+                'notice'       => 'db_error',
+                'notice_extra' => UMS_DB_Inventory_Movement::get_last_error(),
+            ) );
+        }
+
+        $wpdb->query( 'COMMIT' );
+        self::redirect_to_inventory( array( 'notice' => 'inventory_manual_out_created' ) );
+    }
+
     private static function record_inventory_admin_movement( $item_id, $before_qty, $after_qty, $unit_price, $is_edit ) {
         if ( $item_id <= 0 ) {
             return;
@@ -1160,6 +1333,31 @@ class UMS_Admin {
             'color_code'   => isset( $raw['color_code'] ) ? sanitize_text_field( $raw['color_code'] ) : '',
             'stock_qty'    => isset( $raw['stock_qty'] ) ? (int) $raw['stock_qty'] : 0,
             'base_price'   => isset( $raw['base_price'] ) ? self::normalize_money_value( $raw['base_price'] ) : 0,
+        );
+    }
+
+    private static function sanitize_annual_allowance_data( $raw ) {
+        $monthly_quantities = array();
+        $raw_months         = isset( $raw['monthly_quantities'] ) && is_array( $raw['monthly_quantities'] ) ? $raw['monthly_quantities'] : array();
+
+        for ( $month = 1; $month <= 12; $month++ ) {
+            $monthly_quantities[ $month ] = isset( $raw_months[ $month ] ) ? max( 0, absint( $raw_months[ $month ] ) ) : 0;
+        }
+
+        $target_type = isset( $raw['target_type'] ) ? sanitize_key( $raw['target_type'] ) : 'all';
+        $apply_type  = isset( $raw['apply_type'] ) ? sanitize_key( $raw['apply_type'] ) : 'item';
+
+        return array(
+            'rule_id'            => isset( $raw['rule_id'] ) ? absint( $raw['rule_id'] ) : 0,
+            'apply_type'         => $apply_type,
+            'category_id'        => $apply_type === 'category' && isset( $raw['category_id'] ) ? absint( $raw['category_id'] ) : 0,
+            'item_id'            => $apply_type === 'item' && isset( $raw['item_id'] ) ? absint( $raw['item_id'] ) : 0,
+            'target_type'        => $target_type,
+            'position_id'        => $target_type === 'position' && isset( $raw['position_id'] ) ? absint( $raw['position_id'] ) : 0,
+            'frequency_count'    => isset( $raw['frequency_count'] ) ? max( 1, absint( $raw['frequency_count'] ) ) : 1,
+            'frequency_years'    => isset( $raw['frequency_years'] ) ? max( 1, absint( $raw['frequency_years'] ) ) : 1,
+            'monthly_quantities' => wp_json_encode( $monthly_quantities ),
+            'is_active'          => ! empty( $raw['is_active'] ) ? 1 : 0,
         );
     }
 
@@ -1430,6 +1628,45 @@ class UMS_Admin {
         return array_unique( $errors );
     }
 
+    private static function validate_annual_allowance_data( $data, $is_edit ) {
+        $errors = array();
+
+        if ( $is_edit && $data['rule_id'] <= 0 ) {
+            $errors[] = 'Không tìm thấy định mức cần cập nhật.';
+        }
+
+        if ( ! in_array( $data['apply_type'], array( 'category', 'item' ), true ) ) {
+            $errors[] = 'Kiểu áp dụng định mức không hợp lệ.';
+        }
+
+        if ( $data['apply_type'] === 'category' && ( $data['category_id'] <= 0 || ! UMS_DB_Product_Category::get_by_id( $data['category_id'] ) ) ) {
+            $errors[] = 'Vui lòng chọn danh mục sản phẩm hợp lệ.';
+        }
+
+        if ( $data['apply_type'] === 'item' && ( $data['item_id'] <= 0 || ! UMS_DB_Inventory::get_by_id( $data['item_id'] ) ) ) {
+            $errors[] = 'Vui lòng chọn sản phẩm hợp lệ.';
+        }
+
+        if ( ! in_array( $data['target_type'], array( 'all', 'position' ), true ) ) {
+            $errors[] = 'Đối tượng áp dụng không hợp lệ.';
+        }
+
+        if ( $data['target_type'] === 'position' && ( $data['position_id'] <= 0 || ! UMS_DB_Position::get_by_id( $data['position_id'] ) ) ) {
+            $errors[] = 'Vui lòng chọn chức vụ áp dụng hợp lệ.';
+        }
+
+        if ( $data['frequency_count'] <= 0 || $data['frequency_years'] <= 0 ) {
+            $errors[] = 'Tần suất cấp phát phải có số lần và số năm lớn hơn 0.';
+        }
+
+        $monthly_quantities = json_decode( $data['monthly_quantities'], true );
+        if ( ! is_array( $monthly_quantities ) || array_sum( array_map( 'absint', $monthly_quantities ) ) <= 0 ) {
+            $errors[] = 'Vui lòng chọn ít nhất một tháng có số lượng cấp phát lớn hơn 0.';
+        }
+
+        return array_unique( $errors );
+    }
+
     private static function is_valid_date( $date ) {
         $parsed = DateTime::createFromFormat( 'Y-m-d', $date );
         return $parsed && $parsed->format( 'Y-m-d' ) === $date;
@@ -1629,6 +1866,43 @@ class UMS_Admin {
         return $values;
     }
 
+    private static function get_default_annual_allowance_values( $rule = null ) {
+        $monthly_quantities = array();
+        for ( $month = 1; $month <= 12; $month++ ) {
+            $monthly_quantities[ $month ] = 0;
+        }
+
+        $defaults = array(
+            'rule_id'            => 0,
+            'apply_type'         => 'item',
+            'category_id'        => 0,
+            'item_id'            => 0,
+            'target_type'        => 'all',
+            'position_id'        => 0,
+            'frequency_count'    => 1,
+            'frequency_years'    => 1,
+            'monthly_quantities' => $monthly_quantities,
+            'is_active'          => 1,
+        );
+
+        $values = $rule ? wp_parse_args( $rule, $defaults ) : $defaults;
+
+        if ( is_string( $values['monthly_quantities'] ) ) {
+            $decoded = json_decode( $values['monthly_quantities'], true );
+            $values['monthly_quantities'] = is_array( $decoded ) ? $decoded : array();
+        }
+
+        $normalised_months = array();
+        for ( $month = 1; $month <= 12; $month++ ) {
+            $normalised_months[ $month ] = isset( $values['monthly_quantities'][ $month ] )
+                ? absint( $values['monthly_quantities'][ $month ] )
+                : 0;
+        }
+        $values['monthly_quantities'] = $normalised_months;
+
+        return $values;
+    }
+
     private static function is_known_department( $department_name ) {
         $departments = UMS_DB_Department::get_active();
 
@@ -1724,6 +1998,10 @@ class UMS_Admin {
             'inventory_created'  => array( 'success', 'Đã thêm sản phẩm/tồn kho mới.' ),
             'inventory_updated'  => array( 'success', 'Đã cập nhật sản phẩm/tồn kho.' ),
             'inventory_deleted'  => array( 'success', 'Đã xóa sản phẩm khỏi danh mục kho.' ),
+            'inventory_manual_out_created' => array( 'success', 'Đã ghi nhận xuất kho chủ động và trừ tồn kho.' ),
+            'annual_allowance_created' => array( 'success', 'Đã thêm định mức cấp phát hàng năm.' ),
+            'annual_allowance_updated' => array( 'success', 'Đã cập nhật định mức cấp phát hàng năm.' ),
+            'annual_allowance_deleted' => array( 'success', 'Đã xóa định mức cấp phát hàng năm.' ),
             'invalid_user'     => array( 'error', 'Không tìm thấy nhân sự cần xử lý.' ),
             'invalid_department' => array( 'error', 'Không tìm thấy phòng ban cần xử lý.' ),
             'invalid_position' => array( 'error', 'Không tìm thấy chức danh cần xử lý.' ),
@@ -1732,6 +2010,7 @@ class UMS_Admin {
             'invalid_approval_flow' => array( 'error', 'Không tìm thấy bước duyệt cần xử lý.' ),
             'invalid_product_category' => array( 'error', 'Không tìm thấy danh mục sản phẩm cần xử lý.' ),
             'invalid_inventory_item' => array( 'error', 'Không tìm thấy sản phẩm cần xử lý.' ),
+            'invalid_annual_allowance' => array( 'error', 'Không tìm thấy định mức cần xử lý.' ),
             'validation_error' => array( 'error', 'Dữ liệu chưa hợp lệ.' ),
             'db_error'         => array( 'error', 'Không thể ghi dữ liệu vào database.' ),
         );
@@ -1861,6 +2140,24 @@ class UMS_Admin {
             array_filter(
                 array_merge(
                     array( 'page' => 'tvn-ums-inventory' ),
+                    $args
+                ),
+                function( $value ) {
+                    return $value !== null && $value !== '';
+                }
+            ),
+            admin_url( 'admin.php' )
+        );
+
+        wp_safe_redirect( $url );
+        exit;
+    }
+
+    private static function redirect_to_annual_allowances( $args = array() ) {
+        $url = add_query_arg(
+            array_filter(
+                array_merge(
+                    array( 'page' => 'tvn-ums-annual-allowances' ),
                     $args
                 ),
                 function( $value ) {

@@ -97,7 +97,7 @@ foreach ( $details as $detail ) {
 		</label>
 		<label>
 			<span>Loại phiếu</span>
-			<input type="text" value="<?php echo esc_attr( $detail_request['request_type'] ); ?>" readonly>
+			<input type="text" value="<?php echo esc_attr( 'Yêu cầu cấp đồng phục' ); ?>" readonly>
 		</label>
 	</div>
 </section>
@@ -110,7 +110,7 @@ foreach ( $details as $detail ) {
 		</div>
 	</div>
 
-	<div class="ums-user-request-form">
+	<div class="ums-user-request-form ums-request-detail-profile-grid">
 		<label>
 			<span>Mã nhân viên</span>
 			<input type="text" value="<?php echo esc_attr( $target_profile ? $target_profile['employee_code'] : '' ); ?>" readonly>
@@ -271,6 +271,12 @@ foreach ( $details as $detail ) {
 		</div>
 	<?php endif; ?>
 </section>
+
+<?php
+$signature_request = $detail_request;
+$signature_profile = $target_profile ? $target_profile : array();
+include UMS_PLUGIN_DIR . 'user/partials/components/approval-signature-grid.php';
+?>
 
 <?php if ( ! empty( $detail_can_approve ) ) : ?>
 	<section class="ums-user-panel">

@@ -296,6 +296,84 @@
     margin-bottom: 4px;
 }
 
+.ums-approval-signature-wrap {
+    overflow-x: auto;
+}
+
+.ums-approval-signature-table {
+    border-collapse: collapse;
+    min-width: 760px;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.ums-approval-signature-table th,
+.ums-approval-signature-table td {
+    border: 1px solid #9ca3af;
+    color: #334155;
+    min-height: 86px;
+    padding: 10px;
+    text-align: center;
+    vertical-align: top;
+}
+
+.ums-approval-signature-table th {
+    background: #f8fafc;
+    color: #374151;
+    font-weight: 800;
+}
+
+.ums-approval-signature-table thead tr:first-child th {
+    font-size: 15px;
+}
+
+.ums-approval-signature-status {
+    display: grid;
+    gap: 4px;
+    min-height: 72px;
+    place-content: center;
+}
+
+.ums-approval-signature-status strong {
+    color: #166534;
+    font-size: 13px;
+}
+
+.ums-approval-signature-status.is-rejected strong {
+    color: #b91c1c;
+}
+
+.ums-approval-signature-status span {
+    color: #111827;
+    font-weight: 700;
+}
+
+.ums-approval-signature-status small,
+.ums-approval-signature-status em,
+.ums-approval-signature-empty,
+.ums-approval-signature-pending {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.ums-approval-signature-status em {
+    display: block;
+    font-style: normal;
+    overflow-wrap: anywhere;
+}
+
+.ums-approval-signature-pending {
+    color: #1d4ed8;
+    display: block;
+    font-weight: 800;
+    margin-top: 22px;
+}
+
+.ums-approval-signature-empty {
+    display: block;
+    margin-top: 22px;
+}
+
 .ums-user-request-form input:focus,
 .ums-user-request-form select:focus,
 .ums-user-request-form textarea:focus,

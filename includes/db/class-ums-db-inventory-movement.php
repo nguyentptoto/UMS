@@ -92,4 +92,8 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
 
         return self::db()->get_results( self::db()->prepare( $sql, $params ), ARRAY_A );
     }
+
+    public static function get_last_error() {
+        return self::db()->last_error;
+    }
 }
