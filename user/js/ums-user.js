@@ -107,7 +107,10 @@
     function filterSizesByCategory(row) {
         var categorySelect = row.querySelector('[data-ums-child-category]');
         var sizeSelect = row.querySelector('[data-ums-size-select]');
+        var inventoryField = row.querySelector('[data-ums-inventory-field="inventory_id"]');
         var categoryId = categorySelect ? categorySelect.value : '';
+        var currentInventoryId = inventoryField ? inventoryField.value : '';
+        var matchedCurrent = false;
 
         if (!sizeSelect) {
             return;
@@ -120,9 +123,15 @@
             }
 
             setVisibleOption(option, categoryId !== '' && option.dataset.categoryId === categoryId);
+            if (currentInventoryId && option.dataset.inventoryId === currentInventoryId && !option.disabled) {
+                option.selected = true;
+                matchedCurrent = true;
+            }
         });
 
-        resetSelect(sizeSelect);
+        if (!matchedCurrent) {
+            resetSelect(sizeSelect);
+        }
         updateSizeFields(sizeSelect);
     }
 
@@ -130,6 +139,8 @@
         var parentSelect = row.querySelector('[data-ums-parent-category]');
         var childSelect = row.querySelector('[data-ums-child-category]');
         var parentId = parentSelect ? parentSelect.value : '';
+        var currentChildId = childSelect ? childSelect.value : '';
+        var matchedCurrent = false;
 
         if (!childSelect) {
             return;
@@ -142,9 +153,15 @@
             }
 
             setVisibleOption(option, parentId !== '' && option.dataset.parentId === parentId);
+            if (currentChildId && option.value === currentChildId && !option.disabled) {
+                option.selected = true;
+                matchedCurrent = true;
+            }
         });
 
-        resetSelect(childSelect);
+        if (!matchedCurrent) {
+            resetSelect(childSelect);
+        }
         filterSizesByCategory(row);
     }
 
@@ -225,6 +242,144 @@
         });
     }
 
+    function parseJsonAttribute(element, attributeName, fallback) {
+        try {
+            return JSON.parse(element.getAttribute(attributeName) || '');
+        } catch (error) {
+            return fallback;
+        }
+    }
+
+    function initUserJqxGrids() {
+        var $ = window.jQuery;
+        if (!$ || !$.fn || !$.fn.jqxGrid) {
+            return;
+        }
+
+        $('.ums-user-jqx-grid').each(function () {
+            var $grid = $(this);
+            if ($grid.data('umsJqxReady')) {
+                return;
+            }
+
+            var rows = parseJsonAttribute(this, 'data-rows', []);
+            var columns = parseJsonAttribute(this, 'data-columns', []);
+
+            columns = columns.map(function (column) {
+                if (column.cellsrenderer === 'html') {
+                    column.cellsrenderer = function (row, columnfield, value) {
+                        return '<div class="ums-jqx-cell-html">' + (value || '') + '</div>';
+                    };
+                }
+                return column;
+            });
+
+            var source = {
+                datatype: 'array',
+                localdata: rows
+            };
+
+            $grid.jqxGrid({
+                width: '100%',
+                height: 390,
+                theme: 'energyblue',
+                source: new $.jqx.dataAdapter(source),
+                columns: columns,
+                columnsresize: true,
+                sortable: true,
+                filterable: true,
+                pageable: true,
+                pagesize: 10,
+                altrows: true,
+                autoheight: false,
+                selectionmode: 'singlerow'
+            });
+
+            $grid.data('umsJqxReady', true);
+        });
+    }
+
+    function refreshUserJqxGrids() {
+        var $ = window.jQuery;
+        if (!$ || !$.fn || !$.fn.jqxGrid) {
+            return;
+        }
+
+        $('.ums-user-jqx-grid').each(function () {
+            var $grid = $(this);
+            if ($grid.data('umsJqxReady')) {
+                $grid.jqxGrid('refresh');
+            }
+        });
+    }
+
+    function initUserJqxTabs() {
+        var $ = window.jQuery;
+        if (!$ || !$.fn || !$.fn.jqxTabs) {
+            return;
+        }
+
+        $('[data-ums-jqx-tabs]').each(function () {
+            var $tabs = $(this);
+            if ($tabs.data('umsJqxReady')) {
+                return;
+            }
+
+            $tabs.jqxTabs({
+                width: '100%',
+                theme: 'energyblue',
+                animationType: 'fade',
+                height: 500,
+                autoHeight: false,
+                initTabContent: function () {
+                    window.setTimeout(function () {
+                        initUserJqxGrids();
+                        refreshUserJqxGrids();
+                    }, 0);
+                }
+            });
+
+            $tabs.on('selected', function () {
+                window.setTimeout(function () {
+                    initUserJqxGrids();
+                    refreshUserJqxGrids();
+                }, 0);
+            });
+
+            $tabs.data('umsJqxReady', true);
+        });
+
+        initUserJqxGrids();
+        window.setTimeout(refreshUserJqxGrids, 60);
+    }
+
+    function openRejectModal(form) {
+        var modal = form ? form.querySelector('[data-ums-reject-modal]') : null;
+        var reason = form ? form.querySelector('[data-ums-reject-modal-reason]') : null;
+        if (!modal) {
+            return;
+        }
+
+        modal.hidden = false;
+        document.body.classList.add('ums-modal-open');
+        window.setTimeout(function () {
+            if (reason) {
+                reason.focus();
+            }
+        }, 0);
+    }
+
+    function closeRejectModal(modal) {
+        if (!modal) {
+            return;
+        }
+
+        modal.hidden = true;
+        if (!document.querySelector('[data-ums-reject-modal]:not([hidden])')) {
+            document.body.classList.remove('ums-modal-open');
+        }
+    }
+
     document.addEventListener('change', function (event) {
         var form = event.target.closest('[data-ums-user-form]');
         var row = getItemRow(event.target);
@@ -278,6 +433,36 @@
             return;
         }
 
+        var rejectButton = event.target.closest('[data-ums-reject-button]');
+        if (rejectButton) {
+            var rejectForm = rejectButton.closest('[data-ums-reject-form]');
+            var rejectReason = rejectForm ? rejectForm.querySelector('[data-ums-reject-reason]') : null;
+            if (rejectReason && !rejectReason.value) {
+                var reason = window.prompt('Nhập lý do từ chối phiếu:');
+                if (!reason || !reason.trim()) {
+                    event.preventDefault();
+                    return;
+                }
+                rejectReason.value = reason.trim();
+            }
+            return;
+        }
+
+        var openRejectModalButton = event.target.closest('[data-ums-open-reject-modal]');
+        if (openRejectModalButton) {
+            var detailRejectForm = openRejectModalButton.closest('[data-ums-detail-reject-form]');
+            if (detailRejectForm) {
+                openRejectModal(detailRejectForm);
+            }
+            return;
+        }
+
+        var closeRejectModalButton = event.target.closest('[data-ums-close-reject-modal]');
+        if (closeRejectModalButton) {
+            closeRejectModal(closeRejectModalButton.closest('[data-ums-reject-modal]'));
+            return;
+        }
+
         var submitButton = event.target.closest('[data-ums-submit-approval]');
         if (!submitButton) {
             return;
@@ -308,6 +493,16 @@
         }
     });
 
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        document.querySelectorAll('[data-ums-reject-modal]:not([hidden])').forEach(function (modal) {
+            closeRejectModal(modal);
+        });
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('[data-ums-user-form]').forEach(function (form) {
             var targetSelect = form.querySelector('[data-ums-target-select]');
@@ -315,9 +510,13 @@
                 updateTargetFields(targetSelect);
             }
 
-            form.querySelectorAll('[data-ums-request-item]').forEach(initRequestItem);
+            var rows = form.querySelectorAll('[data-ums-request-item]');
+            itemIndex = Math.max(itemIndex, rows.length);
+            rows.forEach(initRequestItem);
             updateRemoveButtons(form);
             updateReasonState(form);
         });
+
+        initUserJqxTabs();
     });
 })();

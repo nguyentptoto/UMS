@@ -14,6 +14,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
     <nav class="ums-portal-nav" aria-label="UMS user navigation">
         <?php foreach ( $portal_pages as $page_key => $page ) : ?>
+            <?php if ( isset( $page['nav'] ) && $page['nav'] === false ) : ?>
+                <?php continue; ?>
+            <?php endif; ?>
             <a
                 class="<?php echo $current_page === $page_key ? 'is-active' : ''; ?>"
                 href="<?php echo esc_url( add_query_arg( 'ums_page', $page_key, $portal_url ) ); ?>"

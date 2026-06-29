@@ -10,22 +10,47 @@ class UMS_User {
         add_action( 'admin_post_ums_submit_uniform_request', array( __CLASS__, 'handle_submit_uniform_request' ) );
         add_action( 'admin_post_ums_delete_uniform_request', array( __CLASS__, 'handle_delete_uniform_request' ) );
         add_action( 'admin_post_ums_approve_uniform_request', array( __CLASS__, 'handle_approve_uniform_request' ) );
+        add_action( 'admin_post_ums_reject_uniform_request', array( __CLASS__, 'handle_reject_uniform_request' ) );
+        add_action( 'admin_init', array( __CLASS__, 'redirect_user_from_wp_admin' ) );
         add_filter( 'template_include', array( __CLASS__, 'use_standalone_template' ), 99 );
+        add_filter( 'login_redirect', array( __CLASS__, 'redirect_user_after_login' ), 20, 3 );
     }
 
     public static function register_assets() {
         wp_register_style(
+            'ums-jqx-base-css',
+            UMS_PLUGIN_URL . 'assets/css/jqx.base.ums.css',
+            array(),
+            '1.0.0'
+        );
+
+        wp_register_style(
+            'ums-jqx-energyblue-css',
+            UMS_PLUGIN_URL . 'assets/css/jqx.energyblue.css',
+            array( 'ums-jqx-base-css' ),
+            '1.0.0'
+        );
+
+        wp_register_style(
             'ums-user-css',
             UMS_PLUGIN_URL . 'user/css/ums-user.css',
-            array(),
-            '1.0.9'
+            array( 'ums-jqx-energyblue-css' ),
+            '1.1.8'
+        );
+
+        wp_register_script(
+            'ums-jqx-all',
+            UMS_PLUGIN_URL . 'assets/js/jqx-all.js',
+            array( 'jquery' ),
+            '1.0.0',
+            true
         );
 
         wp_register_script(
             'ums-user-js',
             UMS_PLUGIN_URL . 'user/js/ums-user.js',
-            array(),
-            '1.1.0',
+            array( 'jquery', 'ums-jqx-all' ),
+            '1.1.5',
             true
         );
     }
@@ -48,6 +73,46 @@ class UMS_User {
         return file_exists( $standalone_template ) ? $standalone_template : $template;
     }
 
+    public static function redirect_user_after_login( $redirect_to, $requested_redirect_to, $user ) {
+        if ( is_wp_error( $user ) || ! $user instanceof WP_User ) {
+            return $redirect_to;
+        }
+
+        if ( user_can( $user, 'manage_options' ) ) {
+            return $redirect_to;
+        }
+
+        $profile = UMS_DB_User::get_by_wp_user_id( (int) $user->ID );
+        if ( ! $profile ) {
+            return $redirect_to;
+        }
+
+        return home_url( '/' );
+    }
+
+    public static function redirect_user_from_wp_admin() {
+        if ( ! is_user_logged_in() || current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        if ( wp_doing_ajax() ) {
+            return;
+        }
+
+        global $pagenow;
+        if ( in_array( $pagenow, array( 'admin-post.php', 'admin-ajax.php' ), true ) ) {
+            return;
+        }
+
+        $profile = UMS_DB_User::get_by_wp_user_id( get_current_user_id() );
+        if ( ! $profile ) {
+            return;
+        }
+
+        wp_safe_redirect( home_url( '/' ) );
+        exit;
+    }
+
     public static function current_page_has_portal_shortcode() {
         $post = get_post();
         if ( ! $post || empty( $post->post_content ) ) {
@@ -61,6 +126,11 @@ class UMS_User {
         self::register_assets();
         wp_enqueue_style( 'ums-user-css' );
         self::enqueue_late_portal_css();
+        wp_add_inline_script(
+            'jquery',
+            'window.$ = window.jQuery;',
+            'after'
+        );
         wp_enqueue_script( 'ums-user-js' );
     }
 
@@ -146,6 +216,7 @@ class UMS_User {
                 self::redirect_with_notice( $redirect_url, 'request_db_error' );
             }
 
+            self::send_approval_step_email( $edit_request_id, $request_data, $flows, $request_data['current_status'], $redirect_url );
             self::redirect_with_notice( $redirect_url, 'request_updated', array( 'request_id' => $edit_request_id, 'ums_page' => 'my-requests' ) );
         }
 
@@ -155,6 +226,7 @@ class UMS_User {
             self::redirect_with_notice( $redirect_url, 'request_db_error' );
         }
 
+        self::send_approval_step_email( $request_id, $request_data, $flows, $request_data['current_status'], $redirect_url );
         self::redirect_with_notice( $redirect_url, 'request_submitted', array( 'request_id' => $request_id, 'ums_page' => 'my-requests' ) );
     }
 
@@ -216,10 +288,51 @@ class UMS_User {
         }
 
         $next_status = self::get_next_status_after_approval( $flows, $step_order );
-        UMS_DB_Request::add_log( $request_id, $step_order, $current_user_id, 'approved', 'Đã duyệt bước ' . $step_order . '.' );
-        $updated = UMS_DB_Request::update_status( $request_id, $next_status );
+        if ( $next_status === 'completed' ) {
+            $updated = UMS_DB_Request::complete_approved_request( $request_id, $current_user_id );
+            if ( $updated ) {
+                UMS_DB_Request::add_log( $request_id, $step_order, $current_user_id, 'approved', 'Đã duyệt bước ' . $step_order . ' và ghi nhận xuất kho.' );
+            }
+        } else {
+            $updated = UMS_DB_Request::update_status( $request_id, $next_status );
+            if ( $updated !== false ) {
+                UMS_DB_Request::add_log( $request_id, $step_order, $current_user_id, 'approved', 'Đã duyệt bước ' . $step_order . '.' );
+                $request['current_status'] = $next_status;
+                self::send_approval_step_email( $request_id, $request, $flows, $next_status, $redirect_url );
+            }
+        }
 
-        self::redirect_with_notice( $redirect_url, $updated === false ? 'request_db_error' : 'request_approved', array( 'ums_page' => 'my-requests' ) );
+        self::redirect_with_notice( $redirect_url, ! $updated ? 'request_stock_error' : 'request_approved', array( 'ums_page' => 'my-requests' ) );
+    }
+
+    public static function handle_reject_uniform_request() {
+        if ( ! is_user_logged_in() ) {
+            wp_safe_redirect( wp_login_url() );
+            exit;
+        }
+
+        $request_id    = isset( $_POST['request_id'] ) ? absint( $_POST['request_id'] ) : 0;
+        $redirect_url  = isset( $_POST['portal_url'] ) ? esc_url_raw( wp_unslash( $_POST['portal_url'] ) ) : home_url();
+        $reject_reason = isset( $_POST['reject_reason'] ) ? sanitize_textarea_field( wp_unslash( $_POST['reject_reason'] ) ) : '';
+        check_admin_referer( 'ums_reject_uniform_request_' . $request_id );
+
+        if ( $reject_reason === '' ) {
+            self::redirect_with_notice( $redirect_url, 'request_reject_reason_required', array( 'ums_page' => 'my-requests' ) );
+        }
+
+        $current_user_id = get_current_user_id();
+        $profile         = UMS_DB_User::get_by_wp_user_id( $current_user_id );
+        $request         = UMS_DB_Request::get_by_id( $request_id );
+
+        if ( ! self::can_current_user_approve_request( $request, $profile ) ) {
+            self::redirect_with_notice( $redirect_url, 'request_not_approvable', array( 'ums_page' => 'my-requests' ) );
+        }
+
+        $step_order = self::get_status_step_order( $request['current_status'] );
+        UMS_DB_Request::add_log( $request_id, $step_order, $current_user_id, 'rejected', $reject_reason );
+        $updated = UMS_DB_Request::update_status( $request_id, 'rejected' );
+
+        self::redirect_with_notice( $redirect_url, $updated === false ? 'request_db_error' : 'request_rejected', array( 'ums_page' => 'my-requests' ) );
     }
 
     private static function render_portal() {
@@ -264,9 +377,12 @@ class UMS_User {
         $portal_url         = get_permalink();
         $current_user       = wp_get_current_user();
         $portal_notice      = self::get_portal_notice();
-        $my_requests        = UMS_DB_Request::get_all( array( 'creator_id' => $current_user_id ) );
-        $approval_requests  = self::get_requests_waiting_for_profile_approval( $profile, $approval_flows );
+        $approval_requests  = self::get_pending_requests_for_portal_tab( $current_user_id, $profile, $approval_flows );
+        $completed_requests = self::get_completed_requests_for_profile( $current_user_id, $profile, $approval_flows );
+        $dashboard_stats    = self::get_dashboard_stats( $current_user_id, $profile, $approval_flows );
         $editing_request    = self::get_editing_request_for_form( $current_user_id );
+        $detail_request     = self::get_detail_request_for_page( $current_user_id, $profile );
+        $detail_can_approve = $detail_request ? self::can_current_user_approve_request( $detail_request, $profile ) : false;
 
         ob_start();
         include UMS_PLUGIN_DIR . 'user/partials/view-user-portal.php';
@@ -367,10 +483,34 @@ class UMS_User {
         return false;
     }
 
+    private static function can_current_user_approve_request( $request, $profile ) {
+        if ( ! $request || ! $profile ) {
+            return false;
+        }
+
+        $step_order = self::get_status_step_order( $request['current_status'] );
+        if ( $step_order <= 1 ) {
+            return false;
+        }
+
+        $target_profile = UMS_DB_User::get_by_wp_user_id( (int) $request['target_user_id'] );
+        $department     = $target_profile ? self::get_department_by_name( $target_profile['department'] ) : null;
+        $flows          = $department ? self::prepare_approval_flows(
+            UMS_DB_Approval_Flow::get_all(
+                array(
+                    'department_id' => (int) $department['department_id'],
+                    'status'        => 'active',
+                )
+            )
+        ) : array();
+
+        return self::can_approve_step( $profile, $flows, $step_order );
+    }
+
     private static function can_edit_created_request( $request, $creator_user_id ) {
         return $request
             && (int) $request['creator_id'] === (int) $creator_user_id
-            && $request['current_status'] === 'pending_step_2';
+            && in_array( (string) $request['current_status'], array( 'pending_step_2', 'rejected' ), true );
     }
 
     private static function get_requests_waiting_for_profile_approval( $profile, $approval_flows ) {
@@ -399,6 +539,121 @@ class UMS_User {
         );
     }
 
+    private static function get_pending_requests_for_creator( $current_user_id ) {
+        $requests = UMS_DB_Request::get_all(
+            array(
+                'creator_id' => $current_user_id,
+            )
+        );
+
+        return array_values(
+            array_filter(
+                $requests,
+                function ( $request ) {
+                    return ! empty( $request['current_status'] )
+                        && preg_match( '/^pending_step_\d+$/', (string) $request['current_status'] );
+                }
+            )
+        );
+    }
+
+    private static function get_pending_requests_for_portal_tab( $current_user_id, $profile, $approval_flows ) {
+        $requests = array();
+
+        foreach ( self::get_pending_requests_for_creator( $current_user_id ) as $request ) {
+            $request['_ums_action_mode']              = 'owner';
+            $requests[ (int) $request['request_id'] ] = $request;
+        }
+
+        foreach ( self::get_requests_waiting_for_profile_approval( $profile, $approval_flows ) as $request ) {
+            $request['_ums_action_mode']              = 'approval';
+            $requests[ (int) $request['request_id'] ] = $request;
+        }
+
+        $requests = array_values( $requests );
+        usort(
+            $requests,
+            function ( $left, $right ) {
+                return strtotime( $right['created_at'] ) <=> strtotime( $left['created_at'] );
+            }
+        );
+
+        return $requests;
+    }
+
+    private static function get_dashboard_stats( $current_user_id, $profile, $approval_flows ) {
+        $created_requests = UMS_DB_Request::get_all(
+            array(
+                'creator_id' => $current_user_id,
+                'limit'      => 0,
+            )
+        );
+        $waiting_approval = self::get_requests_waiting_for_profile_approval( $profile, $approval_flows );
+        $stats            = array(
+            'created_total'    => count( $created_requests ),
+            'created_pending'  => 0,
+            'created_done'     => 0,
+            'created_rejected' => 0,
+            'waiting_approval' => count( $waiting_approval ),
+        );
+
+        foreach ( $created_requests as $request ) {
+            $status = (string) $request['current_status'];
+            if ( $status === 'completed' ) {
+                $stats['created_done']++;
+                continue;
+            }
+
+            if ( $status === 'rejected' ) {
+                $stats['created_rejected']++;
+                continue;
+            }
+
+            if ( preg_match( '/^pending_step_\d+$/', $status ) ) {
+                $stats['created_pending']++;
+            }
+        }
+
+        return $stats;
+    }
+
+    private static function get_completed_requests_for_profile( $current_user_id, $profile, $approval_flows ) {
+        $requests = UMS_DB_Request::get_all(
+            array(
+                'creator_id' => $current_user_id,
+                'status_in'  => array( 'completed', 'rejected' ),
+            )
+        );
+
+        $can_approve_in_department = false;
+        foreach ( $approval_flows as $flow ) {
+            $step = (int) $flow['step_order'];
+            if ( $step > 1 && self::can_approve_step( $profile, $approval_flows, $step ) ) {
+                $can_approve_in_department = true;
+                break;
+            }
+        }
+
+        if ( $can_approve_in_department ) {
+            $requests = array_merge(
+                $requests,
+                UMS_DB_Request::get_all(
+                    array(
+                        'department' => $profile['department'],
+                        'status_in'  => array( 'completed', 'rejected' ),
+                    )
+                )
+            );
+        }
+
+        $unique = array();
+        foreach ( $requests as $request ) {
+            $unique[ (int) $request['request_id'] ] = $request;
+        }
+
+        return array_values( $unique );
+    }
+
     private static function get_editing_request_for_form( $current_user_id ) {
         $edit_request_id = isset( $_GET['edit_request_id'] ) ? absint( $_GET['edit_request_id'] ) : 0;
         if ( $edit_request_id <= 0 ) {
@@ -412,6 +667,67 @@ class UMS_User {
 
         $request['details'] = UMS_DB_Request::get_details( $edit_request_id );
         return $request;
+    }
+
+    private static function get_detail_request_for_page( $current_user_id, $profile ) {
+        $request_id = isset( $_GET['request_id'] ) ? absint( $_GET['request_id'] ) : 0;
+        if ( $request_id <= 0 ) {
+            return null;
+        }
+
+        $request = UMS_DB_Request::get_by_id( $request_id );
+        if ( ! self::can_view_request_detail( $request, $current_user_id, $profile ) ) {
+            return null;
+        }
+
+        $request['details'] = UMS_DB_Request::get_details( $request_id );
+        return $request;
+    }
+
+    private static function can_view_request_detail( $request, $current_user_id, $profile ) {
+        if ( ! $request || empty( $profile['profile_id'] ) ) {
+            return false;
+        }
+
+        if ( (int) $request['creator_id'] === (int) $current_user_id || (int) $request['target_user_id'] === (int) $current_user_id ) {
+            return true;
+        }
+
+        if ( in_array( (string) $request['current_status'], array( 'completed', 'rejected' ), true ) ) {
+            return self::can_profile_view_department_request_history( $request, $profile );
+        }
+
+        return self::can_current_user_approve_request( $request, $profile );
+    }
+
+    private static function can_profile_view_department_request_history( $request, $profile ) {
+        $target_profile = UMS_DB_User::get_by_wp_user_id( (int) $request['target_user_id'] );
+        if ( ! $target_profile || (string) $target_profile['department'] !== (string) $profile['department'] ) {
+            return false;
+        }
+
+        $department = self::get_department_by_name( $target_profile['department'] );
+        if ( ! $department ) {
+            return false;
+        }
+
+        $flows = self::prepare_approval_flows(
+            UMS_DB_Approval_Flow::get_all(
+                array(
+                    'department_id' => (int) $department['department_id'],
+                    'status'        => 'active',
+                )
+            )
+        );
+
+        foreach ( $flows as $flow ) {
+            $step = (int) $flow['step_order'];
+            if ( $step > 1 && self::can_approve_step( $profile, $flows, $step ) ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function get_active_teammate_by_user_id( $profile, $user_id ) {
@@ -444,7 +760,15 @@ class UMS_User {
         }
 
         $messages = array(
-            'request_submitted'       => array( 'success', 'Đã gửi phiếu vào luồng duyệt bước 1.' ),
+            'request_submitted'       => array( 'success', 'Đã gửi phiếu vào luồng duyệt tiếp theo.' ),
+            'request_updated'         => array( 'success', 'Đã cập nhật phiếu yêu cầu.' ),
+            'request_deleted'         => array( 'success', 'Đã xóa phiếu yêu cầu.' ),
+            'request_approved'        => array( 'success', 'Đã duyệt phiếu và chuyển sang bước tiếp theo.' ),
+            'request_rejected'        => array( 'success', 'Đã từ chối phiếu yêu cầu.' ),
+            'request_not_editable'    => array( 'error', 'Phiếu này không còn ở trạng thái cho phép sửa hoặc xóa.' ),
+            'request_not_approvable'  => array( 'error', 'Bạn không có quyền duyệt phiếu ở bước hiện tại.' ),
+            'request_reject_reason_required' => array( 'error', 'Vui lòng nhập lý do từ chối phiếu.' ),
+            'request_stock_error'     => array( 'error', 'Không thể ghi nhận xuất kho. Vui lòng kiểm tra tồn kho hoặc lịch sử xuất kho của phiếu.' ),
             'request_invalid_profile' => array( 'error', 'Hồ sơ của bạn không hợp lệ hoặc tài khoản đang bị khóa.' ),
             'request_no_permission'   => array( 'error', 'Bạn không thuộc bước 1 của luồng duyệt nên không có quyền tạo yêu cầu.' ),
             'request_invalid_target'  => array( 'error', 'Người nhận đồng phục không hợp lệ.' ),
@@ -503,6 +827,17 @@ class UMS_User {
                 'file'  => 'page-request.php',
             );
         }
+
+        $pages['my-requests'] = array(
+            'label' => 'Phiếu của tôi',
+            'file'  => 'page-my-requests.php',
+        );
+
+        $pages['request-detail'] = array(
+            'label' => 'Chi tiết phiếu',
+            'file'  => 'page-request-detail.php',
+            'nav'   => false,
+        );
 
         $pages['approval-flow'] = array(
             'label' => 'Luồng duyệt',
@@ -595,6 +930,66 @@ class UMS_User {
         }
 
         return ! empty( $names ) ? implode( ', ', $names ) : 'Chưa chọn người duyệt';
+    }
+
+    private static function send_approval_step_email( $request_id, $request, $approval_flows, $status, $portal_url ) {
+        $step_order = self::get_status_step_order( $status );
+        if ( $step_order <= 1 ) {
+            return;
+        }
+
+        $flow = self::get_flow_by_step( $approval_flows, $step_order );
+        if ( ! $flow ) {
+            return;
+        }
+
+        $approver_ids = json_decode( $flow['approver_profile_ids'], true );
+        if ( ! is_array( $approver_ids ) || empty( $approver_ids ) ) {
+            return;
+        }
+
+        $target_profile = UMS_DB_User::get_by_wp_user_id( (int) $request['target_user_id'] );
+        $detail_url     = add_query_arg(
+            array(
+                'ums_page'   => 'request-detail',
+                'request_id' => absint( $request_id ),
+            ),
+            $portal_url
+        );
+
+        $subject = '[UMS] Phiếu #' . absint( $request_id ) . ' đang chờ bạn duyệt';
+        $message = "Xin chào,\n\n";
+        $message .= 'Phiếu yêu cầu cấp đồng phục #' . absint( $request_id ) . ' đã chuyển đến bước "' . $flow['step_name'] . "\".\n";
+        if ( $target_profile ) {
+            $message .= 'Người nhận: ' . $target_profile['employee_code'] . ' - ' . $target_profile['full_name'] . "\n";
+            $message .= 'Phòng ban: ' . $target_profile['department'] . "\n";
+        }
+        $message .= "\nVui lòng truy cập liên kết sau để xem chi tiết và duyệt phiếu:\n" . esc_url_raw( $detail_url ) . "\n\n";
+        $message .= 'UMS - Uniform Management System';
+
+        foreach ( array_unique( array_map( 'absint', $approver_ids ) ) as $approver_profile_id ) {
+            $approver = UMS_DB_User::get_by_id( $approver_profile_id );
+            if ( ! $approver || empty( $approver['user_id'] ) ) {
+                continue;
+            }
+
+            $wp_user = get_userdata( (int) $approver['user_id'] );
+            if ( ! $wp_user || empty( $wp_user->user_email ) || ! is_email( $wp_user->user_email ) ) {
+                continue;
+            }
+
+            wp_mail( $wp_user->user_email, $subject, $message );
+        }
+    }
+
+    private static function get_flow_by_step( $approval_flows, $step_order ) {
+        foreach ( $approval_flows as $flow ) {
+            if ( (int) $flow['step_order'] === (int) $step_order ) {
+                return $flow;
+            }
+        }
+
+        return null;
     }
 
     private static function prepare_approval_flows( $approval_flows ) {

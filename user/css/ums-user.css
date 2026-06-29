@@ -202,8 +202,12 @@
 .ums-user-metrics {
     display: grid;
     gap: 12px;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     margin-bottom: 14px;
+}
+
+.ums-user-stat-metrics {
+    margin-top: -2px;
 }
 
 .ums-user-metrics div {
@@ -239,7 +243,7 @@
 .ums-user-request-form {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .ums-user-request-form input,
@@ -256,9 +260,40 @@
     width: 100%;
 }
 
-.ums-user-request-form input[readonly] {
+.ums-user-request-form input[readonly],
+.ums-user-request-form textarea[readonly],
+.ums-user-field-block textarea[readonly] {
     background: #f8fafc;
     color: #334155;
+}
+
+.ums-request-detail-page .ums-reason-option,
+.ums-request-detail-page .ums-payment-options label {
+    background: #f8fafc;
+}
+
+.ums-request-detail-page input:disabled {
+    cursor: default;
+}
+
+.ums-request-detail-payment {
+    margin-top: 14px;
+}
+
+.ums-request-detail-profile-grid {
+    gap: 10px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.ums-request-detail-profile-grid input {
+    font-size: 13px;
+    min-height: 36px;
+    padding: 6px 8px;
+}
+
+.ums-request-detail-profile-grid label span {
+    font-size: 10px;
+    margin-bottom: 4px;
 }
 
 .ums-user-request-form input:focus,
@@ -376,6 +411,18 @@ button.ums-user-button-light:hover {
     color: #1e40af;
 }
 
+.ums-user-button-danger,
+button.ums-user-button-danger {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.ums-user-button-danger:hover,
+button.ums-user-button-danger:hover {
+    background: #991b1b;
+    color: #ffffff;
+}
+
 .ums-user-link-button {
     background: transparent;
     border: 0;
@@ -387,6 +434,10 @@ button.ums-user-button-light:hover {
 
 .ums-user-link-button:hover {
     color: #7f1d1d;
+}
+
+.ums-user-link-button-danger {
+    color: #dc2626;
 }
 
 .ums-payment-context {
@@ -475,6 +526,173 @@ button.ums-user-button-light:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.ums-user-request-table {
+    overflow-x: auto;
+}
+
+.ums-user-request-table table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+}
+
+.ums-user-request-table th,
+.ums-user-request-table td {
+    border-bottom: 1px solid #edf2f7;
+    color: #334155;
+    padding: 10px 8px;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.ums-user-request-table th {
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.ums-user-actions-cell,
+.ums-jqx-cell-html {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    height: 100%;
+}
+
+.ums-inline-form {
+    display: inline;
+}
+
+.ums-user-jqx-tabs {
+    min-height: 500px;
+    overflow: hidden;
+}
+
+.ums-user-shell .jqx-widget,
+.ums-user-shell .jqx-widget *,
+.ums-user-shell .jqx-grid,
+.ums-user-shell .jqx-grid *,
+.ums-user-shell .jqx-tabs,
+.ums-user-shell .jqx-tabs * {
+    box-sizing: content-box;
+}
+
+.ums-user-tab-copy {
+    color: #64748b;
+    font-weight: 700;
+    padding: 10px 0 14px;
+}
+
+.ums-user-jqx-grid {
+    min-height: 390px;
+    width: 100%;
+}
+
+.ums-user-shell .jqx-tabs-header {
+    height: 40px !important;
+    min-height: 40px;
+    overflow: visible !important;
+    position: relative;
+    z-index: 2;
+}
+
+.ums-user-shell .jqx-tabs-title {
+    line-height: 18px;
+    min-height: 18px;
+    overflow: visible;
+}
+
+.ums-user-shell .jqx-tabs-content {
+    clear: both;
+    position: relative;
+    z-index: 1;
+}
+
+.ums-user-shell .jqx-tabs-content-element {
+    overflow: hidden;
+}
+
+.ums-detail-approval-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.ums-modal[hidden] {
+    display: none;
+}
+
+.ums-modal {
+    align-items: center;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    left: 0;
+    padding: 20px;
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 99999;
+}
+
+.ums-modal-backdrop {
+    background: rgba(15, 23, 42, .48);
+    bottom: 0;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+}
+
+.ums-modal-dialog {
+    background: #ffffff;
+    border: 1px solid #dde3ea;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .24);
+    max-width: 560px;
+    padding: 18px;
+    position: relative;
+    width: min(560px, 100%);
+}
+
+.ums-modal-head {
+    align-items: flex-start;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+}
+
+.ums-modal-head h3 {
+    color: #111827;
+    font-size: 18px;
+    margin: 0;
+}
+
+.ums-modal-close {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    cursor: pointer;
+    font-size: 24px;
+    height: 34px;
+    line-height: 1;
+    width: 34px;
+}
+
+.ums-modal-actions {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
+.ums-modal-open {
+    overflow: hidden;
+}
+
 .ums-inventory-list {
     display: grid;
     gap: 10px;
@@ -560,6 +778,10 @@ button.ums-user-button-light:hover {
     .ums-user-request-form {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .ums-request-detail-profile-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 760px) {
@@ -570,6 +792,7 @@ button.ums-user-button-light:hover {
     .ums-user-metrics,
     .ums-dashboard-grid,
     .ums-user-request-form,
+    .ums-detail-approval-actions,
     .ums-user-profile-list-wide,
     .ums-inventory-item,
     .ums-inventory-item dl {

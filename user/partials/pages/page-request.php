@@ -13,10 +13,26 @@ foreach ( $teammates as $teammate ) {
 
 $category_tree   = isset( $category_tree ) && is_array( $category_tree ) ? $category_tree : array();
 $inventory_items = isset( $inventory_items ) && is_array( $inventory_items ) ? $inventory_items : array();
+$editing_request = isset( $editing_request ) && is_array( $editing_request ) ? $editing_request : null;
+$editing_details = $editing_request && ! empty( $editing_request['details'] ) && is_array( $editing_request['details'] ) ? $editing_request['details'] : array();
 
-$render_request_item_row = function ( $index, $is_template = false ) use ( $category_tree, $inventory_items ) {
-    $prefix      = 'request_items[' . $index . ']';
-    $row_classes = 'ums-request-item';
+$selected_target_user_id = $editing_request ? (int) $editing_request['target_user_id'] : (int) $default_target['user_id'];
+foreach ( $teammates as $teammate ) {
+    if ( (int) $teammate['user_id'] === $selected_target_user_id ) {
+        $default_target = $teammate;
+        break;
+    }
+}
+
+$render_request_item_row = function ( $index, $is_template = false, $selected_detail = array() ) use ( $category_tree, $inventory_items ) {
+    $prefix               = 'request_items[' . $index . ']';
+    $row_classes          = 'ums-request-item';
+    $selected_parent_id   = isset( $selected_detail['parent_id'] ) ? (int) $selected_detail['parent_id'] : 0;
+    $selected_category_id = isset( $selected_detail['category_id'] ) ? (int) $selected_detail['category_id'] : 0;
+    $selected_item_id     = isset( $selected_detail['item_id'] ) ? (int) $selected_detail['item_id'] : 0;
+    $selected_quantity    = isset( $selected_detail['quantity'] ) ? max( 1, (int) $selected_detail['quantity'] ) : 1;
+    $selected_price       = isset( $selected_detail['price_at_request'] ) ? (float) $selected_detail['price_at_request'] : 0;
+    $selected_unit_price  = $selected_quantity > 0 ? $selected_price / $selected_quantity : 0;
     if ( $is_template ) {
         $row_classes .= ' is-template';
     }
@@ -33,7 +49,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
                 <select name="<?php echo esc_attr( $prefix ); ?>[parent_category_id]" data-ums-parent-category required>
                     <option value="">Chọn danh mục cha</option>
                     <?php foreach ( $category_tree as $parent ) : ?>
-                        <option value="<?php echo esc_attr( $parent['category_id'] ); ?>">
+                        <option value="<?php echo esc_attr( $parent['category_id'] ); ?>" <?php selected( $selected_parent_id, (int) $parent['category_id'] ); ?>>
                             <?php echo esc_html( $parent['category_name'] ); ?>
                         </option>
                     <?php endforeach; ?>
@@ -49,6 +65,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
                             <option
                                 value="<?php echo esc_attr( $child['category_id'] ); ?>"
                                 data-parent-id="<?php echo esc_attr( $parent['category_id'] ); ?>"
+                                <?php selected( $selected_category_id, (int) $child['category_id'] ); ?>
                                 hidden
                             >
                                 <?php echo esc_html( $child['category_name'] ); ?>
@@ -76,6 +93,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
                             data-inventory-id="<?php echo esc_attr( $item['item_id'] ); ?>"
                             data-price="<?php echo esc_attr( number_format( (float) $item['base_price'], 0, '.', '' ) ); ?>"
                             data-variant="<?php echo esc_attr( $item['item_variant'] ); ?>"
+                            <?php selected( $selected_item_id, (int) $item['item_id'] ); ?>
                             hidden
                         >
                             <?php echo esc_html( $size_label ); ?>
@@ -86,17 +104,17 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
 
             <label>
                 <span>SL</span>
-                <input type="number" name="<?php echo esc_attr( $prefix ); ?>[quantity]" min="1" step="1" value="1" data-ums-quantity-input required>
+                <input type="number" name="<?php echo esc_attr( $prefix ); ?>[quantity]" min="1" step="1" value="<?php echo esc_attr( $selected_quantity ); ?>" data-ums-quantity-input required>
             </label>
 
             <label>
                 <span>Giá</span>
-                <input type="text" name="<?php echo esc_attr( $prefix ); ?>[price]" data-ums-inventory-field="price" inputmode="decimal" placeholder="Tự tính theo số lượng" readonly>
+                <input type="text" name="<?php echo esc_attr( $prefix ); ?>[price]" value="<?php echo esc_attr( $selected_price > 0 ? number_format( $selected_price, 0, '.', '' ) : '' ); ?>" data-ums-inventory-field="price" inputmode="decimal" placeholder="Tự tính theo số lượng" readonly>
             </label>
 
-            <input type="hidden" name="<?php echo esc_attr( $prefix ); ?>[inventory_item_id]" data-ums-inventory-field="inventory_id">
-            <input type="hidden" name="<?php echo esc_attr( $prefix ); ?>[item_variant]" data-ums-inventory-field="variant">
-            <input type="hidden" name="<?php echo esc_attr( $prefix ); ?>[unit_price]" data-ums-inventory-field="unit_price">
+            <input type="hidden" name="<?php echo esc_attr( $prefix ); ?>[inventory_item_id]" value="<?php echo esc_attr( $selected_item_id ); ?>" data-ums-inventory-field="inventory_id">
+            <input type="hidden" name="<?php echo esc_attr( $prefix ); ?>[item_variant]" value="<?php echo esc_attr( isset( $selected_detail['item_variant'] ) ? $selected_detail['item_variant'] : '' ); ?>" data-ums-inventory-field="variant">
+            <input type="hidden" name="<?php echo esc_attr( $prefix ); ?>[unit_price]" value="<?php echo esc_attr( $selected_unit_price > 0 ? number_format( $selected_unit_price, 0, '.', '' ) : '' ); ?>" data-ums-inventory-field="unit_price">
         </div>
     </div>
     <?php
@@ -115,6 +133,9 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
     <?php wp_nonce_field( 'ums_submit_uniform_request' ); ?>
     <input type="hidden" name="action" value="ums_submit_uniform_request">
     <input type="hidden" name="portal_url" value="<?php echo esc_url( $portal_url ); ?>">
+    <?php if ( $editing_request ) : ?>
+        <input type="hidden" name="request_id" value="<?php echo esc_attr( $editing_request['request_id'] ); ?>">
+    <?php endif; ?>
     <section class="ums-user-panel">
         <div class="ums-user-panel-head">
             <div>
@@ -180,7 +201,13 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
         <?php endif; ?>
 
         <div class="ums-request-items" data-ums-request-items>
-            <?php $render_request_item_row( 0 ); ?>
+            <?php if ( ! empty( $editing_details ) ) : ?>
+                <?php foreach ( $editing_details as $detail_index => $detail ) : ?>
+                    <?php $render_request_item_row( $detail_index, false, $detail ); ?>
+                <?php endforeach; ?>
+            <?php else : ?>
+                <?php $render_request_item_row( 0 ); ?>
+            <?php endif; ?>
         </div>
 
         <template data-ums-request-item-template>
@@ -198,7 +225,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
 
         <div class="ums-reason-list" data-ums-reason-group>
             <label class="ums-reason-option">
-                <input type="radio" name="reason_type" value="1" checked>
+                <input type="radio" name="reason_type" value="1" <?php checked( ! $editing_request || (int) $editing_request['reason_type'] === 1 ); ?>>
                 <span>
                     <strong>Lý do 1</strong>
                     Do thay đổi vị trí công việc: chuyển công việc, bộ phận, vị trí, làm việc ngoài trời...
@@ -206,7 +233,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
             </label>
 
             <label class="ums-reason-option">
-                <input type="radio" name="reason_type" value="2">
+                <input type="radio" name="reason_type" value="2" <?php checked( $editing_request && (int) $editing_request['reason_type'] === 2 ); ?>>
                 <span>
                     <strong>Lý do 2</strong>
                     Đồng phục rách/hỏng/bẩn do nguyên nhân trực tiếp từ việc thực thi công việc đảm nhiệm.
@@ -214,7 +241,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
             </label>
 
             <label class="ums-reason-option">
-                <input type="radio" name="reason_type" value="3">
+                <input type="radio" name="reason_type" value="3" <?php checked( $editing_request && (int) $editing_request['reason_type'] === 3 ); ?>>
                 <span>
                     <strong>Lý do 3</strong>
                     Đồng phục mất/hỏng/rách do lỗi CNV, nguyên nhân không vì thực hiện công việc, hoặc yêu cầu cấp ngoài thời gian định mức sử dụng theo quy định.
@@ -224,7 +251,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
 
         <label class="ums-user-field-block">
             <span>Ghi rõ lý do chi tiết</span>
-            <textarea name="reason_detail" rows="4" data-ums-reason-detail placeholder="Ví dụ: do men hồ, sự cố công việc, chuyển vị trí làm việc ngoài trời..."></textarea>
+            <textarea name="reason_detail" rows="4" data-ums-reason-detail placeholder="Ví dụ: do men hồ, sự cố công việc, chuyển vị trí làm việc ngoài trời..."><?php echo esc_textarea( $editing_request ? $editing_request['reason_detail'] : '' ); ?></textarea>
         </label>
 
         <div class="ums-payment-panel" data-ums-payment-panel hidden>
@@ -244,11 +271,11 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
             <span class="ums-user-label">Phương thức thanh toán chi phí</span>
             <div class="ums-payment-options">
                 <label>
-                    <input type="radio" name="payment_method" value="salary">
+                    <input type="radio" name="payment_method" value="salary" <?php checked( $editing_request && (int) $editing_request['payment_method'] === 1 ); ?>>
                     <span>Hình thức 1: Thanh toán qua lương tháng phát sinh.</span>
                 </label>
                 <label>
-                    <input type="radio" name="payment_method" value="direct">
+                    <input type="radio" name="payment_method" value="direct" <?php checked( $editing_request && (int) $editing_request['payment_method'] === 2 ); ?>>
                     <span>Hình thức 2: Trực tiếp thanh toán cho Công ty bằng tiền mặt hoặc chuyển khoản.</span>
                 </label>
             </div>
@@ -256,7 +283,7 @@ $render_request_item_row = function ( $index, $is_template = false ) use ( $cate
     </section>
 
     <div class="ums-user-actions">
-        <button type="submit" class="ums-user-button" data-ums-submit-approval>Gửi duyệt</button>
-        <p class="ums-user-muted" data-ums-user-message>Phiếu sẽ được gửi vào luồng duyệt sau khi bổ sung lớp dữ liệu phiếu yêu cầu.</p>
+        <button type="submit" class="ums-user-button" data-ums-submit-approval><?php echo $editing_request ? 'Cập nhật phiếu' : 'Gửi duyệt'; ?></button>
+        <p class="ums-user-muted" data-ums-user-message>Phiếu sẽ được lưu và chuyển theo đúng bước duyệt hiện tại của phòng ban.</p>
     </div>
 </form>

@@ -2,6 +2,18 @@
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
+
+$dashboard_stats = isset( $dashboard_stats ) && is_array( $dashboard_stats ) ? $dashboard_stats : array();
+$dashboard_stats = wp_parse_args(
+    $dashboard_stats,
+    array(
+        'created_total'    => 0,
+        'created_pending'  => 0,
+        'created_done'     => 0,
+        'created_rejected' => 0,
+        'waiting_approval' => 0,
+    )
+);
 ?>
 
 <section class="ums-page-title">
@@ -27,6 +39,29 @@ if ( ! defined( 'ABSPATH' ) ) {
     <div>
         <span>Trạng thái</span>
         <strong><?php echo empty( $profile['resignation_date'] ) ? 'Đang làm việc' : 'Đã nộp đơn nghỉ'; ?></strong>
+    </div>
+</section>
+
+<section class="ums-user-metrics ums-user-stat-metrics" aria-label="Thống kê phiếu">
+    <div>
+        <span>Phiếu đã tạo</span>
+        <strong><?php echo esc_html( number_format_i18n( (int) $dashboard_stats['created_total'] ) ); ?></strong>
+    </div>
+    <div>
+        <span>Đang chờ duyệt</span>
+        <strong><?php echo esc_html( number_format_i18n( (int) $dashboard_stats['created_pending'] ) ); ?></strong>
+    </div>
+    <div>
+        <span>Hoàn thành</span>
+        <strong><?php echo esc_html( number_format_i18n( (int) $dashboard_stats['created_done'] ) ); ?></strong>
+    </div>
+    <div>
+        <span>Bị từ chối</span>
+        <strong><?php echo esc_html( number_format_i18n( (int) $dashboard_stats['created_rejected'] ) ); ?></strong>
+    </div>
+    <div>
+        <span>Chờ tôi duyệt</span>
+        <strong><?php echo esc_html( number_format_i18n( (int) $dashboard_stats['waiting_approval'] ) ); ?></strong>
     </div>
 </section>
 

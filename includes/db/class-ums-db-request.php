@@ -29,10 +29,13 @@ class UMS_DB_Request extends UMS_DB_Base {
 		$sql             = self::db()->prepare(
 			"
 			SELECT details.*, inventory.category_id, inventory.item_type, inventory.item_variant,
-				inventory.size, inventory.base_price, category.parent_id
+				inventory.size, inventory.base_price, category.parent_id,
+				category.category_name AS category_name,
+				parent_category.category_name AS parent_category_name
 			FROM $detail_table details
 			LEFT JOIN $inventory_table inventory ON details.item_id = inventory.item_id
 			LEFT JOIN $category_table category ON inventory.category_id = category.category_id
+			LEFT JOIN $category_table parent_category ON category.parent_id = parent_category.category_id
 			WHERE details.request_id = %d
 			ORDER BY details.detail_id ASC
 			",
@@ -220,6 +223,100 @@ class UMS_DB_Request extends UMS_DB_Base {
 			array( '%s' ),
 			array( '%d' )
 		);
+	}
+
+	public static function complete_approved_request( $request_id, $actor_user_id ) {
+		$wpdb       = self::db();
+		$request_id = absint( $request_id );
+
+		$wpdb->query( 'START TRANSACTION' );
+
+		$request = $wpdb->get_row(
+			$wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE request_id = %d FOR UPDATE', $request_id ),
+			ARRAY_A
+		);
+		if ( ! $request ) {
+			$wpdb->query( 'ROLLBACK' );
+			return false;
+		}
+
+		$existing_out = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM ' . UMS_DB_Inventory_Movement::table() . " WHERE request_id = %d AND movement_type = 'out'",
+				$request_id
+			)
+		);
+
+		if ( $existing_out <= 0 ) {
+			$details = self::get_details( $request_id );
+			foreach ( $details as $detail ) {
+				$item_id   = (int) $detail['item_id'];
+				$quantity  = max( 1, (int) $detail['quantity'] );
+				$inventory = $wpdb->get_row(
+					$wpdb->prepare( 'SELECT * FROM ' . UMS_DB_Inventory::table() . ' WHERE item_id = %d FOR UPDATE', $item_id ),
+					ARRAY_A
+				);
+
+				if ( ! $inventory || (int) $inventory['stock_qty'] < $quantity ) {
+					$wpdb->query( 'ROLLBACK' );
+					return false;
+				}
+
+				$before_qty = (int) $inventory['stock_qty'];
+				$after_qty  = $before_qty - $quantity;
+				$unit_price = $quantity > 0 ? (float) $detail['price_at_request'] / $quantity : 0;
+
+				$updated_stock = $wpdb->update(
+					UMS_DB_Inventory::table(),
+					array( 'stock_qty' => $after_qty ),
+					array( 'item_id' => $item_id ),
+					array( '%d' ),
+					array( '%d' )
+				);
+
+				if ( $updated_stock === false ) {
+					$wpdb->query( 'ROLLBACK' );
+					return false;
+				}
+
+				$movement_inserted = UMS_DB_Inventory_Movement::insert(
+					array(
+						'item_id'        => $item_id,
+						'request_id'     => $request_id,
+						'movement_type'  => 'out',
+						'quantity'       => $quantity,
+						'before_qty'     => $before_qty,
+						'after_qty'      => $after_qty,
+						'unit_price'     => $unit_price,
+						'total_price'    => (float) $detail['price_at_request'],
+						'actor_user_id'  => absint( $actor_user_id ),
+						'target_user_id' => (int) $request['target_user_id'],
+						'note'           => 'Phiếu đã duyệt hoàn toàn, ghi nhận xuất kho và trừ tồn.',
+					)
+				);
+
+				if ( ! $movement_inserted ) {
+					$wpdb->query( 'ROLLBACK' );
+					return false;
+				}
+			}
+		}
+
+		$status_updated = $wpdb->update(
+			self::table(),
+			array( 'current_status' => 'completed' ),
+			array( 'request_id' => $request_id ),
+			array( '%s' ),
+			array( '%d' )
+		);
+
+		if ( $status_updated === false ) {
+			$wpdb->query( 'ROLLBACK' );
+			return false;
+		}
+
+		$wpdb->query( 'COMMIT' );
+		return true;
 	}
 
 	public static function add_log( $request_id, $step_order, $approver_id, $action, $comment = '' ) {
