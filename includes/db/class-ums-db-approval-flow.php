@@ -32,11 +32,11 @@ class UMS_DB_Approval_Flow extends UMS_DB_Base {
             $where[] = 'flow.is_active = 0';
         }
 
-        $sql = "SELECT flow.*, department.department_name
+        $sql = "SELECT flow.*, department.department_code, department.department_name
             FROM $table flow
             LEFT JOIN $department_table department ON department.department_id = flow.department_id
             WHERE " . implode( ' AND ', $where ) . '
-            ORDER BY department.department_name ASC, flow.step_order ASC';
+            ORDER BY department.department_code ASC, department.department_name ASC, flow.step_order ASC';
 
         if ( ! empty( $params ) ) {
             $sql = self::db()->prepare( $sql, $params );

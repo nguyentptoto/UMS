@@ -368,6 +368,56 @@ class UMS_DB_Request extends UMS_DB_Base {
 		return true;
 	}
 
+	public static function get_allowance_usage( $target_user_id, $rule, $start_date, $end_date, $exclude_request_id = 0 ) {
+		$wpdb           = self::db();
+		$request_table  = self::table();
+		$detail_table   = self::detail_table();
+		$inventory_table = UMS_DB_Inventory::table();
+		$category_table = UMS_DB_Product_Category::table();
+
+		$where  = array(
+			'requests.target_user_id = %d',
+			"requests.current_status <> 'rejected'",
+			'requests.created_at >= %s',
+			'requests.created_at <= %s',
+		);
+		$params = array(
+			absint( $target_user_id ),
+			sanitize_text_field( $start_date ),
+			sanitize_text_field( $end_date ),
+		);
+
+		if ( absint( $exclude_request_id ) > 0 ) {
+			$where[]  = 'requests.request_id <> %d';
+			$params[] = absint( $exclude_request_id );
+		}
+
+		if ( isset( $rule['apply_type'] ) && $rule['apply_type'] === 'category' ) {
+			$where[]  = '(inventory.category_id = %d OR category.parent_id = %d)';
+			$params[] = absint( $rule['category_id'] );
+			$params[] = absint( $rule['category_id'] );
+		} else {
+			$where[]  = 'details.item_id = %d';
+			$params[] = absint( $rule['item_id'] );
+		}
+
+		$sql = "
+			SELECT COUNT(DISTINCT requests.request_id) AS request_count,
+				COALESCE(SUM(details.quantity), 0) AS quantity
+			FROM $request_table requests
+			INNER JOIN $detail_table details ON details.request_id = requests.request_id
+			INNER JOIN $inventory_table inventory ON inventory.item_id = details.item_id
+			LEFT JOIN $category_table category ON category.category_id = inventory.category_id
+			WHERE " . implode( ' AND ', $where );
+
+		$row = $wpdb->get_row( $wpdb->prepare( $sql, $params ), ARRAY_A );
+
+		return array(
+			'request_count' => isset( $row['request_count'] ) ? absint( $row['request_count'] ) : 0,
+			'quantity'      => isset( $row['quantity'] ) ? absint( $row['quantity'] ) : 0,
+		);
+	}
+
 	public static function get_last_error() {
 		return self::db()->last_error;
 	}

@@ -84,6 +84,43 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		return self::db()->get_row( $sql, ARRAY_A );
 	}
 
+	public static function get_active_rule_for_item( $item_id, $position_id = 0 ) {
+		$table           = self::table();
+		$inventory_table = UMS_DB_Inventory::table();
+		$category_table  = UMS_DB_Product_Category::table();
+		$position_id     = absint( $position_id );
+
+		$sql = self::db()->prepare(
+			"
+			SELECT rules.*, inventory.category_id AS item_category_id, child.parent_id AS item_parent_category_id,
+				inventory.item_variant, inventory.size, child.category_name, parent.category_name AS parent_category_name
+			FROM $table rules
+			INNER JOIN $inventory_table inventory ON inventory.item_id = %d
+			LEFT JOIN $category_table child ON child.category_id = inventory.category_id
+			LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
+			WHERE rules.is_active = 1
+				AND (
+					(rules.apply_type = 'item' AND rules.item_id = inventory.item_id)
+					OR (rules.apply_type = 'category' AND rules.category_id IN (inventory.category_id, child.parent_id))
+				)
+				AND (
+					rules.target_type = 'all'
+					OR (rules.target_type = 'position' AND rules.position_id = %d)
+				)
+			ORDER BY
+				CASE WHEN rules.target_type = 'position' THEN 0 ELSE 1 END ASC,
+				CASE WHEN rules.apply_type = 'item' THEN 0 ELSE 1 END ASC,
+				CASE WHEN rules.category_id = inventory.category_id THEN 0 ELSE 1 END ASC,
+				rules.rule_id DESC
+			LIMIT 1
+			",
+			absint( $item_id ),
+			$position_id
+		);
+
+		return self::db()->get_row( $sql, ARRAY_A );
+	}
+
 	public static function insert( $data ) {
 		return self::db()->insert( self::table(), $data, self::formats_for( $data ) );
 	}

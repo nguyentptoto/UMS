@@ -195,6 +195,17 @@ class UMS_User {
         }
 
         $edit_request_id = isset( $_POST['request_id'] ) ? absint( $_POST['request_id'] ) : 0;
+        $allowance_errors = self::validate_request_allowances( $details, $target_profile, $edit_request_id );
+        if ( ! empty( $allowance_errors ) ) {
+            self::redirect_with_notice(
+                $redirect_url,
+                'request_allowance_error',
+                array(
+                    'ums_notice_extra' => implode( ' ', $allowance_errors ),
+                )
+            );
+        }
+
         $request_data    = array(
             'creator_id'     => $current_user_id,
             'target_user_id' => (int) $target_profile['user_id'],
@@ -422,6 +433,150 @@ class UMS_User {
         }
 
         return $details;
+    }
+
+    private static function validate_request_allowances( $details, $target_profile, $exclude_request_id = 0 ) {
+        $errors      = array();
+        $rule_groups = array();
+        $position_id = self::get_profile_position_id( $target_profile );
+
+        foreach ( $details as $detail ) {
+            $item_id   = isset( $detail['item_id'] ) ? absint( $detail['item_id'] ) : 0;
+            $quantity  = isset( $detail['quantity'] ) ? max( 1, absint( $detail['quantity'] ) ) : 1;
+            $inventory = $item_id ? UMS_DB_Inventory::get_by_id( $item_id ) : null;
+
+            if ( ! $inventory ) {
+                $errors[] = 'Có dòng đồng phục không còn tồn tại trong kho.';
+                continue;
+            }
+
+            $rule = UMS_DB_Annual_Allowance::get_active_rule_for_item( $item_id, $position_id );
+            if ( ! $rule ) {
+                $errors[] = 'Sản phẩm "' . self::get_inventory_label( $inventory ) . '" chưa có định mức cấp phát phù hợp với người nhận.';
+                continue;
+            }
+
+            $rule_id = (int) $rule['rule_id'];
+            if ( ! isset( $rule_groups[ $rule_id ] ) ) {
+                $rule_groups[ $rule_id ] = array(
+                    'rule'     => $rule,
+                    'quantity' => 0,
+                    'labels'   => array(),
+                );
+            }
+
+            $rule_groups[ $rule_id ]['quantity'] += $quantity;
+            $rule_groups[ $rule_id ]['labels'][]  = self::get_inventory_label( $inventory );
+        }
+
+        if ( empty( $rule_groups ) ) {
+            return array_unique( $errors );
+        }
+
+        $now_timestamp = current_time( 'timestamp' );
+        $month         = (int) date( 'n', $now_timestamp );
+        $month_start   = date( 'Y-m-01 00:00:00', $now_timestamp );
+        $month_end     = date( 'Y-m-t 23:59:59', $now_timestamp );
+        $period_end    = date( 'Y-m-d H:i:s', $now_timestamp );
+
+        foreach ( $rule_groups as $group ) {
+            $rule       = $group['rule'];
+            $labels     = implode( ', ', array_unique( $group['labels'] ) );
+            $requested  = max( 1, absint( $group['quantity'] ) );
+            $quantities = json_decode( (string) $rule['monthly_quantities'], true );
+            $quantities = is_array( $quantities ) ? $quantities : array();
+            $month_quota = isset( $quantities[ $month ] ) ? absint( $quantities[ $month ] ) : 0;
+
+            if ( $month_quota <= 0 ) {
+                $errors[] = 'Định mức của "' . $labels . '" không cho phép cấp trong tháng ' . $month . '.';
+                continue;
+            }
+
+            $month_usage = UMS_DB_Request::get_allowance_usage(
+                (int) $target_profile['user_id'],
+                $rule,
+                $month_start,
+                $month_end,
+                $exclude_request_id
+            );
+            $manual_month_usage = UMS_DB_Inventory_Movement::get_manual_allowance_usage(
+                (int) $target_profile['user_id'],
+                $rule,
+                $month_start,
+                $month_end
+            );
+            $used_in_month = (int) $month_usage['quantity'] + (int) $manual_month_usage['quantity'];
+
+            if ( $used_in_month + $requested > $month_quota ) {
+                $errors[] = 'Số lượng "' . $labels . '" vượt định mức tháng ' . $month . ' (' . $used_in_month . ' đã dùng, yêu cầu thêm ' . $requested . ', tối đa ' . $month_quota . ').';
+            }
+
+            $frequency_count = max( 1, absint( $rule['frequency_count'] ?? 1 ) );
+            $frequency_years = max( 1, absint( $rule['frequency_years'] ?? 1 ) );
+            $period_start    = date( 'Y-m-d H:i:s', strtotime( '-' . $frequency_years . ' years', $now_timestamp ) );
+            $period_usage    = UMS_DB_Request::get_allowance_usage(
+                (int) $target_profile['user_id'],
+                $rule,
+                $period_start,
+                $period_end,
+                $exclude_request_id
+            );
+            $manual_period_usage = UMS_DB_Inventory_Movement::get_manual_allowance_usage(
+                (int) $target_profile['user_id'],
+                $rule,
+                $period_start,
+                $period_end
+            );
+            $used_times = (int) $period_usage['request_count'] + (int) $manual_period_usage['request_count'];
+
+            if ( $used_times + 1 > $frequency_count ) {
+                $errors[] = 'Định mức của "' . $labels . '" chỉ cho phép ' . $frequency_count . ' lần / ' . $frequency_years . ' năm.';
+            }
+        }
+
+        return array_unique( $errors );
+    }
+
+    private static function get_profile_position_id( $profile ) {
+        $job_position = isset( $profile['job_position'] ) ? trim( (string) $profile['job_position'] ) : '';
+        if ( $job_position === '' ) {
+            return 0;
+        }
+
+        foreach ( UMS_DB_Position::get_active() as $position ) {
+            if (
+                (string) $position['position_name'] === $job_position
+                || (string) $position['position_code'] === $job_position
+            ) {
+                return (int) $position['position_id'];
+            }
+        }
+
+        return 0;
+    }
+
+    private static function get_inventory_label( $inventory ) {
+        $parts = array();
+
+        if ( ! empty( $inventory['parent_category_name'] ) ) {
+            $parts[] = $inventory['parent_category_name'];
+        }
+
+        if ( ! empty( $inventory['category_name'] ) ) {
+            $parts[] = $inventory['category_name'];
+        } elseif ( ! empty( $inventory['item_type'] ) ) {
+            $parts[] = $inventory['item_type'];
+        }
+
+        $label = implode( ' / ', $parts );
+        if ( ! empty( $inventory['item_variant'] ) ) {
+            $label .= ' - ' . $inventory['item_variant'];
+        }
+        if ( ! empty( $inventory['size'] ) ) {
+            $label .= ' - Size ' . $inventory['size'];
+        }
+
+        return $label !== '' ? $label : 'Sản phẩm #' . absint( $inventory['item_id'] );
     }
 
     private static function can_create_request( $profile, $approval_flows ) {
@@ -876,6 +1031,7 @@ class UMS_User {
             'request_empty_items'     => array( 'error', 'Vui lòng chọn ít nhất một dòng đồng phục hợp lệ.' ),
             'request_invalid_reason'  => array( 'error', 'Lý do yêu cầu không hợp lệ.' ),
             'request_invalid_payment' => array( 'error', 'Vui lòng chọn phương thức thanh toán cho Lý do 3.' ),
+            'request_allowance_error' => array( 'error', 'Phiếu chưa phù hợp với định mức cấp phát.' ),
             'request_db_error'        => array( 'error', 'Không lưu được phiếu yêu cầu. Vui lòng thử lại.' ),
         );
 
@@ -883,9 +1039,11 @@ class UMS_User {
             return null;
         }
 
+        $extra = isset( $_GET['ums_notice_extra'] ) ? sanitize_text_field( wp_unslash( $_GET['ums_notice_extra'] ) ) : '';
+
         return array(
             'type'    => $messages[ $notice ][0],
-            'message' => $messages[ $notice ][1],
+            'message' => trim( $messages[ $notice ][1] . ' ' . $extra ),
         );
     }
 

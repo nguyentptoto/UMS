@@ -165,9 +165,9 @@ $grid_columns = array(
                 </label>
 
                 <label>
-                    <span>Người nhận</span>
-                    <select name="ums_manual_out[target_user_id]">
-                        <option value="">Không gắn người nhận</option>
+                    <span>Người nhận <b>*</b></span>
+                    <select name="ums_manual_out[target_user_id]" required>
+                        <option value="">Chọn người nhận để kiểm tra định mức</option>
                         <?php foreach ( $recipient_options as $recipient ) : ?>
                             <option value="<?php echo esc_attr( $recipient['user_id'] ); ?>">
                                 <?php echo esc_html( $recipient['employee_code'] . ' - ' . $recipient['full_name'] ); ?>

@@ -93,6 +93,48 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         return self::db()->get_results( self::db()->prepare( $sql, $params ), ARRAY_A );
     }
 
+    public static function get_manual_allowance_usage( $target_user_id, $rule, $start_date, $end_date ) {
+        $table          = self::table();
+        $inventory      = UMS_DB_Inventory::table();
+        $category_table = UMS_DB_Product_Category::table();
+
+        $where  = array(
+            'movement.target_user_id = %d',
+            "movement.movement_type = 'out'",
+            'movement.request_id IS NULL',
+            'movement.created_at >= %s',
+            'movement.created_at <= %s',
+        );
+        $params = array(
+            absint( $target_user_id ),
+            sanitize_text_field( $start_date ),
+            sanitize_text_field( $end_date ),
+        );
+
+        if ( isset( $rule['apply_type'] ) && $rule['apply_type'] === 'category' ) {
+            $where[]  = '(inventory.category_id = %d OR category.parent_id = %d)';
+            $params[] = absint( $rule['category_id'] );
+            $params[] = absint( $rule['category_id'] );
+        } else {
+            $where[]  = 'movement.item_id = %d';
+            $params[] = absint( $rule['item_id'] );
+        }
+
+        $sql = "
+            SELECT COUNT(*) AS request_count, COALESCE(SUM(movement.quantity), 0) AS quantity
+            FROM $table movement
+            INNER JOIN $inventory inventory ON inventory.item_id = movement.item_id
+            LEFT JOIN $category_table category ON category.category_id = inventory.category_id
+            WHERE " . implode( ' AND ', $where );
+
+        $row = self::db()->get_row( self::db()->prepare( $sql, $params ), ARRAY_A );
+
+        return array(
+            'request_count' => isset( $row['request_count'] ) ? absint( $row['request_count'] ) : 0,
+            'quantity'      => isset( $row['quantity'] ) ? absint( $row['quantity'] ) : 0,
+        );
+    }
+
     public static function get_last_error() {
         return self::db()->last_error;
     }

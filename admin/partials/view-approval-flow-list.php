@@ -10,6 +10,17 @@ $is_editing = ! empty( $editing_flow );
 $page_url   = admin_url( 'admin.php?page=tvn-ums-approval-flows' );
 $grid_rows  = array();
 
+$format_department_label = function( $department ) {
+    $code = isset( $department['department_code'] ) ? trim( (string) $department['department_code'] ) : '';
+    $name = isset( $department['department_name'] ) ? trim( (string) $department['department_name'] ) : '';
+
+    if ( $code !== '' && $name !== '' ) {
+        return $code . ' - ' . $name;
+    }
+
+    return $name !== '' ? $name : ( $code !== '' ? $code : '-' );
+};
+
 foreach ( $approval_flows as $flow ) {
     $edit_url = add_query_arg(
         array(
@@ -40,7 +51,7 @@ foreach ( $approval_flows as $flow ) {
     }
 
     $grid_rows[] = array(
-        'department_name' => $flow['department_name'] ?: '-',
+        'department_name' => $format_department_label( $flow ),
         'step_order'      => (int) $flow['step_order'],
         'step_group'      => 'Bước ' . (int) $flow['step_order'] . ' - ' . $flow['step_name'],
         'step_name'       => $flow['step_name'],
@@ -83,7 +94,7 @@ $grid_groups = array( 'department_name', 'step_group' );
                     <option value="">Tất cả phòng ban</option>
                     <?php foreach ( $departments as $department ) : ?>
                         <option value="<?php echo esc_attr( $department['department_id'] ); ?>" <?php selected( $filters['department_id'], (string) $department['department_id'] ); ?>>
-                            <?php echo esc_html( $department['department_name'] ); ?>
+                            <?php echo esc_html( $format_department_label( $department ) ); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -127,7 +138,7 @@ $grid_groups = array( 'department_name', 'step_group' );
                         <option value="">Chọn phòng ban</option>
                         <?php foreach ( $departments as $department ) : ?>
                             <option value="<?php echo esc_attr( $department['department_id'] ); ?>" <?php selected( (int) $form_values['department_id'], (int) $department['department_id'] ); ?>>
-                                <?php echo esc_html( $department['department_name'] ); ?>
+                                <?php echo esc_html( $format_department_label( $department ) ); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
