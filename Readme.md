@@ -174,17 +174,31 @@ Hash lấy từ DB nguồn được ghi trực tiếp vào `wp_users.user_pass`,
 
 Admin quản lý tại menu `Sơ đồ tổ chức TVN`. Giao diện dùng jqxGrid phân trang phía server và đọc dữ liệu từ bảng nội bộ `wp_uniform_organization_employees`.
 
-Nút `Đồng bộ từ Google Sheet` trên trang này mở Google Apps Script Web App bằng Popup Bridge và gửi dữ liệu về receiver `POST /wp-json/ums/v1/sync-organization`. Dữ liệu được upsert vào bảng nội bộ theo `source_id/id`; batch cuối gửi `finalize=true` để xóa các bản ghi không còn trong Sheet.
+Nút `Đồng bộ từ Google Sheet` trên trang này mở Google Apps Script Web App bằng Popup Bridge và gửi dữ liệu Sheet `Danh sách CNV` về receiver `POST /wp-json/ums/v1/sync-organization`. Dữ liệu được upsert vào bảng nội bộ theo `Mã nhân viên`; cột `STT` chỉ dùng để hiển thị. Batch cuối gửi `finalize=true` để xóa các bản ghi không còn trong Sheet.
 
 Module này không còn kết nối database ngoài. Plugin không tự tạo bảng; cần import bảng `wp_uniform_organization_employees` từ `ums.sql` trước lần đồng bộ đầu tiên.
 
-## Đồng Bộ Nhân Sự Từ Google Sheet
+Với database đã có bảng tổ chức từ bản cũ, chạy thủ công:
 
-Plugin cung cấp receiver `POST /wp-json/ums/v1/sync-users`. Endpoint xác thực bằng header `X-Sync-Token`; token được lưu trong `wp_options` và hiển thị tại Admin menu `Đồng bộ Sheet`. `employee_code` là khóa upsert duy nhất: hồ sơ đã có được cập nhật, hồ sơ chưa có sẽ tạo tài khoản `wp_users` role `subscriber` với mật khẩu mặc định `12345678`, sau đó tạo `wp_uniform_user_profiles`.
+```sql
+ALTER TABLE `wp_uniform_organization_employees`
+    ADD COLUMN `sheet_stt` INT DEFAULT NULL AFTER `source_id`,
+    ADD COLUMN `cost_center` VARCHAR(100) DEFAULT NULL AFTER `position`,
+    ADD COLUMN `date_joined` DATE DEFAULT NULL AFTER `cost_center`,
+    ADD COLUMN `previous_position` VARCHAR(50) DEFAULT NULL AFTER `date_joined`,
+    ADD UNIQUE KEY `idx_employee_no_unique` (`employee_no`(50)),
+    ADD KEY `idx_sheet_stt` (`sheet_stt`),
+    ADD KEY `idx_cost_center` (`cost_center`),
+    ADD KEY `idx_date_joined` (`date_joined`);
+```
 
-Do Google Workspace có SSO và WordPress chạy nội bộ, hệ thống dùng mô hình Popup Bridge thay vì GAS trigger server-to-server. Admin bấm `Bắt đầu đồng bộ`, plugin mở Google Apps Script Web App bằng `window.open()`, popup đọc Sheet bằng phiên SSO trình duyệt rồi `fetch()` JSON về endpoint nội bộ của WordPress. Nếu trình duyệt chặn POST trực tiếp từ popup, popup chuyển payload về trang Admin bằng `postMessage` để Admin POST cùng-origin vào UMS. Plugin lưu log lần sync gần nhất vào `wp_options`.
+## Đồng Bộ Sơ Đồ Tổ Chức Từ Google Sheet
 
-Google Apps Script mẫu gồm `ums-user-sync.gs` và `Index.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/`.
+Plugin cung cấp receiver `POST /wp-json/ums/v1/sync-organization`. Endpoint xác thực bằng header `X-Sync-Token`; token được lưu trong `wp_options` và hiển thị tại Admin menu `Đồng bộ Sheet`. Sheet nguồn duy nhất là `Danh sách CNV`, gồm các cột `STT`, `Mã nhân viên`, `Họ và tên`, `Phòng`, `Nhóm`, `Mã cost center`, `Ngày vào`, `Vị trí`, `Vị trí trước TT`.
+
+Do Google Workspace có SSO và WordPress chạy nội bộ, hệ thống dùng mô hình Popup Bridge thay vì GAS trigger server-to-server. Admin bấm `Đồng bộ từ Google Sheet` trong trang `Sơ đồ tổ chức TVN`, plugin mở Google Apps Script Web App bằng `window.open()`, popup đọc Sheet bằng phiên SSO trình duyệt rồi `fetch()` JSON về endpoint nội bộ của WordPress. Nếu trình duyệt chặn POST trực tiếp từ popup, popup chuyển payload về trang Admin bằng `postMessage` để Admin POST cùng-origin vào UMS.
+
+Google Apps Script mẫu gồm `ums-organization-sync.gs` và `Index.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/`.
 
 ## Cấu Trúc Thư Mục Chính
 

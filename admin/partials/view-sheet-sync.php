@@ -1,16 +1,13 @@
 <?php
 /**
- * Trang cấu hình Popup Bridge đồng bộ nhân sự từ Google Sheet.
+ * Trang cấu hình Popup Bridge cho Google Sheet "Danh sách CNV".
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
-
-$last_summary = isset( $last_log['summary'] ) && is_array( $last_log['summary'] ) ? $last_log['summary'] : array();
-$last_errors  = isset( $last_log['errors'] ) && is_array( $last_log['errors'] ) ? $last_log['errors'] : array();
 ?>
 <div class="wrap ums-admin-wrap ums-sheet-sync-page">
-    <h1>UMS - Đồng bộ nhân sự từ Google Sheet</h1>
+    <h1>UMS - Cấu hình Google Sheet Danh sách CNV</h1>
 
     <?php if ( ! empty( $notice ) ) : ?>
         <div class="notice notice-<?php echo esc_attr( $notice['type'] ); ?> is-dismissible">
@@ -41,15 +38,11 @@ $last_errors  = isset( $last_log['errors'] ) && is_array( $last_log['errors'] ) 
                 </tr>
                 <tr>
                     <th scope="row">REST Endpoint</th>
-                    <td>
-                        <input type="text" class="regular-text code" readonly value="<?php echo esc_attr( $rest_endpoint ); ?>">
-                    </td>
+                    <td><input type="text" class="regular-text code" readonly value="<?php echo esc_attr( $rest_endpoint ); ?>"></td>
                 </tr>
                 <tr>
                     <th scope="row">X-Sync-Token</th>
-                    <td>
-                        <input type="text" class="regular-text code" readonly value="<?php echo esc_attr( $sync_token ); ?>">
-                    </td>
+                    <td><input type="text" class="regular-text code" readonly value="<?php echo esc_attr( $sync_token ); ?>"></td>
                 </tr>
             </table>
 
@@ -61,7 +54,7 @@ $last_errors  = isset( $last_log['errors'] ) && is_array( $last_log['errors'] ) 
         <div class="ums-panel-heading-row">
             <div>
                 <h2>Chạy đồng bộ</h2>
-                <p class="description">Popup sẽ dùng phiên SSO của trình duyệt để đọc Sheet, sau đó POST dữ liệu về endpoint nội bộ của UMS.</p>
+                <p class="description">Popup sẽ đọc Sheet Danh sách CNV và đồng bộ về Sơ đồ tổ chức TVN.</p>
             </div>
             <button
                 type="button"
@@ -70,56 +63,14 @@ $last_errors  = isset( $last_log['errors'] ) && is_array( $last_log['errors'] ) 
                 data-apps-script-url="<?php echo esc_attr( $apps_script_url ); ?>"
                 data-rest-endpoint="<?php echo esc_attr( $rest_endpoint ); ?>"
                 data-sync-token="<?php echo esc_attr( $sync_token ); ?>"
-                data-sync-mode="users"
+                data-sync-mode="organization"
             >
                 Bắt đầu đồng bộ
             </button>
         </div>
 
         <div class="ums-sync-log" id="ums-sheet-sync-log" aria-live="polite">
-            <div class="ums-sync-log-line">Sẵn sàng đồng bộ.</div>
+            <div class="ums-sync-log-line">Sẵn sàng đồng bộ Sheet Danh sách CNV.</div>
         </div>
-    </div>
-
-    <div class="ums-panel">
-        <h2>Kết quả gần nhất</h2>
-        <?php if ( empty( $last_log ) ) : ?>
-            <p class="description">Chưa có phiên đồng bộ nào được ghi nhận.</p>
-        <?php else : ?>
-            <table class="widefat striped">
-                <tbody>
-                    <tr>
-                        <th>Thời gian</th>
-                        <td><?php echo esc_html( isset( $last_log['synced_at'] ) ? $last_log['synced_at'] : '-' ); ?></td>
-                    </tr>
-                    <tr>
-                        <th>Trạng thái</th>
-                        <td><?php echo ! empty( $last_log['success'] ) ? 'Thành công' : 'Có lỗi'; ?></td>
-                    </tr>
-                    <tr>
-                        <th>Nguồn</th>
-                        <td><?php echo esc_html( isset( $last_log['source'] ) ? $last_log['source'] : '-' ); ?></td>
-                    </tr>
-                    <tr>
-                        <th>Tổng hợp</th>
-                        <td>
-                            Nhận: <?php echo esc_html( isset( $last_summary['received'] ) ? $last_summary['received'] : 0 ); ?>,
-                            tạo mới: <?php echo esc_html( isset( $last_summary['created'] ) ? $last_summary['created'] : 0 ); ?>,
-                            cập nhật: <?php echo esc_html( isset( $last_summary['updated'] ) ? $last_summary['updated'] : 0 ); ?>,
-                            lỗi: <?php echo esc_html( isset( $last_summary['failed'] ) ? $last_summary['failed'] : 0 ); ?>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <?php if ( ! empty( $last_errors ) ) : ?>
-                <h3>Dòng lỗi</h3>
-                <ul class="ums-sync-error-list">
-                    <?php foreach ( $last_errors as $error ) : ?>
-                        <li><?php echo esc_html( $error ); ?></li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-        <?php endif; ?>
     </div>
 </div>

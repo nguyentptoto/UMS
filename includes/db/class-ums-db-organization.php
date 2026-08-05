@@ -35,6 +35,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		list( $where, $params ) = self::build_where( $args );
 		$allowed_orderby = array(
 			'source_id',
+			'sheet_stt',
 			'source_version',
 			'employee_no',
 			'full_name',
@@ -43,6 +44,9 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			'section',
 			'team',
 			'position',
+			'cost_center',
+			'date_joined',
+			'previous_position',
 			'email',
 			'factory',
 			'source_updated_at',
@@ -55,8 +59,8 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		$offset  = ( $page - 1 ) * $limit;
 		$table   = self::table();
 
-		$sql = "SELECT source_id, source_version, employee_no, full_name, division, department, section, team,
-			position, email, factory, source_created_at, source_updated_at, synced_at
+		$sql = "SELECT source_id, sheet_stt, source_version, employee_no, full_name, division, department, section, team,
+			position, cost_center, date_joined, previous_position, email, factory, source_created_at, source_updated_at, synced_at
 			FROM $table
 			WHERE " . implode( ' AND ', $where ) . "
 			ORDER BY $orderby $order, source_id ASC
@@ -101,8 +105,9 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		$params       = array();
 
 		foreach ( $rows as $row ) {
-			$placeholders[] = '(%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)';
+			$placeholders[] = '(%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)';
 			$params[] = absint( $row['id'] );
+			$params[] = absint( $row['sheet_stt'] );
 			$params[] = (int) $row['version'];
 			$params[] = $row['emp_no'];
 			$params[] = $row['fname'];
@@ -111,6 +116,9 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			$params[] = $row['section'];
 			$params[] = $row['team'];
 			$params[] = $row['position'];
+			$params[] = $row['cost_center'];
+			$params[] = $row['date_joined'];
+			$params[] = $row['previous_position'];
 			$params[] = $row['email'];
 			$params[] = $row['factory'];
 			$params[] = $row['time_create'];
@@ -121,13 +129,14 @@ class UMS_DB_Organization extends UMS_DB_Base {
 
 		$table = self::table();
 		$sql = "INSERT INTO $table
-			(source_id, source_version, employee_no, full_name, division, department, section, team, position,
-			email, factory, source_created_at, source_updated_at, synced_at, sync_token)
+			(source_id, sheet_stt, source_version, employee_no, full_name, division, department, section, team, position,
+			cost_center, date_joined, previous_position, email, factory, source_created_at, source_updated_at, synced_at, sync_token)
 			VALUES " . implode( ',', $placeholders ) . '
 			ON DUPLICATE KEY UPDATE
-			source_version = VALUES(source_version), employee_no = VALUES(employee_no), full_name = VALUES(full_name),
+			sheet_stt = VALUES(sheet_stt), source_version = VALUES(source_version), employee_no = VALUES(employee_no), full_name = VALUES(full_name),
 			division = VALUES(division), department = VALUES(department), section = VALUES(section), team = VALUES(team),
-			position = VALUES(position), email = VALUES(email), factory = VALUES(factory),
+			position = VALUES(position), cost_center = VALUES(cost_center), date_joined = VALUES(date_joined),
+			previous_position = VALUES(previous_position), email = VALUES(email), factory = VALUES(factory),
 			source_created_at = VALUES(source_created_at), source_updated_at = VALUES(source_updated_at),
 			synced_at = VALUES(synced_at), sync_token = VALUES(sync_token)';
 
@@ -158,8 +167,8 @@ class UMS_DB_Organization extends UMS_DB_Base {
 
 		if ( $args['search'] !== '' ) {
 			$like = '%' . self::db()->esc_like( sanitize_text_field( $args['search'] ) ) . '%';
-			$where[] = '(employee_no LIKE %s OR full_name LIKE %s OR email LIKE %s OR position LIKE %s OR section LIKE %s OR team LIKE %s)';
-			$params = array_merge( $params, array_fill( 0, 6, $like ) );
+			$where[] = '(employee_no LIKE %s OR full_name LIKE %s OR department LIKE %s OR team LIKE %s OR position LIKE %s OR previous_position LIKE %s OR cost_center LIKE %s)';
+			$params = array_merge( $params, array_fill( 0, 7, $like ) );
 		}
 
 		foreach ( array( 'division', 'department', 'factory' ) as $field ) {

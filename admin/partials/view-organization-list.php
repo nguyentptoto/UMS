@@ -1,6 +1,6 @@
 <?php
 /**
- * Giao diện quản lý dữ liệu sơ đồ tổ chức TVN đã đồng bộ về UMS.
+ * Giao diện Sơ đồ tổ chức TVN, dữ liệu lấy từ Google Sheet "Danh sách CNV".
  */
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -8,31 +8,29 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $page_url = admin_url( 'admin.php?page=tvn-ums-organization' );
 $grid_columns = array(
-	array( 'text' => 'Mã NV', 'datafield' => 'employee_no', 'width' => 105 ),
-	array( 'text' => 'Họ và tên', 'datafield' => 'full_name', 'width' => 190 ),
-	array( 'text' => 'Khối', 'datafield' => 'division', 'width' => 190 ),
-	array( 'text' => 'Phòng ban', 'datafield' => 'department', 'width' => 185 ),
-	array( 'text' => 'Bộ phận', 'datafield' => 'section', 'width' => 175 ),
-	array( 'text' => 'Nhóm', 'datafield' => 'team', 'width' => 160 ),
-	array( 'text' => 'Chức danh', 'datafield' => 'position', 'width' => 90 ),
-	array( 'text' => 'Email', 'datafield' => 'email', 'width' => 220 ),
-	array( 'text' => 'Nhà máy', 'datafield' => 'factory', 'width' => 115 ),
-	array( 'text' => 'Cập nhật nguồn', 'datafield' => 'source_updated_at', 'width' => 145 ),
+	array( 'text' => 'STT', 'datafield' => 'sheet_stt', 'width' => 80 ),
+	array( 'text' => 'Mã nhân viên', 'datafield' => 'employee_no', 'width' => 130 ),
+	array( 'text' => 'Họ và tên', 'datafield' => 'full_name', 'width' => 220 ),
+	array( 'text' => 'Phòng', 'datafield' => 'department', 'width' => 230 ),
+	array( 'text' => 'Nhóm', 'datafield' => 'team', 'width' => 230 ),
+	array( 'text' => 'Mã cost center', 'datafield' => 'cost_center', 'width' => 140 ),
+	array( 'text' => 'Ngày vào', 'datafield' => 'date_joined', 'width' => 115 ),
+	array( 'text' => 'Vị trí', 'datafield' => 'position', 'width' => 90 ),
+	array( 'text' => 'Vị trí trước TT', 'datafield' => 'previous_position', 'width' => 130 ),
+	array( 'text' => 'Đồng bộ lúc', 'datafield' => 'synced_at', 'width' => 145 ),
 );
 $grid_fields = array(
 	array( 'name' => 'source_id', 'type' => 'number' ),
+	array( 'name' => 'sheet_stt', 'type' => 'number' ),
 	array( 'name' => 'source_version', 'type' => 'number' ),
 	array( 'name' => 'employee_no', 'type' => 'string' ),
 	array( 'name' => 'full_name', 'type' => 'string' ),
-	array( 'name' => 'division', 'type' => 'string' ),
 	array( 'name' => 'department', 'type' => 'string' ),
-	array( 'name' => 'section', 'type' => 'string' ),
 	array( 'name' => 'team', 'type' => 'string' ),
+	array( 'name' => 'cost_center', 'type' => 'string' ),
+	array( 'name' => 'date_joined', 'type' => 'string' ),
 	array( 'name' => 'position', 'type' => 'string' ),
-	array( 'name' => 'email', 'type' => 'string' ),
-	array( 'name' => 'factory', 'type' => 'string' ),
-	array( 'name' => 'source_created_at', 'type' => 'string' ),
-	array( 'name' => 'source_updated_at', 'type' => 'string' ),
+	array( 'name' => 'previous_position', 'type' => 'string' ),
 	array( 'name' => 'synced_at', 'type' => 'string' ),
 );
 ?>
@@ -56,7 +54,7 @@ $grid_fields = array(
 	<div class="ums-panel">
 		<div class="ums-panel-heading-row">
 			<div>
-				<h2>Danh sách nhân sự toàn TVN</h2>
+				<h2>Danh sách CNV</h2>
 				<p class="description">
 					<?php echo esc_html( number_format_i18n( $total_employees ) ); ?> nhân sự nội bộ
 					<?php if ( $last_synced_at ) : ?>
@@ -67,12 +65,7 @@ $grid_fields = array(
 					<p class="description">
 						Lần đồng bộ Sheet gần nhất:
 						<?php echo esc_html( mysql2date( 'd/m/Y H:i:s', $cron_result['ended_at'] ) ); ?>
-						·
-						<?php if ( isset( $cron_result['status'] ) && in_array( $cron_result['status'], array( 'success', 'partial' ), true ) ) : ?>
-							Đã nhận <?php echo esc_html( number_format_i18n( $cron_result['total'] ?? 0 ) ); ?> nhân sự từ Google Sheet
-						<?php else : ?>
-							Thất bại: <?php echo esc_html( $cron_result['message'] ?? 'Không xác định được lỗi.' ); ?>
-						<?php endif; ?>
+						· Đã nhận <?php echo esc_html( number_format_i18n( $cron_result['total'] ?? 0 ) ); ?> nhân sự từ Google Sheet
 					</p>
 				<?php endif; ?>
 			</div>
@@ -98,7 +91,7 @@ $grid_fields = array(
 		<?php endif; ?>
 
 		<div class="ums-sync-log" id="ums-sheet-sync-log" aria-live="polite">
-			<div class="ums-sync-log-line">Sẵn sàng đồng bộ sơ đồ tổ chức từ Google Sheet.</div>
+			<div class="ums-sync-log-line">Sẵn sàng đồng bộ sơ đồ tổ chức từ Sheet Danh sách CNV.</div>
 		</div>
 
 		<form method="get" class="ums-filter-bar ums-organization-filters">
@@ -106,35 +99,15 @@ $grid_fields = array(
 
 			<label>
 				<span class="screen-reader-text">Tìm nhân viên</span>
-				<input type="search" name="s" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Mã NV, họ tên, email, chức danh">
+				<input type="search" name="s" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Mã NV, họ tên, phòng, nhóm, cost center">
 			</label>
 
 			<label>
-				<span class="screen-reader-text">Khối</span>
-				<select name="division">
-					<option value="">Tất cả khối</option>
-					<?php foreach ( $divisions as $division ) : ?>
-						<option value="<?php echo esc_attr( $division ); ?>" <?php selected( $filters['division'], $division ); ?>><?php echo esc_html( $division ); ?></option>
-					<?php endforeach; ?>
-				</select>
-			</label>
-
-			<label>
-				<span class="screen-reader-text">Phòng ban</span>
+				<span class="screen-reader-text">Phòng</span>
 				<select name="department">
-					<option value="">Tất cả phòng ban</option>
+					<option value="">Tất cả phòng</option>
 					<?php foreach ( $departments as $department ) : ?>
 						<option value="<?php echo esc_attr( $department ); ?>" <?php selected( $filters['department'], $department ); ?>><?php echo esc_html( $department ); ?></option>
-					<?php endforeach; ?>
-				</select>
-			</label>
-
-			<label>
-				<span class="screen-reader-text">Nhà máy</span>
-				<select name="factory">
-					<option value="">Tất cả nhà máy</option>
-					<?php foreach ( $factories as $factory ) : ?>
-						<option value="<?php echo esc_attr( $factory ); ?>" <?php selected( $filters['factory'], $factory ); ?>><?php echo esc_html( $factory ); ?></option>
 					<?php endforeach; ?>
 				</select>
 			</label>

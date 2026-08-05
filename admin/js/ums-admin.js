@@ -277,7 +277,7 @@
             appendLog('Đang mở popup Google Apps Script...', 'info');
 
             var separator = appsScriptUrl.indexOf('?') >= 0 ? '&' : '?';
-            var popupUrl = appsScriptUrl + separator + 'mode=' + encodeURIComponent(syncMode);
+            var popupUrl = appsScriptUrl + separator + 'mode=' + encodeURIComponent(syncMode) + '&ums_module=tvn_org';
             activePopup = window.open(popupUrl, 'umsSheetSyncPopup', 'width=860,height=720,menubar=no,toolbar=no,location=yes,status=yes,scrollbars=yes,resizable=yes');
             if (!activePopup) {
                 appendLog('Trình duyệt đã chặn popup. Hãy cho phép popup cho trang Admin này.', 'error');

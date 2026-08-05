@@ -231,6 +231,7 @@ CREATE TABLE `wp_uniform_returns` (
 -- 15. BANG DU LIEU SO DO TO CHUC TVN DONG BO TU GOOGLE SHEET
 CREATE TABLE `wp_uniform_organization_employees` (
     `source_id` BIGINT(20) UNSIGNED NOT NULL,
+    `sheet_stt` INT DEFAULT NULL,
     `source_version` INT NOT NULL DEFAULT 0,
     `employee_no` VARCHAR(255) DEFAULT NULL,
     `full_name` VARCHAR(255) DEFAULT NULL,
@@ -239,6 +240,9 @@ CREATE TABLE `wp_uniform_organization_employees` (
     `section` VARCHAR(255) DEFAULT NULL,
     `team` VARCHAR(255) DEFAULT NULL,
     `position` VARCHAR(50) DEFAULT NULL,
+    `cost_center` VARCHAR(100) DEFAULT NULL,
+    `date_joined` DATE DEFAULT NULL,
+    `previous_position` VARCHAR(50) DEFAULT NULL,
     `email` VARCHAR(255) DEFAULT NULL,
     `factory` VARCHAR(255) DEFAULT NULL,
     `source_created_at` DATETIME DEFAULT NULL,
@@ -247,8 +251,12 @@ CREATE TABLE `wp_uniform_organization_employees` (
     `sync_token` CHAR(32) NOT NULL,
     PRIMARY KEY (`source_id`),
     KEY `idx_employee_no` (`employee_no`(50)),
+    UNIQUE KEY `idx_employee_no_unique` (`employee_no`(50)),
+    KEY `idx_sheet_stt` (`sheet_stt`),
     KEY `idx_division` (`division`(100)),
     KEY `idx_department` (`department`(100)),
+    KEY `idx_cost_center` (`cost_center`),
+    KEY `idx_date_joined` (`date_joined`),
     KEY `idx_factory` (`factory`(100)),
     KEY `idx_source_updated_at` (`source_updated_at`),
     KEY `idx_synced_at` (`synced_at`)

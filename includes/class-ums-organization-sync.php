@@ -312,35 +312,32 @@ class UMS_Organization_Sync {
 			return new WP_Error( 'organization_row_invalid', sprintf( 'Dòng %d không phải JSON object.', (int) $index + 2 ) );
 		}
 
-		$source_id = self::first_scalar( $row, array( 'source_id', 'id' ) );
-		if ( $source_id === '' ) {
-			return new WP_Error( 'organization_source_id_missing', sprintf( 'Dòng %d thiếu id/source_id.', (int) $index + 2 ) );
+		$employee_no = sanitize_text_field( self::first_scalar( $row, array( 'employee_no', 'emp_no', 'ma_nv', 'mã nv', 'mã nhân viên' ) ) );
+		if ( $employee_no === '' ) {
+			return new WP_Error( 'organization_employee_no_missing', sprintf( 'Dòng %d thiếu mã nhân viên.', (int) $index + 2 ) );
 		}
 
-		$source_id = absint( $source_id );
-		if ( $source_id <= 0 ) {
-			return new WP_Error( 'organization_source_id_invalid', sprintf( 'Dòng %d có id/source_id không hợp lệ.', (int) $index + 2 ) );
-		}
+		$source_id = self::stable_source_id( $employee_no );
 
 		$item = array(
 			'id'          => $source_id,
 			'version'     => absint( self::first_scalar( $row, array( 'source_version', 'version' ) ) ),
-			'emp_no'      => sanitize_text_field( self::first_scalar( $row, array( 'employee_no', 'emp_no', 'ma_nv', 'mã nv' ) ) ),
-			'fname'       => sanitize_text_field( self::first_scalar( $row, array( 'full_name', 'fname', 'ho_ten', 'họ tên' ) ) ),
-			'division'    => sanitize_text_field( self::first_scalar( $row, array( 'division', 'khoi', 'khối' ) ) ),
+			'sheet_stt'   => absint( self::first_scalar( $row, array( 'stt', 'sheet_stt' ) ) ),
+			'emp_no'      => $employee_no,
+			'fname'       => sanitize_text_field( self::first_scalar( $row, array( 'full_name', 'fname', 'ho_ten', 'họ tên', 'họ và tên' ) ) ),
+			'division'    => '',
 			'department'  => sanitize_text_field( self::first_scalar( $row, array( 'department', 'phong_ban', 'phòng ban' ) ) ),
-			'section'     => sanitize_text_field( self::first_scalar( $row, array( 'section', 'bo_phan', 'bộ phận' ) ) ),
+			'section'     => '',
 			'team'        => sanitize_text_field( self::first_scalar( $row, array( 'team', 'nhom', 'nhóm' ) ) ),
 			'position'    => sanitize_text_field( self::first_scalar( $row, array( 'position', 'chuc_danh', 'chức danh' ) ) ),
-			'email'       => sanitize_email( self::first_scalar( $row, array( 'email' ) ) ),
-			'factory'     => sanitize_text_field( self::first_scalar( $row, array( 'factory', 'nha_may', 'nhà máy' ) ) ),
+			'email'       => '',
+			'factory'     => '',
+			'cost_center' => sanitize_text_field( self::first_scalar( $row, array( 'cost_center', 'mã cost center', 'ma cost center' ) ) ),
+			'date_joined' => self::normalize_date( self::first_scalar( $row, array( 'date_joined', 'ngày vào', 'ngay vao' ) ) ),
+			'previous_position' => sanitize_text_field( self::first_scalar( $row, array( 'previous_position', 'vị trí trước tt', 'vi tri truoc tt' ) ) ),
 			'time_create' => self::normalize_datetime( self::first_scalar( $row, array( 'source_created_at', 'time_create', 'created_at' ) ) ),
 			'time_update' => self::normalize_datetime( self::first_scalar( $row, array( 'source_updated_at', 'time_update', 'updated_at' ) ) ),
 		);
-
-		if ( $item['emp_no'] === '' ) {
-			return new WP_Error( 'organization_employee_no_missing', sprintf( 'Dòng %d thiếu mã nhân viên.', (int) $index + 2 ) );
-		}
 
 		return $item;
 	}
@@ -364,5 +361,26 @@ class UMS_Organization_Sync {
 		}
 
 		return wp_generate_password( 32, false, false );
+	}
+
+	private static function stable_source_id( $employee_no ) {
+		return (int) sprintf( '%u', crc32( strtoupper( trim( (string) $employee_no ) ) ) );
+	}
+
+	private static function normalize_date( $value ) {
+		$value = trim( (string) $value );
+		if ( $value === '' ) {
+			return null;
+		}
+
+		$formats = array( 'Y-m-d', 'd/m/Y', 'n/j/Y', 'm/d/Y' );
+		foreach ( $formats as $format ) {
+			$date = DateTime::createFromFormat( $format, $value );
+			if ( $date instanceof DateTime ) {
+				return $date->format( 'Y-m-d' );
+			}
+		}
+
+		return null;
 	}
 }
