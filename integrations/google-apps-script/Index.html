@@ -45,6 +45,8 @@
       const payload = <?!= payload ?>;
       const totalRows = Number('<?= totalRows ?>') || 0;
       const batchSize = Number('<?= batchSize ?>') || 200;
+      const mode = '<?= mode ?>';
+      const itemKey = '<?= itemKey ?>';
 
       function notify(message, status, extra) {
         const data = {
@@ -83,12 +85,13 @@
         }, 1800);
       }
 
-      async function postBatch(users, offset) {
+      async function postBatch(items, offset, totalItems) {
         const body = Object.assign({}, payload, {
-          users: users,
           batch_offset: offset,
-          batch_size: users.length
+          batch_size: items.length,
+          finalize: mode === 'organization' && offset + items.length >= totalItems
         });
+        body[itemKey] = items;
 
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -127,15 +130,17 @@
         };
         const errors = [];
 
-        for (let offset = 0; offset < payload.users.length; offset += batchSize) {
-          const batch = payload.users.slice(offset, offset + batchSize);
+        const items = payload[itemKey] || [];
+        for (let offset = 0; offset < items.length; offset += batchSize) {
+          const batch = items.slice(offset, offset + batchSize);
           notify('Đang gửi batch ' + (offset + 1) + '-' + (offset + batch.length) + '...', 'info');
 
-          const result = await postBatch(batch, offset);
+          const result = await postBatch(batch, offset, items.length);
           total.count += Number(result.count || result.summary?.received || 0);
           total.created += Number(result.created || result.summary?.created || 0);
           total.updated += Number(result.updated || result.summary?.updated || 0);
           total.failed += Number(result.failed || result.summary?.failed || 0);
+          total.deleted = Number(total.deleted || 0) + Number(result.deleted || 0);
 
           (result.errors || []).forEach(function (error) {
             errors.push(error);
@@ -158,6 +163,7 @@
             status: 'warning',
             payload: payload,
             batchSize: batchSize,
+            mode: mode,
             done: false
           }, '*');
 

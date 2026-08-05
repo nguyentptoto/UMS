@@ -26,10 +26,12 @@ Tạo 2 file:
 Chạy hàm `configureUmsPopupBridge()` một lần rồi sửa các Script Properties:
 
 ```text
-UMS_ENDPOINT=http://localhost/UMS/wp-json/ums/v1/sync-users
+UMS_ENDPOINT_USERS=http://localhost/UMS/wp-json/ums/v1/sync-users
+UMS_ENDPOINT_ORGANIZATION=http://localhost/UMS/wp-json/ums/v1/sync-organization
 UMS_SYNC_TOKEN=token-tu-trang-admin-ums
 UMS_SPREADSHEET_ID=id-google-sheet
-UMS_SHEET_NAME=NhanSu
+UMS_SHEET_NAME_USERS=NhanSu
+UMS_SHEET_NAME_ORGANIZATION=ToChucTVN
 ```
 
 Deploy dạng Web App:
@@ -37,7 +39,7 @@ Deploy dạng Web App:
 - Execute as: `Me`
 - Who has access: `Anyone within domain công ty`
 
-Sau khi deploy, copy Web App URL vào trang `Đồng bộ Sheet` của UMS.
+Sau khi deploy, copy Web App URL vào trang `Đồng bộ Sheet` của UMS. Trang `Đồng bộ Sheet` mở Web App với `mode=users`; trang `Sơ đồ tổ chức TVN` mở cùng Web App với `mode=organization`.
 
 Nếu trình duyệt chặn popup `fetch()` trực tiếp về WordPress do chính sách mạng/mixed content, file `Index.html` sẽ tự gửi payload về trang Admin bằng `postMessage`; trang Admin sau đó POST cùng-origin vào REST endpoint. Đây là fallback để chạy ổn trong môi trường WordPress nội bộ.
 
@@ -61,6 +63,8 @@ Dòng đầu tiên là tiêu đề. Script nhận tiêu đề tiếng Việt ho�
 | `is_outdoor_worker` | Làm việc ngoài trời | Không | `true`, `1`, `Có`, `x` |
 | `account_status` | Trạng thái tài khoản | Không | `active` hoặc `inactive` |
 | `email` | Email | Không | Ghi vào `wp_users.user_email` |
+
+Sheet `ToChucTVN` dùng cho Sơ đồ tổ chức nhận các cột: `id`, `version`, `emp_no`, `fname`, `division`, `department`, `section`, `team`, `position`, `email`, `factory`, `time_create`, `time_update`. Có thể dùng alias `source_id`, `employee_no`, `full_name`, `source_created_at`, `source_updated_at`.
 
 ## 4. Cách Chạy
 

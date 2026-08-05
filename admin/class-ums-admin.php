@@ -447,11 +447,13 @@ class UMS_Admin {
         $table_ready     = UMS_DB_Organization::table_exists();
         $total_employees = $table_ready ? UMS_DB_Organization::get_count() : 0;
         $last_synced_at  = $table_ready ? UMS_DB_Organization::get_last_synced_at() : null;
-        $next_cron_run   = wp_next_scheduled( UMS_ORGANIZATION_SYNC_CRON_HOOK );
         $cron_result     = get_option( UMS_Organization_Sync::CRON_RESULT_OPTION, array() );
         $divisions       = $table_ready ? UMS_DB_Organization::get_distinct_values( 'division' ) : array();
         $departments     = $table_ready ? UMS_DB_Organization::get_distinct_values( 'department' ) : array();
         $factories       = $table_ready ? UMS_DB_Organization::get_distinct_values( 'factory' ) : array();
+        $apps_script_url = (string) get_option( 'ums_sheet_sync_apps_script_url', '' );
+        $rest_endpoint   = rest_url( UMS_Organization_Sync::REST_NAMESPACE . UMS_Organization_Sync::REST_ROUTE );
+        $sync_token      = UMS_Sheet_User_Sync::get_sync_token();
         $notice          = self::get_notice();
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-organization-list.php' ) ) {
@@ -524,7 +526,7 @@ class UMS_Admin {
     }
 
     /**
-     * Chạy đồng bộ thủ công từ qa_dims.wp_tvnorg.
+     * Handler cũ được giữ để tương thích URL cũ; dữ liệu tổ chức nay đồng bộ từ Google Sheet.
      */
     public static function handle_sync_organization() {
         if ( ! current_user_can( 'manage_options' ) ) {

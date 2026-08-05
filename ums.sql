@@ -228,7 +228,7 @@ CREATE TABLE `wp_uniform_returns` (
     KEY `idx_return_target` (`target_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 15. BANG DU LIEU SO DO TO CHUC TVN DONG BO TU qa_dims.wp_tvnorg
+-- 15. BANG DU LIEU SO DO TO CHUC TVN DONG BO TU GOOGLE SHEET
 CREATE TABLE `wp_uniform_organization_employees` (
     `source_id` BIGINT(20) UNSIGNED NOT NULL,
     `source_version` INT NOT NULL DEFAULT 0,

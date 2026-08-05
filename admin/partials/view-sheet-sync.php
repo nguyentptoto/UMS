@@ -70,6 +70,7 @@ $last_errors  = isset( $last_log['errors'] ) && is_array( $last_log['errors'] ) 
                 data-apps-script-url="<?php echo esc_attr( $apps_script_url ); ?>"
                 data-rest-endpoint="<?php echo esc_attr( $rest_endpoint ); ?>"
                 data-sync-token="<?php echo esc_attr( $sync_token ); ?>"
+                data-sync-mode="users"
             >
                 Bắt đầu đồng bộ
             </button>

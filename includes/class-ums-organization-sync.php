@@ -7,19 +7,150 @@ class UMS_Organization_Sync {
 	const LOCK_KEY  = 'ums_organization_sync_lock';
 	const BATCH_SIZE = 500;
 	const CRON_RESULT_OPTION = 'ums_organization_sync_cron_result';
+	const REST_NAMESPACE = 'ums/v1';
+	const REST_ROUTE = '/sync-organization';
+
+	public static function init() {
+		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
+	}
+
+	public static function register_routes() {
+		register_rest_route(
+			self::REST_NAMESPACE,
+			self::REST_ROUTE,
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( __CLASS__, 'handle_sheet_sync' ),
+				'permission_callback' => array( 'UMS_Sheet_User_Sync', 'authorize_request' ),
+			)
+		);
+	}
+
+	public static function handle_sheet_sync( WP_REST_Request $request ) {
+		if ( ! UMS_DB_Organization::table_exists() ) {
+			return new WP_Error(
+				'organization_table_missing',
+				'Chưa có bảng dữ liệu sơ đồ tổ chức nội bộ. Hãy import cấu trúc trong ums.sql.',
+				array( 'status' => 503 )
+			);
+		}
+
+		$payload = $request->get_json_params();
+		$rows    = is_array( $payload ) && isset( $payload['rows'] ) && is_array( $payload['rows'] )
+			? $payload['rows']
+			: array();
+
+		if ( empty( $rows ) && is_array( $payload ) && isset( $payload['organization'] ) && is_array( $payload['organization'] ) ) {
+			$rows = $payload['organization'];
+		}
+
+		if ( empty( $rows ) ) {
+			return new WP_Error(
+				'organization_sheet_empty',
+				'Payload phải có mảng rows hoặc organization.',
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( count( $rows ) > self::BATCH_SIZE ) {
+			return new WP_Error(
+				'organization_batch_too_large',
+				sprintf( 'Mỗi request chỉ được gửi tối đa %d nhân sự tổ chức.', self::BATCH_SIZE ),
+				array( 'status' => 413 )
+			);
+		}
+
+		$sync_token = self::resolve_sync_token( $payload );
+		$synced_at  = current_time( 'mysql' );
+		$normalized = array();
+		$results    = array();
+
+		foreach ( $rows as $index => $row ) {
+			$item = self::normalize_sheet_row( $row, $index );
+			if ( is_wp_error( $item ) ) {
+				$results[] = array(
+					'index'   => (int) $index,
+					'action'  => 'error',
+					'message' => $item->get_error_message(),
+				);
+				continue;
+			}
+
+			$normalized[] = $item;
+			$results[] = array(
+				'index'       => (int) $index,
+				'action'      => 'accepted',
+				'employee_no' => $item['emp_no'],
+			);
+		}
+
+		$upserted = 0;
+		if ( ! empty( $normalized ) ) {
+			$upserted = UMS_DB_Organization::upsert_batch( $normalized, $sync_token, $synced_at );
+			if ( $upserted === false ) {
+				return new WP_Error(
+					'organization_save_failed',
+					'Không lưu được dữ liệu sơ đồ tổ chức: ' . UMS_DB_Organization::get_last_error(),
+					array( 'status' => 500 )
+				);
+			}
+		}
+
+		$finalize = ! empty( $payload['finalize'] );
+		$deleted  = 0;
+		if ( $finalize && ! empty( $normalized ) ) {
+			$deleted = UMS_DB_Organization::delete_not_in_sync( $sync_token );
+			if ( $deleted === false ) {
+				return new WP_Error(
+					'organization_cleanup_failed',
+					'Không dọn được dữ liệu tổ chức cũ: ' . UMS_DB_Organization::get_last_error(),
+					array( 'status' => 500 )
+				);
+			}
+		}
+
+		$failed = count( $rows ) - count( $normalized );
+		update_option(
+			self::CRON_RESULT_OPTION,
+			array(
+				'status'     => $failed > 0 ? 'partial' : 'success',
+				'started_at' => $synced_at,
+				'ended_at'   => current_time( 'mysql' ),
+				'total'      => count( $normalized ),
+				'deleted'    => (int) $deleted,
+				'source'     => 'google-sheet-popup-bridge',
+			),
+			false
+		);
+
+		return new WP_REST_Response(
+			array(
+				'status'  => $failed > 0 ? 'partial' : 'success',
+				'success' => $failed === 0,
+				'count'   => count( $rows ),
+				'updated' => count( $normalized ),
+				'failed'  => $failed,
+				'deleted' => (int) $deleted,
+				'results' => $results,
+			),
+			$failed > 0 ? 207 : 200
+		);
+	}
 
 	public static function get_config() {
 		return array(
-			'host'     => defined( 'UMS_ORG_SYNC_DB_HOST' ) ? UMS_ORG_SYNC_DB_HOST : '172.30.134.76',
-			'port'     => defined( 'UMS_ORG_SYNC_DB_PORT' ) ? absint( UMS_ORG_SYNC_DB_PORT ) : 3306,
-			'user'     => defined( 'UMS_ORG_SYNC_DB_USER' ) ? UMS_ORG_SYNC_DB_USER : 'mims',
-			'password' => defined( 'UMS_ORG_SYNC_DB_PASSWORD' ) ? UMS_ORG_SYNC_DB_PASSWORD : '',
-			'database' => defined( 'UMS_ORG_SYNC_DB_NAME' ) ? UMS_ORG_SYNC_DB_NAME : 'qa_dims',
-			'table'    => defined( 'UMS_ORG_SYNC_DB_TABLE' ) ? UMS_ORG_SYNC_DB_TABLE : 'wp_tvnorg',
+			'host'     => '',
+			'port'     => 0,
+			'user'     => '',
+			'password' => '',
+			'database' => '',
+			'table'    => '',
 		);
 	}
 
 	public static function sync() {
+		return new WP_Error( 'organization_external_sync_disabled', 'Sơ đồ tổ chức TVN hiện đồng bộ từ Google Sheet qua Popup Bridge, không còn kết nối database ngoài.' );
+
 		if ( ! UMS_DB_Organization::table_exists() ) {
 			return new WP_Error( 'organization_table_missing', 'Chưa có bảng dữ liệu sơ đồ tổ chức nội bộ. Hãy import cấu trúc mới trong ums.sql trước.' );
 		}
@@ -174,5 +305,64 @@ class UMS_Organization_Sync {
 	private static function normalize_datetime( $value ) {
 		$value = trim( (string) $value );
 		return preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value ) ? $value : null;
+	}
+
+	private static function normalize_sheet_row( $row, $index ) {
+		if ( ! is_array( $row ) ) {
+			return new WP_Error( 'organization_row_invalid', sprintf( 'Dòng %d không phải JSON object.', (int) $index + 2 ) );
+		}
+
+		$source_id = self::first_scalar( $row, array( 'source_id', 'id' ) );
+		if ( $source_id === '' ) {
+			return new WP_Error( 'organization_source_id_missing', sprintf( 'Dòng %d thiếu id/source_id.', (int) $index + 2 ) );
+		}
+
+		$source_id = absint( $source_id );
+		if ( $source_id <= 0 ) {
+			return new WP_Error( 'organization_source_id_invalid', sprintf( 'Dòng %d có id/source_id không hợp lệ.', (int) $index + 2 ) );
+		}
+
+		$item = array(
+			'id'          => $source_id,
+			'version'     => absint( self::first_scalar( $row, array( 'source_version', 'version' ) ) ),
+			'emp_no'      => sanitize_text_field( self::first_scalar( $row, array( 'employee_no', 'emp_no', 'ma_nv', 'mã nv' ) ) ),
+			'fname'       => sanitize_text_field( self::first_scalar( $row, array( 'full_name', 'fname', 'ho_ten', 'họ tên' ) ) ),
+			'division'    => sanitize_text_field( self::first_scalar( $row, array( 'division', 'khoi', 'khối' ) ) ),
+			'department'  => sanitize_text_field( self::first_scalar( $row, array( 'department', 'phong_ban', 'phòng ban' ) ) ),
+			'section'     => sanitize_text_field( self::first_scalar( $row, array( 'section', 'bo_phan', 'bộ phận' ) ) ),
+			'team'        => sanitize_text_field( self::first_scalar( $row, array( 'team', 'nhom', 'nhóm' ) ) ),
+			'position'    => sanitize_text_field( self::first_scalar( $row, array( 'position', 'chuc_danh', 'chức danh' ) ) ),
+			'email'       => sanitize_email( self::first_scalar( $row, array( 'email' ) ) ),
+			'factory'     => sanitize_text_field( self::first_scalar( $row, array( 'factory', 'nha_may', 'nhà máy' ) ) ),
+			'time_create' => self::normalize_datetime( self::first_scalar( $row, array( 'source_created_at', 'time_create', 'created_at' ) ) ),
+			'time_update' => self::normalize_datetime( self::first_scalar( $row, array( 'source_updated_at', 'time_update', 'updated_at' ) ) ),
+		);
+
+		if ( $item['emp_no'] === '' ) {
+			return new WP_Error( 'organization_employee_no_missing', sprintf( 'Dòng %d thiếu mã nhân viên.', (int) $index + 2 ) );
+		}
+
+		return $item;
+	}
+
+	private static function first_scalar( $row, $keys ) {
+		foreach ( $keys as $key ) {
+			if ( array_key_exists( $key, $row ) && is_scalar( $row[ $key ] ) ) {
+				return trim( (string) $row[ $key ] );
+			}
+		}
+
+		return '';
+	}
+
+	private static function resolve_sync_token( $payload ) {
+		if ( is_array( $payload ) && ! empty( $payload['sync_token'] ) && is_scalar( $payload['sync_token'] ) ) {
+			$token = sanitize_key( (string) $payload['sync_token'] );
+			if ( strlen( $token ) >= 16 ) {
+				return substr( $token, 0, 32 );
+			}
+		}
+
+		return wp_generate_password( 32, false, false );
 	}
 }

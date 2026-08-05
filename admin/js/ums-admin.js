@@ -141,20 +141,25 @@
             $log.scrollTop($log.prop('scrollHeight'));
         }
 
-        function postPayloadFromAdmin(payload, batchSize) {
+        function postPayloadFromAdmin(payload, batchSize, mode) {
             var endpoint = String($button.attr('data-rest-endpoint') || '').trim();
             var token = String($button.attr('data-sync-token') || '').trim();
+            var isOrganization = mode === 'organization';
+            var rows = payload && Array.isArray(payload.rows) ? payload.rows : [];
             var users = payload && Array.isArray(payload.users) ? payload.users : [];
+            var items = isOrganization ? (rows.length ? rows : users) : users;
             var size = parseInt(batchSize, 10) || 200;
+            var syncToken = 'sheet' + String(Date.now()) + String(Math.floor(Math.random() * 100000));
             var total = {
                 count: 0,
                 created: 0,
                 updated: 0,
                 failed: 0,
+                deleted: 0,
                 errors: []
             };
 
-            if (!endpoint || !token || !users.length) {
+            if (!endpoint || !token || !items.length) {
                 appendLog('Không đủ dữ liệu để gửi fallback từ trang Admin.', 'error');
                 $button.prop('disabled', false).text('Bắt đầu đồng bộ');
                 return;
@@ -164,12 +169,20 @@
             $button.prop('disabled', true).text('Đang đồng bộ...');
 
             function sendBatch(offset) {
-                var batch = users.slice(offset, offset + size);
+                var batch = items.slice(offset, offset + size);
                 var body = $.extend({}, payload, {
-                    users: batch,
                     batch_offset: offset,
-                    batch_size: batch.length
+                    batch_size: batch.length,
+                    sync_token: syncToken,
+                    finalize: offset + size >= items.length
                 });
+
+                if (isOrganization) {
+                    delete body.users;
+                    body.rows = batch;
+                } else {
+                    body.users = batch;
+                }
 
                 appendLog('Admin bridge gửi batch ' + (offset + 1) + '-' + (offset + batch.length) + '...', 'info');
 
@@ -198,9 +211,10 @@
                         total.created += Number(decoded.created || (decoded.summary && decoded.summary.created) || 0);
                         total.updated += Number(decoded.updated || (decoded.summary && decoded.summary.updated) || 0);
                         total.failed += Number(decoded.failed || (decoded.summary && decoded.summary.failed) || 0);
+                        total.deleted += Number(decoded.deleted || 0);
                         total.errors = total.errors.concat(decoded.errors || []);
 
-                        if (offset + size < users.length) {
+                        if (offset + size < items.length) {
                             return sendBatch(offset + size);
                         }
 
@@ -233,7 +247,7 @@
 
             if (data.action === 'admin-post') {
                 appendLog('Popup yêu cầu chuyển sang Admin bridge.', 'warning');
-                postPayloadFromAdmin(data.payload || {}, data.batchSize || 200);
+                postPayloadFromAdmin(data.payload || {}, data.batchSize || 200, data.mode || String($button.attr('data-sync-mode') || 'users'));
                 return;
             }
 
@@ -252,6 +266,7 @@
 
         $button.on('click', function () {
             var appsScriptUrl = String($button.attr('data-apps-script-url') || '').trim();
+            var syncMode = String($button.attr('data-sync-mode') || 'users').trim() || 'users';
 
             if (!appsScriptUrl) {
                 window.alert('Vui lòng cấu hình Google Apps Script Web App URL trước khi đồng bộ.');
@@ -261,7 +276,9 @@
             $log.empty();
             appendLog('Đang mở popup Google Apps Script...', 'info');
 
-            activePopup = window.open(appsScriptUrl, 'umsSheetSyncPopup', 'width=860,height=720,menubar=no,toolbar=no,location=yes,status=yes,scrollbars=yes,resizable=yes');
+            var separator = appsScriptUrl.indexOf('?') >= 0 ? '&' : '?';
+            var popupUrl = appsScriptUrl + separator + 'mode=' + encodeURIComponent(syncMode);
+            activePopup = window.open(popupUrl, 'umsSheetSyncPopup', 'width=860,height=720,menubar=no,toolbar=no,location=yes,status=yes,scrollbars=yes,resizable=yes');
             if (!activePopup) {
                 appendLog('Trình duyệt đã chặn popup. Hãy cho phép popup cho trang Admin này.', 'error');
                 return;

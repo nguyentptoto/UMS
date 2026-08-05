@@ -174,22 +174,9 @@ Hash lấy từ DB nguồn được ghi trực tiếp vào `wp_users.user_pass`,
 
 Admin quản lý tại menu `Sơ đồ tổ chức TVN`. Giao diện dùng jqxGrid phân trang phía server và đọc dữ liệu từ bảng nội bộ `wp_uniform_organization_employees`.
 
-Nút `Đồng bộ dữ liệu` kết nối tới bảng `qa_dims.wp_tvnorg`, tự xác định `MAX(version)`, lấy snapshot nhân sự mới nhất theo từng batch và upsert theo `source_id`. Các version lịch sử không được đưa vào danh sách hiện hành. Bản ghi nội bộ không còn tồn tại ở snapshot mới chỉ bị xóa sau khi toàn bộ phiên đồng bộ hoàn thành; nếu kết nối hoặc truy vấn lỗi giữa chừng, danh sách cũ vẫn được giữ.
+Nút `Đồng bộ từ Google Sheet` trên trang này mở Google Apps Script Web App bằng Popup Bridge và gửi dữ liệu về receiver `POST /wp-json/ums/v1/sync-organization`. Dữ liệu được upsert vào bảng nội bộ theo `source_id/id`; batch cuối gửi `finalize=true` để xóa các bản ghi không còn trong Sheet.
 
-Plugin đăng ký tác vụ WP-Cron `ums_daily_organization_sync` theo chu kỳ `daily` để tự động đồng bộ một lần mỗi 24 giờ. Trang Admin hiển thị thời điểm dự kiến chạy tiếp theo và kết quả lần chạy nền gần nhất. WP-Cron được kích hoạt khi website có lượt truy cập; nếu máy chủ tắt `DISABLE_WP_CRON`, cần cấu hình cron hệ điều hành gọi `wp-cron.php`.
-
-Cấu hình mặc định:
-
-```php
-define( 'UMS_ORG_SYNC_DB_HOST', '172.30.134.76' );
-define( 'UMS_ORG_SYNC_DB_PORT', 3306 );
-define( 'UMS_ORG_SYNC_DB_USER', 'mims' );
-define( 'UMS_ORG_SYNC_DB_PASSWORD', '' );
-define( 'UMS_ORG_SYNC_DB_NAME', 'qa_dims' );
-define( 'UMS_ORG_SYNC_DB_TABLE', 'wp_tvnorg' );
-```
-
-Các hằng số trên là tùy chọn và có thể đặt trong `wp-config.php`. Plugin không tự tạo bảng; cần import bảng `wp_uniform_organization_employees` từ `ums.sql` trước lần đồng bộ đầu tiên.
+Module này không còn kết nối database ngoài. Plugin không tự tạo bảng; cần import bảng `wp_uniform_organization_employees` từ `ums.sql` trước lần đồng bộ đầu tiên.
 
 ## Đồng Bộ Nhân Sự Từ Google Sheet
 

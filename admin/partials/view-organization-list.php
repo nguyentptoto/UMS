@@ -1,9 +1,6 @@
 <?php
 /**
  * Giao diện quản lý dữ liệu sơ đồ tổ chức TVN đã đồng bộ về UMS.
- *
- * Biến: $filters, $table_ready, $total_employees, $last_synced_at,
- * $next_cron_run, $cron_result, $divisions, $departments, $factories, $notice.
  */
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -65,17 +62,14 @@ $grid_fields = array(
 					<?php if ( $last_synced_at ) : ?>
 						· Đồng bộ gần nhất: <?php echo esc_html( mysql2date( 'd/m/Y H:i:s', $last_synced_at ) ); ?>
 					<?php endif; ?>
-					<?php if ( $next_cron_run ) : ?>
-						· Tự động kế tiếp: <?php echo esc_html( wp_date( 'd/m/Y H:i:s', $next_cron_run ) ); ?>
-					<?php endif; ?>
 				</p>
 				<?php if ( ! empty( $cron_result['ended_at'] ) ) : ?>
 					<p class="description">
-						Lần chạy nền gần nhất:
+						Lần đồng bộ Sheet gần nhất:
 						<?php echo esc_html( mysql2date( 'd/m/Y H:i:s', $cron_result['ended_at'] ) ); ?>
 						·
-						<?php if ( isset( $cron_result['status'] ) && $cron_result['status'] === 'success' ) : ?>
-							Thành công, <?php echo esc_html( number_format_i18n( $cron_result['total'] ?? 0 ) ); ?> nhân sự
+						<?php if ( isset( $cron_result['status'] ) && in_array( $cron_result['status'], array( 'success', 'partial' ), true ) ) : ?>
+							Đã nhận <?php echo esc_html( number_format_i18n( $cron_result['total'] ?? 0 ) ); ?> nhân sự từ Google Sheet
 						<?php else : ?>
 							Thất bại: <?php echo esc_html( $cron_result['message'] ?? 'Không xác định được lỗi.' ); ?>
 						<?php endif; ?>
@@ -83,11 +77,28 @@ $grid_fields = array(
 				<?php endif; ?>
 			</div>
 
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<?php wp_nonce_field( 'ums_sync_organization' ); ?>
-				<input type="hidden" name="action" value="ums_sync_organization">
-				<button type="submit" class="button button-primary" <?php disabled( ! $table_ready ); ?>>Đồng bộ dữ liệu</button>
-			</form>
+			<button
+				type="button"
+				class="button button-primary ums-start-popup-sync"
+				id="ums-start-sheet-sync"
+				data-apps-script-url="<?php echo esc_attr( $apps_script_url ); ?>"
+				data-rest-endpoint="<?php echo esc_attr( $rest_endpoint ); ?>"
+				data-sync-token="<?php echo esc_attr( $sync_token ); ?>"
+				data-sync-mode="organization"
+				<?php disabled( ! $table_ready || $apps_script_url === '' ); ?>
+			>
+				Đồng bộ từ Google Sheet
+			</button>
+		</div>
+
+		<?php if ( $apps_script_url === '' ) : ?>
+			<div class="notice notice-warning inline">
+				<p>Chưa cấu hình Google Apps Script Web App URL. Hãy cấu hình tại menu <strong>Đồng bộ Sheet</strong> trước.</p>
+			</div>
+		<?php endif; ?>
+
+		<div class="ums-sync-log" id="ums-sheet-sync-log" aria-live="polite">
+			<div class="ums-sync-log-line">Sẵn sàng đồng bộ sơ đồ tổ chức từ Google Sheet.</div>
 		</div>
 
 		<form method="get" class="ums-filter-bar ums-organization-filters">

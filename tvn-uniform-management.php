@@ -19,10 +19,9 @@ define( 'UMS_ORGANIZATION_SYNC_CRON_HOOK', 'ums_daily_organization_sync' );
  * Đăng ký tác vụ đồng bộ sơ đồ tổ chức một lần mỗi ngày.
  */
 function ums_schedule_daily_organization_sync() {
-    if ( ! wp_next_scheduled( UMS_ORGANIZATION_SYNC_CRON_HOOK ) ) {
-        wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', UMS_ORGANIZATION_SYNC_CRON_HOOK );
+    if ( wp_next_scheduled( UMS_ORGANIZATION_SYNC_CRON_HOOK ) ) {
+        wp_clear_scheduled_hook( UMS_ORGANIZATION_SYNC_CRON_HOOK );
     }
-
     ums_ensure_sheet_sync_token();
 }
 
@@ -81,8 +80,8 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-organization-sync.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-sheet-user-sync.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-department-import.php';
-    add_action( UMS_ORGANIZATION_SYNC_CRON_HOOK, array( 'UMS_Organization_Sync', 'run_scheduled_sync' ) );
     UMS_Sheet_User_Sync::init();
+    UMS_Organization_Sync::init();
     
     // 3. Kích hoạt phân hệ Admin
     if ( is_admin() ) {
