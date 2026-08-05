@@ -198,7 +198,7 @@ Plugin cung cấp receiver `POST /wp-json/ums/v1/sync-organization`. Endpoint x�
 
 Do Google Workspace có SSO và WordPress chạy nội bộ, hệ thống dùng mô hình Popup Bridge thay vì GAS trigger server-to-server. Admin bấm `Đồng bộ từ Google Sheet` trong trang `Sơ đồ tổ chức TVN`, plugin mở Google Apps Script Web App bằng `window.open()`, popup đọc Sheet bằng phiên SSO trình duyệt rồi `fetch()` JSON về endpoint nội bộ của WordPress. Nếu trình duyệt chặn POST trực tiếp từ popup, popup chuyển payload về trang Admin bằng `postMessage` để Admin POST cùng-origin vào UMS.
 
-Google Apps Script mẫu gồm `ums-organization-sync.gs` và `Index.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/`.
+Google Apps Script mẫu gồm `ums-organization-sync.gs` và `UmsTvnOrgIndex.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/`.
 
 ## Cấu Trúc Thư Mục Chính
 

@@ -35,7 +35,7 @@ function umsTvnOrgDoGet(e) {
     rows: syncData.rows
   };
 
-  const template = HtmlService.createTemplateFromFile('Index');
+  const template = HtmlService.createTemplateFromFile('UmsTvnOrgIndex');
   template.endpoint = config.endpoint;
   template.token = config.token;
   template.payload = JSON.stringify(payload);

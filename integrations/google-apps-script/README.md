@@ -16,49 +16,75 @@ Vị trí
 Vị trí trước TT
 ```
 
-## Cấu hình WordPress
+## Vì sao popup đang mở giao diện app cũ?
 
-Vào `Quản lý Đồng phục > Đồng bộ Sheet`.
+Google Apps Script Web App chỉ có một entry `doGet(e)`. Sheet của bạn đã có app riêng, nên popup đang chạy `doGet(e)` cũ trong file `Mã.gs` và hiển thị giao diện quản trị đồng phục hiện có.
 
-Trang này hiển thị:
+File UMS không tự tạo `doGet` mới để tránh đè chức năng cũ. Thay vào đó, UMS mở Web App kèm query:
 
-- `REST Endpoint`: `http://localhost/UMS/wp-json/ums/v1/sync-organization`
-- `X-Sync-Token`
-- ô nhập `Google Apps Script Web App URL`
+```text
+?ums_module=tvn_org
+```
 
-Copy endpoint và token sang Script Properties của Apps Script.
+Bạn chỉ cần thêm một nhánh router vào `doGet(e)` hiện tại.
 
-## Thêm file Apps Script riêng
+## File cần tạo thêm trong Apps Script
 
-Sheet của bạn đã có Apps Script cho chức năng khác, vì vậy file UMS dùng prefix riêng `umsTvnOrg...` để tránh trùng tên hàm.
+Tạo thêm file `.gs` mới, ví dụ:
 
-Tạo thêm file `.gs` mới, ví dụ `ums-organization-sync.gs`, rồi dán nội dung từ:
+```text
+ums-organization-sync.gs
+```
+
+Dán nội dung từ:
 
 ```text
 integrations/google-apps-script/ums-organization-sync.gs
 ```
 
-Tạo thêm file HTML `Index` nếu project chưa có file này, rồi dán nội dung từ:
+Tạo thêm file HTML mới tên:
 
 ```text
-integrations/google-apps-script/Index.html
+UmsTvnOrgIndex
 ```
 
-Nếu project đã có `Index.html` cho chức năng khác, hãy đổi tên file HTML UMS thành `UmsTvnOrgIndex.html`, rồi sửa trong `ums-organization-sync.gs` dòng:
+Dán nội dung từ:
 
-```javascript
-HtmlService.createTemplateFromFile('Index')
+```text
+integrations/google-apps-script/UmsTvnOrgIndex.html
 ```
 
-thành:
+Các hàm UMS đều dùng prefix `umsTvnOrg...`, nên không trùng với các hàm đang có.
+
+## Router trong doGet hiện có
+
+Trong file `Mã.gs`, tìm hàm `doGet(e)` hiện tại và thêm nhánh này ở đầu hàm:
 
 ```javascript
-HtmlService.createTemplateFromFile('UmsTvnOrgIndex')
+function doGet(e) {
+  if (e && e.parameter && e.parameter.ums_module === 'tvn_org') {
+    return umsTvnOrgDoGet(e);
+  }
+
+  // Giữ nguyên logic doGet cũ của bạn bên dưới.
+}
+```
+
+Nếu `doGet(e)` hiện tại đang không có tham số `e`, đổi thành:
+
+```javascript
+function doGet(e) {
+  if (e && e.parameter && e.parameter.ums_module === 'tvn_org') {
+    return umsTvnOrgDoGet(e);
+  }
+
+  // Logic cũ.
+}
 ```
 
 ## Script Properties
 
-Chạy hàm `umsTvnOrgConfigure()` một lần để tạo properties mẫu, sau đó sửa lại:
+Chạy hàm `umsTvnOrgConfigure()` một lần để tạo properties mẫu, sau đó sửa:
 
 ```text
 UMS_TVN_ORG_ENDPOINT=http://localhost/UMS/wp-json/ums/v1/sync-organization
@@ -67,37 +93,11 @@ UMS_TVN_ORG_SPREADSHEET_ID=id-google-sheet
 UMS_TVN_ORG_SHEET_NAME=Danh sách CNV
 ```
 
-## Tránh trùng doGet
-
-Apps Script Web App chỉ có một entry `doGet(e)`. File UMS không tự khai báo `doGet` để tránh đụng chức năng sẵn có.
-
-Nếu project chưa có `doGet`, thêm:
-
-```javascript
-function doGet(e) {
-  return umsTvnOrgDoGet(e);
-}
-```
-
-Nếu project đã có `doGet`, thêm nhánh router vào `doGet` hiện tại:
-
-```javascript
-function doGet(e) {
-  if (e && e.parameter && e.parameter.ums_module === 'tvn_org') {
-    return umsTvnOrgDoGet(e);
-  }
-
-  // Logic doGet cũ của bạn giữ nguyên bên dưới.
-}
-```
-
-UMS sẽ mở Web App với query `ums_module=tvn_org`, nên nhánh router này không ảnh hưởng chức năng cũ.
-
 ## Chạy đồng bộ
 
-1. Deploy Apps Script dạng Web App.
+1. Deploy lại Apps Script Web App sau khi thêm file/router.
 2. Copy Web App URL vào UMS tại `Đồng bộ Sheet`.
 3. Vào `Sơ đồ tổ chức TVN`.
 4. Bấm `Đồng bộ từ Google Sheet`.
 
-Popup sẽ đọc Sheet `Danh sách CNV`, đóng gói JSON và gửi về `/wp-json/ums/v1/sync-organization`. Nếu trình duyệt chặn POST trực tiếp từ popup, payload sẽ được chuyển về trang Admin bằng `postMessage` để Admin POST cùng-origin vào UMS.
+Popup lúc này sẽ chạy `umsTvnOrgDoGet(e)`, không còn mở giao diện app cũ nữa.
