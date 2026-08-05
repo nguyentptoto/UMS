@@ -202,15 +202,19 @@ $grid_columns = array(
 			<div class="ums-form-grid">
 				<label>
 					<span>Kiểu áp dụng <b>*</b></span>
-					<select name="ums_annual_allowance[apply_type]" required>
+					<select name="ums_annual_allowance[apply_type]" data-ums-annual-apply-type required>
 						<option value="category" <?php selected( $form_values['apply_type'], 'category' ); ?>>Theo danh mục</option>
 						<option value="item" <?php selected( $form_values['apply_type'], 'item' ); ?>>Theo sản phẩm cố định</option>
 					</select>
 				</label>
 
-				<label class="ums-field-wide">
+				<label
+					class="ums-field-wide ums-conditional-field"
+					data-ums-annual-apply-field="category"
+					<?php echo $form_values['apply_type'] === 'category' ? '' : 'hidden'; ?>
+				>
 					<span>Danh mục áp dụng</span>
-					<select name="ums_annual_allowance[category_id]">
+					<select name="ums_annual_allowance[category_id]" <?php echo $form_values['apply_type'] === 'category' ? 'required' : 'disabled'; ?>>
 						<option value="">Chọn khi kiểu áp dụng là danh mục</option>
 						<?php foreach ( $categories as $category ) : ?>
 							<option value="<?php echo esc_attr( $category['category_id'] ); ?>" <?php selected( (int) $form_values['category_id'], (int) $category['category_id'] ); ?>>
@@ -220,9 +224,13 @@ $grid_columns = array(
 					</select>
 				</label>
 
-				<label class="ums-field-wide">
+				<label
+					class="ums-field-wide ums-conditional-field"
+					data-ums-annual-apply-field="item"
+					<?php echo $form_values['apply_type'] === 'item' ? '' : 'hidden'; ?>
+				>
 					<span>Sản phẩm cố định</span>
-					<select name="ums_annual_allowance[item_id]">
+					<select name="ums_annual_allowance[item_id]" <?php echo $form_values['apply_type'] === 'item' ? 'required' : 'disabled'; ?>>
 						<option value="">Chọn khi kiểu áp dụng là sản phẩm cố định</option>
 						<?php foreach ( $inventory as $item ) : ?>
 							<option value="<?php echo esc_attr( $item['item_id'] ); ?>" <?php selected( (int) $form_values['item_id'], (int) $item['item_id'] ); ?>>

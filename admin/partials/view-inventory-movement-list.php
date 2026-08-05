@@ -15,16 +15,26 @@ $type_labels = array(
     'adjust'      => 'Điều chỉnh',
     'request_out' => 'Yêu cầu xuất',
 );
-$grid_rows = array();
+$movement_sections = array();
 
 foreach ( $movements as $movement ) {
-    $item_name = trim( ( $movement['parent_category_name'] ?: '' ) . ' / ' . ( $movement['category_name'] ?: '' ), ' /' );
-    $variant = trim( (string) $movement['item_variant'] );
+    $parent_id    = ! empty( $movement['parent_category_id'] ) ? absint( $movement['parent_category_id'] ) : 0;
+    $section_key  = $parent_id > 0 ? 'parent-' . $parent_id : 'uncategorized';
+    $section_name = ! empty( $movement['parent_category_name'] ) ? $movement['parent_category_name'] : 'Chưa phân loại';
+    $item_name    = trim( (string) $movement['category_name'] );
+    $variant      = trim( (string) $movement['item_variant'] );
     if ( $variant !== '' ) {
-        $item_name .= ' - ' . $variant;
+        $item_name .= ( $item_name !== '' ? ' - ' : '' ) . $variant;
     }
 
-    $grid_rows[] = array(
+    if ( ! isset( $movement_sections[ $section_key ] ) ) {
+        $movement_sections[ $section_key ] = array(
+            'name' => $section_name,
+            'rows' => array(),
+        );
+    }
+
+    $movement_sections[ $section_key ]['rows'][] = array(
         'created_at'     => mysql2date( 'd/m/Y H:i', $movement['created_at'] ),
         'movement_type'  => isset( $type_labels[ $movement['movement_type'] ] ) ? $type_labels[ $movement['movement_type'] ] : $movement['movement_type'],
         'request_id'     => ! empty( $movement['request_id'] ) ? '#' . (int) $movement['request_id'] : '-',
@@ -40,6 +50,13 @@ foreach ( $movements as $movement ) {
         'note'           => $movement['note'] ?: '-',
     );
 }
+
+uasort(
+    $movement_sections,
+    function( $left, $right ) {
+        return strnatcasecmp( $left['name'], $right['name'] );
+    }
+);
 
 $grid_columns = array(
     array( 'text' => 'Thời gian', 'datafield' => 'created_at', 'width' => '11%' ),
@@ -101,11 +118,21 @@ $grid_columns = array(
 
     <div class="ums-panel">
         <h2>Chi tiết nhập xuất kho</h2>
-        <div
-            id="ums-inventory-movement-grid"
-            class="ums-jqx-grid"
-            data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows ) ); ?>"
-            data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
-        ></div>
+
+        <?php if ( empty( $movement_sections ) ) : ?>
+            <div class="ums-empty-state">Không có lịch sử kho phù hợp với bộ lọc.</div>
+        <?php else : ?>
+            <?php $section_number = 0; ?>
+            <?php foreach ( $movement_sections as $section ) : ?>
+                <?php $section_number++; ?>
+                <h3><?php echo esc_html( $section_number . '. Lịch sử kho ' . $section['name'] ); ?></h3>
+                <div
+                    id="ums-inventory-movement-grid-<?php echo esc_attr( $section_number ); ?>"
+                    class="ums-jqx-grid"
+                    data-rows="<?php echo esc_attr( wp_json_encode( $section['rows'] ) ); ?>"
+                    data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
+                ></div>
+            <?php endforeach; ?>
+        <?php endif; ?>
     </div>
 </div>

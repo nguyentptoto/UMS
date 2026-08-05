@@ -44,7 +44,13 @@ class UMS_DB_Contract_Type extends UMS_DB_Base {
 	}
 
 	public static function get_active() {
-		return self::get_all( array( 'status' => 'active' ) );
+		static $active_contract_types = null;
+
+		if ( $active_contract_types === null ) {
+			$active_contract_types = self::get_all( array( 'status' => 'active' ) );
+		}
+
+		return $active_contract_types;
 	}
 
 	public static function get_by_id( $contract_type_id ) {

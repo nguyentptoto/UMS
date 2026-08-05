@@ -3,12 +3,14 @@ CREATE TABLE `wp_uniform_departments` (
     `department_id` INT AUTO_INCREMENT NOT NULL,
     `department_code` VARCHAR(50) NOT NULL,
     `department_name` VARCHAR(150) NOT NULL,
+    `department_group` VARCHAR(150) NOT NULL DEFAULT '',
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`department_id`),
     UNIQUE KEY `idx_department_code` (`department_code`),
     KEY `idx_department_name` (`department_name`),
+    KEY `idx_department_group` (`department_group`),
     KEY `idx_is_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -224,4 +226,30 @@ CREATE TABLE `wp_uniform_returns` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`return_id`),
     KEY `idx_return_target` (`target_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 15. BANG DU LIEU SO DO TO CHUC TVN DONG BO TU qa_dims.wp_tvnorg
+CREATE TABLE `wp_uniform_organization_employees` (
+    `source_id` BIGINT(20) UNSIGNED NOT NULL,
+    `source_version` INT NOT NULL DEFAULT 0,
+    `employee_no` VARCHAR(255) DEFAULT NULL,
+    `full_name` VARCHAR(255) DEFAULT NULL,
+    `division` VARCHAR(255) DEFAULT NULL,
+    `department` VARCHAR(255) DEFAULT NULL,
+    `section` VARCHAR(255) DEFAULT NULL,
+    `team` VARCHAR(255) DEFAULT NULL,
+    `position` VARCHAR(50) DEFAULT NULL,
+    `email` VARCHAR(255) DEFAULT NULL,
+    `factory` VARCHAR(255) DEFAULT NULL,
+    `source_created_at` DATETIME DEFAULT NULL,
+    `source_updated_at` DATETIME DEFAULT NULL,
+    `synced_at` DATETIME NOT NULL,
+    `sync_token` CHAR(32) NOT NULL,
+    PRIMARY KEY (`source_id`),
+    KEY `idx_employee_no` (`employee_no`(50)),
+    KEY `idx_division` (`division`(100)),
+    KEY `idx_department` (`department`(100)),
+    KEY `idx_factory` (`factory`(100)),
+    KEY `idx_source_updated_at` (`source_updated_at`),
+    KEY `idx_synced_at` (`synced_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

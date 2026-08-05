@@ -14,6 +14,14 @@ class UMS_DB_User extends UMS_DB_Base {
     }
 
     /**
+     * Kiểm tra bảng hồ sơ đã được import từ ums.sql.
+     */
+    public static function table_exists() {
+        $table = self::table();
+        return self::db()->get_var( self::db()->prepare( 'SHOW TABLES LIKE %s', $table ) ) === $table;
+    }
+
+    /**
      * Lấy toàn bộ danh sách nhân viên
      */
     public static function get_all( $args = array() ) {
@@ -119,6 +127,26 @@ class UMS_DB_User extends UMS_DB_Base {
     }
 
     /**
+     * Lấy hồ sơ theo mã nhân viên duy nhất.
+     */
+    public static function get_by_employee_code( $employee_code ) {
+        $table       = self::table();
+        $users_table = self::db()->users;
+        $sql         = self::db()->prepare(
+            "
+            SELECT profiles.*, wp_users.user_login, wp_users.user_status, wp_users.user_email
+            FROM $table profiles
+            LEFT JOIN $users_table wp_users ON profiles.user_id = wp_users.ID
+            WHERE profiles.employee_code = %s
+            LIMIT 1
+            ",
+            sanitize_text_field( $employee_code )
+        );
+
+        return self::db()->get_row( $sql, ARRAY_A );
+    }
+
+    /**
      * Lấy danh sách nhân viên theo phòng ban (Phục vụ bộ lọc Tạo Phiếu Hộ)
      */
     public static function get_by_department( $department ) {
@@ -134,6 +162,26 @@ class UMS_DB_User extends UMS_DB_Base {
         $table = self::table();
         $sql   = "SELECT DISTINCT department FROM $table WHERE department <> '' ORDER BY department ASC";
         return self::db()->get_col( $sql );
+    }
+
+    /**
+     * Đồng bộ tên phòng ban đã đổi cho toàn bộ hồ sơ nhân sự liên quan.
+     */
+    public static function replace_department_name( $old_name, $new_name ) {
+        $old_name = trim( (string) $old_name );
+        $new_name = trim( (string) $new_name );
+
+        if ( $old_name === '' || $new_name === '' || $old_name === $new_name ) {
+            return 0;
+        }
+
+        return self::db()->update(
+            self::table(),
+            array( 'department' => $new_name ),
+            array( 'department' => $old_name ),
+            array( '%s' ),
+            array( '%s' )
+        );
     }
 
     /**

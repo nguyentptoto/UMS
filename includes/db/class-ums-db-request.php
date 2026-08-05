@@ -109,6 +109,62 @@ class UMS_DB_Request extends UMS_DB_Base {
 		return self::db()->get_results( $sql, ARRAY_A );
 	}
 
+	public static function get_status_counts( $args = array() ) {
+		$table         = self::table();
+		$profile_table = self::prefix() . 'uniform_user_profiles';
+		$args          = wp_parse_args(
+			$args,
+			array(
+				'creator_id' => '',
+				'department' => '',
+				'status_in'  => array(),
+			)
+		);
+
+		$where  = array( '1=1' );
+		$params = array();
+
+		if ( $args['creator_id'] !== '' ) {
+			$where[]  = 'requests.creator_id = %d';
+			$params[] = absint( $args['creator_id'] );
+		}
+
+		if ( $args['department'] !== '' ) {
+			$where[]  = 'target_profiles.department = %s';
+			$params[] = sanitize_text_field( $args['department'] );
+		}
+
+		if ( ! empty( $args['status_in'] ) && is_array( $args['status_in'] ) ) {
+			$placeholders = implode( ',', array_fill( 0, count( $args['status_in'] ), '%s' ) );
+			$where[]      = "requests.current_status IN ($placeholders)";
+			foreach ( $args['status_in'] as $status ) {
+				$params[] = sanitize_text_field( $status );
+			}
+		}
+
+		$sql = "
+			SELECT COUNT(*) AS total,
+				SUM(CASE WHEN requests.current_status LIKE 'pending_step_%' THEN 1 ELSE 0 END) AS pending,
+				SUM(CASE WHEN requests.current_status = 'completed' THEN 1 ELSE 0 END) AS completed,
+				SUM(CASE WHEN requests.current_status = 'rejected' THEN 1 ELSE 0 END) AS rejected
+			FROM $table requests
+			LEFT JOIN $profile_table target_profiles ON requests.target_user_id = target_profiles.user_id
+			WHERE " . implode( ' AND ', $where );
+
+		if ( ! empty( $params ) ) {
+			$sql = self::db()->prepare( $sql, $params );
+		}
+
+		$row = self::db()->get_row( $sql, ARRAY_A );
+
+		return array(
+			'total'     => isset( $row['total'] ) ? absint( $row['total'] ) : 0,
+			'pending'   => isset( $row['pending'] ) ? absint( $row['pending'] ) : 0,
+			'completed' => isset( $row['completed'] ) ? absint( $row['completed'] ) : 0,
+			'rejected'  => isset( $row['rejected'] ) ? absint( $row['rejected'] ) : 0,
+		);
+	}
+
 	public static function insert_with_details( $request, $details ) {
 		$wpdb = self::db();
 		$wpdb->query( 'START TRANSACTION' );

@@ -2,6 +2,54 @@
     'use strict';
 
     var itemIndex = 1;
+    var themeStorageKey = 'umsThemeMode';
+
+    function getStoredTheme() {
+        try {
+            var stored = window.localStorage.getItem(themeStorageKey);
+            if (stored === 'dark' || stored === 'light') {
+                return stored;
+            }
+        } catch (error) {
+            return '';
+        }
+
+        return '';
+    }
+
+    function getInitialTheme() {
+        var stored = getStoredTheme();
+        if (stored) {
+            return stored;
+        }
+
+        return 'light';
+    }
+
+    function applyTheme(theme) {
+        var normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+        var isDark = normalizedTheme === 'dark';
+
+        document.documentElement.setAttribute('data-ums-theme', normalizedTheme);
+        document.body.classList.toggle('ums-theme-dark', isDark);
+        document.querySelectorAll('.ums-user-shell').forEach(function (shell) {
+            shell.setAttribute('data-ums-theme', normalizedTheme);
+        });
+        document.querySelectorAll('[data-ums-theme-toggle]').forEach(function (button) {
+            button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+            button.setAttribute('aria-label', isDark ? 'Bật chế độ sáng' : 'Bật chế độ tối');
+            button.setAttribute('title', isDark ? 'Bật chế độ sáng' : 'Bật chế độ tối');
+            button.setAttribute('data-ums-theme-state', normalizedTheme);
+        });
+    }
+
+    function saveTheme(theme) {
+        try {
+            window.localStorage.setItem(themeStorageKey, theme);
+        } catch (error) {
+            return;
+        }
+    }
 
     function setVisibleOption(option, visible) {
         option.hidden = !visible;
@@ -418,6 +466,14 @@
     });
 
     document.addEventListener('click', function (event) {
+        var themeToggle = event.target.closest('[data-ums-theme-toggle]');
+        if (themeToggle) {
+            var nextTheme = document.documentElement.getAttribute('data-ums-theme') === 'dark' ? 'light' : 'dark';
+            saveTheme(nextTheme);
+            applyTheme(nextTheme);
+            return;
+        }
+
         var addButton = event.target.closest('[data-ums-add-item]');
         if (addButton) {
             var addForm = addButton.closest('[data-ums-user-form]');
@@ -504,6 +560,8 @@
     });
 
     document.addEventListener('DOMContentLoaded', function () {
+        applyTheme(getInitialTheme());
+
         document.querySelectorAll('[data-ums-user-form]').forEach(function (form) {
             var targetSelect = form.querySelector('[data-ums-target-select]');
             if (targetSelect) {

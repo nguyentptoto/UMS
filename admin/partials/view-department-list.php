@@ -3,7 +3,7 @@
  * Giao diện quản lý danh mục phòng ban.
  *
  * Các biến được chuẩn bị từ UMS_Admin::render_department_page():
- * $departments, $filters, $editing_department, $form_values, $notice.
+ * $departments, $department_groups, $filters, $editing_department, $form_values, $notice.
  */
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -35,16 +35,18 @@ foreach ( $departments as $department ) {
     $grid_rows[] = array(
         'department_code' => $department['department_code'],
         'department_name' => $department['department_name'],
+        'department_group'=> ! empty( $department['department_group'] ) ? $department['department_group'] : '-',
         'status'          => (int) $department['is_active'] === 1 ? 'Đang sử dụng' : 'Ngừng sử dụng',
         'actions'         => '<a href="' . esc_url( $edit_url . '#ums-department-form' ) . '">Sửa</a> | <a href="' . esc_url( $delete_url ) . '" class="ums-delete-link" data-confirm="Xóa phòng ban ' . esc_attr( $department['department_code'] ) . '? Chỉ nên xóa khi chưa có nhân sự thuộc phòng ban này.">Xóa</a>',
     );
 }
 
 $grid_columns = array(
-    array( 'text' => 'Mã phòng ban', 'datafield' => 'department_code', 'width' => '25%' ),
-    array( 'text' => 'Tên phòng ban', 'datafield' => 'department_name', 'width' => '35%' ),
-    array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '20%' ),
-    array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '20%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
+    array( 'text' => 'Mã phòng ban', 'datafield' => 'department_code', 'width' => '20%' ),
+    array( 'text' => 'Tên phòng ban', 'datafield' => 'department_name', 'width' => '30%' ),
+    array( 'text' => 'Nhóm', 'datafield' => 'department_group', 'width' => '20%' ),
+    array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '15%' ),
+    array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '15%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
 );
 ?>
 
@@ -69,8 +71,20 @@ $grid_columns = array(
                     type="search"
                     name="s"
                     value="<?php echo esc_attr( $filters['search'] ); ?>"
-                    placeholder="Tìm mã hoặc tên phòng ban"
+                    placeholder="Tìm mã, tên hoặc nhóm"
                 >
+            </label>
+
+            <label>
+                <span class="screen-reader-text">Lọc nhóm phòng ban</span>
+                <select name="group">
+                    <option value="">Tất cả nhóm</option>
+                    <?php foreach ( $department_groups as $department_group ) : ?>
+                        <option value="<?php echo esc_attr( $department_group ); ?>" <?php selected( $filters['group'], $department_group ); ?>>
+                            <?php echo esc_html( $department_group ); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </label>
 
             <label>
@@ -94,6 +108,25 @@ $grid_columns = array(
         ></div>
     </div>
 
+    <div class="ums-panel">
+        <h2>Import phòng ban</h2>
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-filter-bar">
+            <?php wp_nonce_field( 'ums_import_departments' ); ?>
+            <input type="hidden" name="action" value="ums_import_departments">
+
+            <label>
+                <span class="screen-reader-text">Chọn file CSV phòng ban</span>
+                <input type="file" name="ums_department_import_file" accept=".csv,text/csv" required>
+            </label>
+
+            <button type="submit" class="button button-primary">Import CSV</button>
+            <a
+                href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ums_download_department_import_template' ), 'ums_download_department_import_template' ) ); ?>"
+                class="button"
+            >Tải file mẫu</a>
+        </form>
+    </div>
+
     <div class="ums-panel" id="ums-department-form">
         <h2><?php echo $is_editing ? 'Cập nhật phòng ban' : 'Thêm phòng ban'; ?></h2>
 
@@ -113,6 +146,22 @@ $grid_columns = array(
                     <span>Tên phòng ban <b>*</b></span>
                     <input type="text" name="ums_department[department_name]" value="<?php echo esc_attr( $form_values['department_name'] ); ?>" required>
                 </label>
+
+                <label>
+                    <span>Nhóm</span>
+                    <input
+                        type="text"
+                        name="ums_department[department_group]"
+                        value="<?php echo esc_attr( $form_values['department_group'] ); ?>"
+                        list="ums-department-groups"
+                    >
+                </label>
+
+                <datalist id="ums-department-groups">
+                    <?php foreach ( $department_groups as $department_group ) : ?>
+                        <option value="<?php echo esc_attr( $department_group ); ?>"></option>
+                    <?php endforeach; ?>
+                </datalist>
 
             </div>
 

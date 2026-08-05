@@ -44,7 +44,13 @@ class UMS_DB_Factory_Location extends UMS_DB_Base {
 	}
 
 	public static function get_active() {
-		return self::get_all( array( 'status' => 'active' ) );
+		static $active_factory_locations = null;
+
+		if ( $active_factory_locations === null ) {
+			$active_factory_locations = self::get_all( array( 'status' => 'active' ) );
+		}
+
+		return $active_factory_locations;
 	}
 
 	public static function get_by_id( $factory_location_id ) {

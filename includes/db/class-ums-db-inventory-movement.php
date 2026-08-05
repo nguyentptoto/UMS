@@ -77,7 +77,8 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         }
 
         $limit = max( 1, min( 1000, absint( $args['limit'] ) ) );
-        $sql = "SELECT movement.*, inventory.item_variant, inventory.size, child.category_name, parent.category_name AS parent_category_name,
+        $sql = "SELECT movement.*, inventory.item_variant, inventory.size, child.category_name,
+                parent.category_id AS parent_category_id, parent.category_name AS parent_category_name,
                 actor.user_login AS actor_login, target.user_login AS target_login
             FROM $table movement
             LEFT JOIN $inventory inventory ON inventory.item_id = movement.item_id

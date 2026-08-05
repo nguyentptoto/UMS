@@ -9,6 +9,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 $is_editing = ! empty( $editing_flow );
 $page_url   = admin_url( 'admin.php?page=tvn-ums-approval-flows' );
 $grid_rows  = array();
+$approver_map = array();
+
+foreach ( $approvers as $approver ) {
+    $approver_map[ (int) $approver['profile_id'] ] = $approver;
+}
 
 $format_department_label = function( $department ) {
     $code = isset( $department['department_code'] ) ? trim( (string) $department['department_code'] ) : '';
@@ -44,8 +49,8 @@ foreach ( $approval_flows as $flow ) {
     $approver_ids = is_array( $approver_ids ) ? array_map( 'absint', $approver_ids ) : array();
     $approver_labels = array();
     foreach ( $approver_ids as $approver_id ) {
-        $approver = UMS_DB_User::get_by_id( $approver_id );
-        if ( $approver ) {
+        if ( isset( $approver_map[ $approver_id ] ) ) {
+            $approver = $approver_map[ $approver_id ];
             $approver_labels[] = trim( $approver['employee_code'] . ' - ' . $approver['full_name'] );
         }
     }

@@ -13,6 +13,44 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'UMS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'UMS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+define( 'UMS_ORGANIZATION_SYNC_CRON_HOOK', 'ums_daily_organization_sync' );
+
+/**
+ * Đăng ký tác vụ đồng bộ sơ đồ tổ chức một lần mỗi ngày.
+ */
+function ums_schedule_daily_organization_sync() {
+    if ( ! wp_next_scheduled( UMS_ORGANIZATION_SYNC_CRON_HOOK ) ) {
+        wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', UMS_ORGANIZATION_SYNC_CRON_HOOK );
+    }
+
+    ums_ensure_sheet_sync_token();
+}
+
+/**
+ * Tạo token nhận dữ liệu Google Sheet nếu hệ thống chưa có.
+ */
+function ums_ensure_sheet_sync_token() {
+    $token = (string) get_option( 'ums_sheet_sync_token', '' );
+    if ( strlen( $token ) >= 32 ) {
+        return $token;
+    }
+
+    $token = wp_generate_password( 48, false, false );
+    update_option( 'ums_sheet_sync_token', $token, false );
+
+    return $token;
+}
+
+/**
+ * Xóa lịch nền khi plugin bị vô hiệu hóa.
+ */
+function ums_clear_daily_organization_sync() {
+    wp_clear_scheduled_hook( UMS_ORGANIZATION_SYNC_CRON_HOOK );
+}
+
+register_activation_hook( __FILE__, 'ums_schedule_daily_organization_sync' );
+register_deactivation_hook( __FILE__, 'ums_clear_daily_organization_sync' );
+add_action( 'init', 'ums_schedule_daily_organization_sync' );
 
 /**
  * Khởi tạo và nạp các phân hệ chính của hệ thống
@@ -32,6 +70,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-annual-allowance.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-request.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-user.php';
+    require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-organization.php';
 
     // Sau này thêm kho hay phiếu chỉ cần require thêm tại đây:
     // require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory.php';
@@ -39,6 +78,11 @@ function run_tvn_uniform_management() {
     // 2. Nạp helper chứa các hàm tiện ích
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-helper.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-password-sync.php';
+    require_once UMS_PLUGIN_DIR . 'includes/class-ums-organization-sync.php';
+    require_once UMS_PLUGIN_DIR . 'includes/class-ums-sheet-user-sync.php';
+    require_once UMS_PLUGIN_DIR . 'includes/class-ums-department-import.php';
+    add_action( UMS_ORGANIZATION_SYNC_CRON_HOOK, array( 'UMS_Organization_Sync', 'run_scheduled_sync' ) );
+    UMS_Sheet_User_Sync::init();
     
     // 3. Kích hoạt phân hệ Admin
     if ( is_admin() ) {

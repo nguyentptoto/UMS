@@ -58,7 +58,8 @@ class UMS_DB_Inventory extends UMS_DB_Base {
         }
 
         $category_table = UMS_DB_Product_Category::table();
-        $sql = "SELECT inventory.*, child.category_name AS category_name, parent.category_name AS parent_category_name
+        $sql = "SELECT inventory.*, child.category_name AS category_name,
+                parent.category_id AS parent_category_id, parent.category_name AS parent_category_name
             FROM $table inventory
             LEFT JOIN $category_table child ON child.category_id = inventory.category_id
             LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
@@ -88,7 +89,8 @@ class UMS_DB_Inventory extends UMS_DB_Base {
         $table = self::table();
         $category_table = UMS_DB_Product_Category::table();
         $sql   = self::db()->prepare(
-            "SELECT inventory.*, child.category_name AS category_name, parent.category_name AS parent_category_name
+            "SELECT inventory.*, child.category_name AS category_name,
+                    parent.category_id AS parent_category_id, parent.category_name AS parent_category_name
             FROM $table inventory
             LEFT JOIN $category_table child ON child.category_id = inventory.category_id
             LEFT JOIN $category_table parent ON parent.category_id = child.parent_id

@@ -155,6 +155,76 @@
     grid-column: 1 / -1;
 }
 
+.ums-conditional-field[hidden] {
+    display: none !important;
+}
+
+.ums-panel-heading-row {
+    align-items: flex-start;
+    display: flex;
+    gap: 20px;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.ums-panel-heading-row h2 {
+    margin: 0 0 4px;
+}
+
+.ums-panel-heading-row .description {
+    margin: 0;
+}
+
+.ums-organization-filters select {
+    max-width: 240px;
+}
+
+.ums-sync-log {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 4px;
+    color: #dbeafe;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    max-height: 320px;
+    overflow: auto;
+    padding: 12px;
+}
+
+.ums-sync-log-line {
+    margin: 0 0 6px;
+    white-space: pre-wrap;
+}
+
+.ums-sync-log-line-success {
+    color: #86efac;
+}
+
+.ums-sync-log-line-error {
+    color: #fca5a5;
+}
+
+.ums-sync-log-line-warning {
+    color: #fde68a;
+}
+
+.ums-sync-error-list {
+    margin-left: 18px;
+}
+
+.ums-sheet-sync-page .regular-text.code {
+    max-width: 760px;
+    width: 100%;
+}
+
+@media (max-width: 782px) {
+    .ums-panel-heading-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
 .ums-field-label {
     display: block;
     font-weight: 600;
@@ -194,4 +264,96 @@
 .ums-checkboxes label {
     display: inline-block;
     margin-right: 20px;
+}
+
+.ums-admin-wrap {
+    --ums-admin-bg: #f6f8fb;
+    --ums-admin-surface: #ffffff;
+    --ums-admin-surface-soft: #f8fafc;
+    --ums-admin-border: #dcdcde;
+    --ums-admin-border-strong: #b8c6d6;
+    --ums-admin-text: #1f2937;
+    --ums-admin-heading: #111827;
+    --ums-admin-muted: #64748b;
+    --ums-admin-primary: #1d4ed8;
+    --ums-admin-primary-soft: #e0ecff;
+    --ums-admin-input: #ffffff;
+    --ums-admin-danger-bg: #fcf0f1;
+    --ums-admin-danger-text: #8a2424;
+    --ums-admin-success-bg: #e7f5ee;
+    --ums-admin-success-text: #0a6b3d;
+    --ums-admin-warning-bg: #fff4ce;
+    --ums-admin-warning-text: #7a4d00;
+    color: var(--ums-admin-text);
+}
+
+.ums-admin-wrap h1,
+.ums-admin-wrap h2,
+.ums-admin-wrap h3,
+.ums-admin-wrap .form-table th {
+    color: var(--ums-admin-heading);
+}
+
+.ums-admin-wrap p,
+.ums-admin-wrap .description,
+.ums-admin-wrap .ums-empty-state {
+    color: var(--ums-admin-muted);
+}
+
+.ums-admin-wrap .ums-panel,
+.ums-admin-wrap .widefat,
+.ums-admin-wrap .postbox,
+.ums-admin-wrap .notice.inline {
+    background: var(--ums-admin-surface);
+    border-color: var(--ums-admin-border);
+    color: var(--ums-admin-text);
+}
+
+.ums-admin-wrap .widefat th,
+.ums-admin-wrap .widefat td {
+    border-color: var(--ums-admin-border);
+    color: var(--ums-admin-text);
+}
+
+.ums-admin-wrap input[type="text"],
+.ums-admin-wrap input[type="number"],
+.ums-admin-wrap input[type="date"],
+.ums-admin-wrap input[type="email"],
+.ums-admin-wrap input[type="password"],
+.ums-admin-wrap select,
+.ums-admin-wrap textarea {
+    background: var(--ums-admin-input);
+    border-color: var(--ums-admin-border-strong);
+    color: var(--ums-admin-text);
+}
+
+.ums-admin-wrap input:disabled,
+.ums-admin-wrap select:disabled,
+.ums-admin-wrap textarea:disabled {
+    background: var(--ums-admin-surface-soft);
+    color: var(--ums-admin-muted);
+}
+
+.ums-admin-wrap .ums-checkboxes {
+    background: var(--ums-admin-surface);
+    border-color: var(--ums-admin-border);
+}
+
+.ums-admin-wrap .ums-form-grid b {
+    color: var(--ums-admin-danger-text);
+}
+
+.ums-admin-wrap .ums-status-active {
+    background: var(--ums-admin-success-bg);
+    color: var(--ums-admin-success-text);
+}
+
+.ums-admin-wrap .ums-status-resigned {
+    background: var(--ums-admin-danger-bg);
+    color: var(--ums-admin-danger-text);
+}
+
+.ums-admin-wrap .ums-status-warning {
+    background: var(--ums-admin-warning-bg);
+    color: var(--ums-admin-warning-text);
 }

@@ -26,6 +26,7 @@ Các bảng nghiệp vụ chính:
 - `wp_uniform_request_details`
 - `wp_uniform_approval_logs`
 - `wp_uniform_returns`
+- `wp_uniform_organization_employees`
 
 ## Chức Năng Admin
 
@@ -40,9 +41,22 @@ Các bảng nghiệp vụ chính:
 - Xuất kho chủ động từ Admin
 - Xem lịch sử nhập/xuất/điều chỉnh kho chi tiết
 - Quản lý Định mức cấp phát hàng năm
+- Quản lý và đồng bộ Sơ đồ tổ chức TVN
 - Đồng bộ mật khẩu từ DB ngoài vào `wp_users.user_pass`
 
 Hồ sơ nhân sự liên kết với tài khoản WordPress qua `wp_uniform_user_profiles.user_id`. Khi tạo hồ sơ, hệ thống tạo tài khoản WordPress tương ứng, `user_login` mặc định là mã nhân viên và mật khẩu mặc định là `12345678`.
+
+Trang `Quản lý Phòng ban` có trường `department_group` để nhiều phòng ban cùng thuộc một nhóm. Danh sách hỗ trợ lọc theo nhóm và form gợi ý các nhóm đã có.
+
+Import CSV UTF-8 sử dụng các cột `department_code`, `department_name`, `department_group`, `is_active`. Import upsert theo mã phòng ban: mã mới được tạo, mã đã tồn tại được cập nhật. File CSV cũ không có `department_group` vẫn được chấp nhận và giữ nguyên nhóm của phòng ban hiện tại. Khi tên phòng ban thay đổi, hồ sơ nhân sự liên quan được đồng bộ sang tên mới trong cùng transaction. Giao diện có nút tải CSV mẫu.
+
+Với database đã cài UMS trước thay đổi này, chạy thủ công:
+
+```sql
+ALTER TABLE `wp_uniform_departments`
+    ADD COLUMN `department_group` VARCHAR(150) NOT NULL DEFAULT '' AFTER `department_name`,
+    ADD KEY `idx_department_group` (`department_group`);
+```
 
 ## Định Mức Cấp Phát Hàng Năm
 
@@ -156,6 +170,35 @@ define( 'UMS_PASSWORD_SYNC_DB_NAME', 'tvnias' );
 
 Hash lấy từ DB nguồn được ghi trực tiếp vào `wp_users.user_pass`, không hash lại. Nếu đồng bộ thất bại, hệ thống đặt mật khẩu về mặc định `12345678` bằng hàm hash của WordPress.
 
+## Sơ Đồ Tổ Chức TVN
+
+Admin quản lý tại menu `Sơ đồ tổ chức TVN`. Giao diện dùng jqxGrid phân trang phía server và đọc dữ liệu từ bảng nội bộ `wp_uniform_organization_employees`.
+
+Nút `Đồng bộ dữ liệu` kết nối tới bảng `qa_dims.wp_tvnorg`, tự xác định `MAX(version)`, lấy snapshot nhân sự mới nhất theo từng batch và upsert theo `source_id`. Các version lịch sử không được đưa vào danh sách hiện hành. Bản ghi nội bộ không còn tồn tại ở snapshot mới chỉ bị xóa sau khi toàn bộ phiên đồng bộ hoàn thành; nếu kết nối hoặc truy vấn lỗi giữa chừng, danh sách cũ vẫn được giữ.
+
+Plugin đăng ký tác vụ WP-Cron `ums_daily_organization_sync` theo chu kỳ `daily` để tự động đồng bộ một lần mỗi 24 giờ. Trang Admin hiển thị thời điểm dự kiến chạy tiếp theo và kết quả lần chạy nền gần nhất. WP-Cron được kích hoạt khi website có lượt truy cập; nếu máy chủ tắt `DISABLE_WP_CRON`, cần cấu hình cron hệ điều hành gọi `wp-cron.php`.
+
+Cấu hình mặc định:
+
+```php
+define( 'UMS_ORG_SYNC_DB_HOST', '172.30.134.76' );
+define( 'UMS_ORG_SYNC_DB_PORT', 3306 );
+define( 'UMS_ORG_SYNC_DB_USER', 'mims' );
+define( 'UMS_ORG_SYNC_DB_PASSWORD', '' );
+define( 'UMS_ORG_SYNC_DB_NAME', 'qa_dims' );
+define( 'UMS_ORG_SYNC_DB_TABLE', 'wp_tvnorg' );
+```
+
+Các hằng số trên là tùy chọn và có thể đặt trong `wp-config.php`. Plugin không tự tạo bảng; cần import bảng `wp_uniform_organization_employees` từ `ums.sql` trước lần đồng bộ đầu tiên.
+
+## Đồng Bộ Nhân Sự Từ Google Sheet
+
+Plugin cung cấp receiver `POST /wp-json/ums/v1/sync-users`. Endpoint xác thực bằng header `X-Sync-Token`; token được lưu trong `wp_options` và hiển thị tại Admin menu `Đồng bộ Sheet`. `employee_code` là khóa upsert duy nhất: hồ sơ đã có được cập nhật, hồ sơ chưa có sẽ tạo tài khoản `wp_users` role `subscriber` với mật khẩu mặc định `12345678`, sau đó tạo `wp_uniform_user_profiles`.
+
+Do Google Workspace có SSO và WordPress chạy nội bộ, hệ thống dùng mô hình Popup Bridge thay vì GAS trigger server-to-server. Admin bấm `Bắt đầu đồng bộ`, plugin mở Google Apps Script Web App bằng `window.open()`, popup đọc Sheet bằng phiên SSO trình duyệt rồi `fetch()` JSON về endpoint nội bộ của WordPress. Nếu trình duyệt chặn POST trực tiếp từ popup, popup chuyển payload về trang Admin bằng `postMessage` để Admin POST cùng-origin vào UMS. Plugin lưu log lần sync gần nhất vào `wp_options`.
+
+Google Apps Script mẫu gồm `ums-user-sync.gs` và `Index.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/`.
+
 ## Cấu Trúc Thư Mục Chính
 
 ```text
@@ -172,6 +215,7 @@ UMS/
 |       |-- view-factory-location-list.php
 |       |-- view-inventory-list.php
 |       |-- view-inventory-movement-list.php
+|       |-- view-organization-list.php
 |       |-- view-position-list.php
 |       |-- view-product-category-list.php
 |       `-- view-user-list.php
@@ -179,6 +223,7 @@ UMS/
 |-- includes/
 |   |-- class-ums-helper.php
 |   |-- class-ums-password-sync.php
+|   |-- class-ums-organization-sync.php
 |   `-- db/
 |       |-- class-ums-db-annual-allowance.php
 |       |-- class-ums-db-approval-flow.php
@@ -188,6 +233,7 @@ UMS/
 |       |-- class-ums-db-factory-location.php
 |       |-- class-ums-db-inventory.php
 |       |-- class-ums-db-inventory-movement.php
+|       |-- class-ums-db-organization.php
 |       |-- class-ums-db-position.php
 |       |-- class-ums-db-product-category.php
 |       |-- class-ums-db-request.php

@@ -35,7 +35,7 @@ class UMS_User {
             'ums-user-css',
             UMS_PLUGIN_URL . 'user/css/ums-user.css',
             array( 'ums-jqx-energyblue-css' ),
-            '1.1.9'
+            '1.2.1'
         );
 
         wp_register_script(
@@ -50,7 +50,7 @@ class UMS_User {
             'ums-user-js',
             UMS_PLUGIN_URL . 'user/js/ums-user.js',
             array( 'jquery', 'ums-jqx-all' ),
-            '1.1.5',
+            '1.1.8',
             true
         );
     }
@@ -285,12 +285,10 @@ class UMS_User {
 
         $target_profile = UMS_DB_User::get_by_wp_user_id( (int) $request['target_user_id'] );
         $department     = $target_profile ? self::get_department_by_name( $target_profile['department'] ) : null;
-        $flows          = $department ? self::prepare_approval_flows(
-            UMS_DB_Approval_Flow::get_all(
-                array(
-                    'department_id' => (int) $department['department_id'],
-                    'status'        => 'active',
-                )
+        $flows          = $department ? UMS_DB_Approval_Flow::get_all(
+            array(
+                'department_id' => (int) $department['department_id'],
+                'status'        => 'active',
             )
         ) : array();
 
@@ -374,18 +372,15 @@ class UMS_User {
             return self::render_inactive_account();
         }
 
-        $department      = ! empty( $profile['department'] ) ? self::get_department_by_name( $profile['department'] ) : null;
-        $department_id   = $department ? (int) $department['department_id'] : 0;
-        $teammates       = $is_admin_view ? UMS_DB_User::get_all( array( 'status' => 'active' ) ) : self::get_active_teammates( $profile );
-        $inventory_items = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
-        $category_tree   = self::get_active_product_category_tree();
-        $approval_flows  = $department_id ? UMS_DB_Approval_Flow::get_all(
+        $department     = ! empty( $profile['department'] ) ? self::get_department_by_name( $profile['department'] ) : null;
+        $department_id  = $department ? (int) $department['department_id'] : 0;
+        $approval_flows = $department_id ? UMS_DB_Approval_Flow::get_all(
             array(
                 'department_id' => $department_id,
                 'status'        => 'active',
             )
         ) : array();
-        $approval_flows     = self::prepare_approval_flows( $approval_flows );
+        $approval_flows      = self::prepare_approval_flows( $approval_flows );
         $can_create_request = self::can_create_request( $profile, $approval_flows );
         $portal_pages       = self::get_portal_pages( $can_create_request );
         $current_page       = self::get_current_page( $portal_pages );
@@ -393,12 +388,37 @@ class UMS_User {
         $portal_url         = get_permalink();
         $current_user       = wp_get_current_user();
         $portal_notice      = self::get_portal_notice();
-        $approval_requests  = $is_admin_view ? self::get_admin_pending_requests() : self::get_pending_requests_for_portal_tab( $current_user_id, $profile, $approval_flows );
-        $completed_requests = $is_admin_view ? self::get_admin_completed_requests() : self::get_completed_requests_for_profile( $current_user_id, $profile, $approval_flows );
-        $dashboard_stats    = $is_admin_view ? self::get_admin_dashboard_stats() : self::get_dashboard_stats( $current_user_id, $profile, $approval_flows );
-        $editing_request    = self::get_editing_request_for_form( $current_user_id );
-        $detail_request     = self::get_detail_request_for_page( $current_user_id, $profile );
-        $detail_can_approve = $detail_request ? self::can_current_user_approve_request( $detail_request, $profile ) : false;
+
+        $teammates          = array();
+        $inventory_items    = array();
+        $category_tree      = array();
+        $approval_requests  = array();
+        $completed_requests = array();
+        $dashboard_stats    = array();
+        $editing_request    = null;
+        $detail_request     = null;
+        $detail_can_approve = false;
+
+        if ( $current_page === 'dashboard' ) {
+            $dashboard_stats = $is_admin_view ? self::get_admin_dashboard_stats() : self::get_dashboard_stats( $current_user_id, $profile, $approval_flows );
+        }
+
+        if ( $current_page === 'request' ) {
+            $teammates       = $is_admin_view ? UMS_DB_User::get_all( array( 'status' => 'active' ) ) : self::get_active_teammates( $profile );
+            $inventory_items = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
+            $category_tree   = self::get_active_product_category_tree();
+            $editing_request = self::get_editing_request_for_form( $current_user_id );
+        }
+
+        if ( $current_page === 'my-requests' ) {
+            $approval_requests  = $is_admin_view ? self::get_admin_pending_requests() : self::get_pending_requests_for_portal_tab( $current_user_id, $profile, $approval_flows );
+            $completed_requests = $is_admin_view ? self::get_admin_completed_requests() : self::get_completed_requests_for_profile( $current_user_id, $profile, $approval_flows );
+        }
+
+        if ( $current_page === 'request-detail' ) {
+            $detail_request     = self::get_detail_request_for_page( $current_user_id, $profile );
+            $detail_can_approve = $detail_request ? self::can_current_user_approve_request( $detail_request, $profile ) : false;
+        }
 
         ob_start();
         include UMS_PLUGIN_DIR . 'user/partials/view-user-portal.php';
@@ -596,12 +616,12 @@ class UMS_User {
             return false;
         }
 
-        $approver_ids = json_decode( $first_step['approver_profile_ids'], true );
-        if ( ! is_array( $approver_ids ) ) {
+        $approver_ids = self::get_flow_approver_ids( $first_step );
+        if ( empty( $approver_ids ) ) {
             return false;
         }
 
-        return in_array( (int) $profile['profile_id'], array_map( 'intval', $approver_ids ), true );
+        return in_array( (int) $profile['profile_id'], $approver_ids, true );
     }
 
     private static function get_initial_pending_status( $approval_flows ) {
@@ -636,8 +656,7 @@ class UMS_User {
                 continue;
             }
 
-            $approver_ids = json_decode( $flow['approver_profile_ids'], true );
-            return is_array( $approver_ids ) && in_array( (int) $profile['profile_id'], array_map( 'intval', $approver_ids ), true );
+            return in_array( (int) $profile['profile_id'], self::get_flow_approver_ids( $flow ), true );
         }
 
         return false;
@@ -655,12 +674,10 @@ class UMS_User {
 
         $target_profile = UMS_DB_User::get_by_wp_user_id( (int) $request['target_user_id'] );
         $department     = $target_profile ? self::get_department_by_name( $target_profile['department'] ) : null;
-        $flows          = $department ? self::prepare_approval_flows(
-            UMS_DB_Approval_Flow::get_all(
-                array(
-                    'department_id' => (int) $department['department_id'],
-                    'status'        => 'active',
-                )
+        $flows          = $department ? UMS_DB_Approval_Flow::get_all(
+            array(
+                'department_id' => (int) $department['department_id'],
+                'status'        => 'active',
             )
         ) : array();
 
@@ -674,6 +691,21 @@ class UMS_User {
     }
 
     private static function get_requests_waiting_for_profile_approval( $profile, $approval_flows ) {
+        $statuses = self::get_waiting_approval_statuses_for_profile( $profile, $approval_flows );
+
+        if ( empty( $statuses ) ) {
+            return array();
+        }
+
+        return UMS_DB_Request::get_all(
+            array(
+                'department' => $profile['department'],
+                'status_in'  => array_values( array_unique( $statuses ) ),
+            )
+        );
+    }
+
+    private static function get_waiting_approval_statuses_for_profile( $profile, $approval_flows ) {
         if ( empty( $profile['profile_id'] ) || empty( $approval_flows ) ) {
             return array();
         }
@@ -687,16 +719,7 @@ class UMS_User {
             $statuses[] = 'pending_step_' . $step;
         }
 
-        if ( empty( $statuses ) ) {
-            return array();
-        }
-
-        return UMS_DB_Request::get_all(
-            array(
-                'department' => $profile['department'],
-                'status_in'  => array_values( array_unique( $statuses ) ),
-            )
-        );
+        return array_values( array_unique( $statuses ) );
     }
 
     private static function get_pending_requests_for_creator( $current_user_id ) {
@@ -742,39 +765,28 @@ class UMS_User {
     }
 
     private static function get_dashboard_stats( $current_user_id, $profile, $approval_flows ) {
-        $created_requests = UMS_DB_Request::get_all(
+        $created_counts = UMS_DB_Request::get_status_counts(
             array(
                 'creator_id' => $current_user_id,
-                'limit'      => 0,
             )
         );
-        $waiting_approval = self::get_requests_waiting_for_profile_approval( $profile, $approval_flows );
-        $stats            = array(
-            'created_total'    => count( $created_requests ),
-            'created_pending'  => 0,
-            'created_done'     => 0,
-            'created_rejected' => 0,
-            'waiting_approval' => count( $waiting_approval ),
+        $waiting_statuses = self::get_waiting_approval_statuses_for_profile( $profile, $approval_flows );
+        $waiting_counts   = empty( $waiting_statuses )
+            ? array( 'total' => 0 )
+            : UMS_DB_Request::get_status_counts(
+                array(
+                    'department' => $profile['department'],
+                    'status_in'  => $waiting_statuses,
+                )
+            );
+
+        return array(
+            'created_total'    => $created_counts['total'],
+            'created_pending'  => $created_counts['pending'],
+            'created_done'     => $created_counts['completed'],
+            'created_rejected' => $created_counts['rejected'],
+            'waiting_approval' => $waiting_counts['total'],
         );
-
-        foreach ( $created_requests as $request ) {
-            $status = (string) $request['current_status'];
-            if ( $status === 'completed' ) {
-                $stats['created_done']++;
-                continue;
-            }
-
-            if ( $status === 'rejected' ) {
-                $stats['created_rejected']++;
-                continue;
-            }
-
-            if ( preg_match( '/^pending_step_\d+$/', $status ) ) {
-                $stats['created_pending']++;
-            }
-        }
-
-        return $stats;
     }
 
     private static function get_admin_pending_requests() {
@@ -813,34 +825,15 @@ class UMS_User {
     }
 
     private static function get_admin_dashboard_stats() {
-        $requests = UMS_DB_Request::get_all( array( 'limit' => 0 ) );
-        $stats    = array(
-            'created_total'    => count( $requests ),
-            'created_pending'  => 0,
-            'created_done'     => 0,
-            'created_rejected' => 0,
-            'waiting_approval' => 0,
+        $counts = UMS_DB_Request::get_status_counts();
+
+        return array(
+            'created_total'    => $counts['total'],
+            'created_pending'  => $counts['pending'],
+            'created_done'     => $counts['completed'],
+            'created_rejected' => $counts['rejected'],
+            'waiting_approval' => $counts['pending'],
         );
-
-        foreach ( $requests as $request ) {
-            $status = (string) $request['current_status'];
-            if ( $status === 'completed' ) {
-                $stats['created_done']++;
-                continue;
-            }
-
-            if ( $status === 'rejected' ) {
-                $stats['created_rejected']++;
-                continue;
-            }
-
-            if ( preg_match( '/^pending_step_\d+$/', $status ) ) {
-                $stats['created_pending']++;
-                $stats['waiting_approval']++;
-            }
-        }
-
-        return $stats;
     }
 
     private static function get_completed_requests_for_profile( $current_user_id, $profile, $approval_flows ) {
@@ -967,12 +960,10 @@ class UMS_User {
             return false;
         }
 
-        $flows = self::prepare_approval_flows(
-            UMS_DB_Approval_Flow::get_all(
-                array(
-                    'department_id' => (int) $department['department_id'],
-                    'status'        => 'active',
-                )
+        $flows = UMS_DB_Approval_Flow::get_all(
+            array(
+                'department_id' => (int) $department['department_id'],
+                'status'        => 'active',
             )
         );
 
@@ -1123,15 +1114,51 @@ class UMS_User {
     }
 
     private static function get_department_by_name( $department_name ) {
-        $departments = UMS_DB_Department::get_active();
+        $department_name = trim( (string) $department_name );
+        if ( $department_name === '' ) {
+            return null;
+        }
+
+        $departments          = UMS_DB_Department::get_active();
+        $normalized_reference = self::normalize_department_identifier( $department_name );
+        $compatible_match     = null;
+        $compatible_length    = 0;
 
         foreach ( $departments as $department ) {
-            if ( $department['department_name'] === $department_name ) {
+            $department_id   = isset( $department['department_id'] ) ? (string) $department['department_id'] : '';
+            $department_code = isset( $department['department_code'] ) ? trim( (string) $department['department_code'] ) : '';
+            $stored_name     = isset( $department['department_name'] ) ? trim( (string) $department['department_name'] ) : '';
+            $normalized_code = self::normalize_department_identifier( $department_code );
+            $normalized_name = self::normalize_department_identifier( $stored_name );
+
+            if (
+                $stored_name === $department_name
+                || $department_code === $department_name
+                || $department_id === $department_name
+                || ( $normalized_reference !== '' && in_array( $normalized_reference, array( $normalized_name, $normalized_code ), true ) )
+            ) {
                 return $department;
+            }
+
+            // Hồ sơ cũ có thể lưu thêm hậu tố nhà máy, ví dụ "Information Technology DA".
+            if (
+                $normalized_name !== ''
+                && (
+                    strpos( $normalized_reference, $normalized_name . '-' ) === 0
+                    || strpos( $normalized_name, $normalized_reference . '-' ) === 0
+                )
+                && strlen( $normalized_name ) > $compatible_length
+            ) {
+                $compatible_match  = $department;
+                $compatible_length = strlen( $normalized_name );
             }
         }
 
-        return null;
+        return $compatible_match;
+    }
+
+    private static function normalize_department_identifier( $value ) {
+        return trim( sanitize_title( remove_accents( (string) $value ) ), '-' );
     }
 
     private static function get_active_product_category_tree() {
@@ -1175,20 +1202,53 @@ class UMS_User {
     }
 
     public static function format_approver_names( $approver_profile_ids ) {
-        $approver_ids = json_decode( $approver_profile_ids, true );
-        if ( ! is_array( $approver_ids ) || empty( $approver_ids ) ) {
+        $flow         = is_array( $approver_profile_ids ) ? $approver_profile_ids : array( 'approver_profile_ids' => $approver_profile_ids );
+        $approver_ids = self::get_flow_approver_ids( $flow );
+        if ( empty( $approver_ids ) ) {
             return 'Chưa chọn người duyệt';
         }
 
         $names = array();
         foreach ( $approver_ids as $approver_id ) {
-            $approver = UMS_DB_User::get_by_id( absint( $approver_id ) );
+            $approver = self::get_cached_profile_by_id( absint( $approver_id ) );
             if ( $approver ) {
                 $names[] = $approver['full_name'];
             }
         }
 
         return ! empty( $names ) ? implode( ', ', $names ) : 'Chưa chọn người duyệt';
+    }
+
+    private static function get_cached_profile_by_id( $profile_id ) {
+        static $profile_cache = array();
+
+        $profile_id = absint( $profile_id );
+        if ( $profile_id <= 0 ) {
+            return null;
+        }
+
+        if ( ! array_key_exists( $profile_id, $profile_cache ) ) {
+            $profile_cache[ $profile_id ] = UMS_DB_User::get_by_id( $profile_id );
+        }
+
+        return $profile_cache[ $profile_id ];
+    }
+
+    private static function get_flow_approver_ids( $flow ) {
+        $approver_ids = array();
+
+        if ( ! empty( $flow['approver_profile_ids'] ) ) {
+            $decoded = json_decode( (string) $flow['approver_profile_ids'], true );
+            if ( is_array( $decoded ) ) {
+                $approver_ids = $decoded;
+            }
+        }
+
+        if ( empty( $approver_ids ) && ! empty( $flow['approver_profile_id'] ) ) {
+            $approver_ids = array( $flow['approver_profile_id'] );
+        }
+
+        return array_values( array_unique( array_filter( array_map( 'absint', $approver_ids ) ) ) );
     }
 
     private static function send_approval_step_email( $request_id, $request, $approval_flows, $status, $portal_url ) {
@@ -1202,8 +1262,8 @@ class UMS_User {
             return;
         }
 
-        $approver_ids = json_decode( $flow['approver_profile_ids'], true );
-        if ( ! is_array( $approver_ids ) || empty( $approver_ids ) ) {
+        $approver_ids = self::get_flow_approver_ids( $flow );
+        if ( empty( $approver_ids ) ) {
             return;
         }
 
@@ -1227,7 +1287,7 @@ class UMS_User {
         $message .= 'UMS - Uniform Management System';
 
         foreach ( array_unique( array_map( 'absint', $approver_ids ) ) as $approver_profile_id ) {
-            $approver = UMS_DB_User::get_by_id( $approver_profile_id );
+            $approver = self::get_cached_profile_by_id( $approver_profile_id );
             if ( ! $approver || empty( $approver['user_id'] ) ) {
                 continue;
             }
@@ -1253,7 +1313,7 @@ class UMS_User {
 
     private static function prepare_approval_flows( $approval_flows ) {
         foreach ( $approval_flows as $index => $flow ) {
-            $approval_flows[ $index ]['approver_names'] = self::format_approver_names( $flow['approver_profile_ids'] );
+            $approval_flows[ $index ]['approver_names'] = self::format_approver_names( $flow );
         }
 
         return $approval_flows;

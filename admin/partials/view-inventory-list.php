@@ -11,10 +11,58 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $is_editing = ! empty( $editing_item );
 $page_url   = admin_url( 'admin.php?page=tvn-ums-inventory' );
-$grid_rows  = array();
+$inventory_sections = array();
+$size_order = array(
+    'XXS' => 10,
+    'XS'  => 20,
+    'S'   => 30,
+    'M'   => 40,
+    'L'   => 50,
+    'XL'  => 60,
+    'XXL' => 70,
+    '2XL' => 70,
+    'XXXL'=> 80,
+    '3XL' => 80,
+    '4XL' => 90,
+    '5XL' => 100,
+);
 
 foreach ( $inventory as $item ) {
-    $stock_qty = (int) $item['stock_qty'];
+    $parent_id   = ! empty( $item['parent_category_id'] ) ? absint( $item['parent_category_id'] ) : 0;
+    $section_key = $parent_id > 0 ? 'parent-' . $parent_id : 'uncategorized';
+    $section_name = ! empty( $item['parent_category_name'] ) ? $item['parent_category_name'] : 'Chưa phân loại';
+    $category_name = ! empty( $item['category_name'] ) ? $item['category_name'] : $item['item_type'];
+    $variant        = trim( (string) $item['item_variant'] );
+    $color          = trim( (string) $item['color_code'] );
+    $size           = trim( (string) $item['size'] );
+    $size           = $size !== '' ? $size : 'Không size';
+    $row_key        = implode( '|', array( absint( $item['category_id'] ), $variant, $color ) );
+
+    if ( ! isset( $inventory_sections[ $section_key ] ) ) {
+        $inventory_sections[ $section_key ] = array(
+            'name'  => $section_name,
+            'sizes' => array(),
+            'rows'  => array(),
+        );
+    }
+
+    if ( ! isset( $inventory_sections[ $section_key ]['rows'][ $row_key ] ) ) {
+        $label = $category_name;
+        if ( $variant !== '' ) {
+            $label .= ' - ' . $variant;
+        }
+        if ( $color !== '' ) {
+            $label .= ' (' . $color . ')';
+        }
+
+        $inventory_sections[ $section_key ]['rows'][ $row_key ] = array(
+            'label'  => $label,
+            'items'  => array(),
+            'prices' => array(),
+            'total'  => 0,
+        );
+    }
+
     $edit_url = add_query_arg(
         array(
             'page'         => 'tvn-ums-inventory',
@@ -22,49 +70,51 @@ foreach ( $inventory as $item ) {
         ),
         admin_url( 'admin.php' )
     );
-    $delete_url = wp_nonce_url(
-        add_query_arg(
-            array(
-                'action'  => 'ums_delete_inventory_item',
-                'item_id' => absint( $item['item_id'] ),
-            ),
-            admin_url( 'admin-post.php' )
-        ),
-        'ums_delete_inventory_item_' . absint( $item['item_id'] )
+    $stock_qty = (int) $item['stock_qty'];
+    $inventory_sections[ $section_key ]['sizes'][ $size ] = true;
+    $inventory_sections[ $section_key ]['rows'][ $row_key ]['items'][ $size ] = array(
+        'item_id'    => absint( $item['item_id'] ),
+        'stock_qty'  => $stock_qty,
+        'base_price' => (float) $item['base_price'],
+        'edit_url'   => $edit_url . '#ums-inventory-form',
     );
-
-    if ( $stock_qty <= 0 ) {
-        $stock_status = 'Hết hàng';
-    } elseif ( $stock_qty <= 10 ) {
-        $stock_status = 'Tồn thấp';
-    } else {
-        $stock_status = 'Còn hàng';
-    }
-
-    $grid_rows[] = array(
-        'parent_category_name' => $item['parent_category_name'] ?: '-',
-        'category_name'        => $item['category_name'] ?: $item['item_type'],
-        'item_variant'         => $item['item_variant'] ?: '-',
-        'size'                 => $item['size'],
-        'color_code'           => $item['color_code'],
-        'stock_qty'            => $stock_qty,
-        'stock_status'         => $stock_status,
-        'base_price'           => number_format_i18n( (float) $item['base_price'], 0 ),
-        'actions'              => '<a href="' . esc_url( $edit_url . '#ums-inventory-form' ) . '">Sửa</a> | <a href="' . esc_url( $delete_url ) . '" class="ums-delete-link" data-confirm="Xóa sản phẩm ' . esc_attr( $item['category_name'] ?: $item['item_type'] ) . ' ' . esc_attr( $item['item_variant'] ) . '?">Xóa</a>',
-    );
+    $inventory_sections[ $section_key ]['rows'][ $row_key ]['prices'][] = (float) $item['base_price'];
+    $inventory_sections[ $section_key ]['rows'][ $row_key ]['total'] += $stock_qty;
 }
 
-$grid_columns = array(
-    array( 'text' => 'Danh mục cha', 'datafield' => 'parent_category_name', 'width' => '16%' ),
-    array( 'text' => 'Danh mục con', 'datafield' => 'category_name', 'width' => '17%' ),
-    array( 'text' => 'Biến thể', 'datafield' => 'item_variant', 'width' => '14%' ),
-    array( 'text' => 'Size', 'datafield' => 'size', 'width' => '9%' ),
-    array( 'text' => 'Màu/Mã màu', 'datafield' => 'color_code', 'width' => '12%' ),
-    array( 'text' => 'Tồn kho', 'datafield' => 'stock_qty', 'width' => '9%', 'cellsalign' => 'right' ),
-    array( 'text' => 'Trạng thái', 'datafield' => 'stock_status', 'width' => '10%' ),
-    array( 'text' => 'Đơn giá', 'datafield' => 'base_price', 'width' => '10%', 'cellsalign' => 'right' ),
-    array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '12%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
-);
+foreach ( $inventory_sections as &$section ) {
+    $sizes = array_keys( $section['sizes'] );
+    usort(
+        $sizes,
+        function( $left, $right ) use ( $size_order ) {
+            $left_key  = strtoupper( trim( (string) $left ) );
+            $right_key = strtoupper( trim( (string) $right ) );
+
+            if ( isset( $size_order[ $left_key ], $size_order[ $right_key ] ) ) {
+                return $size_order[ $left_key ] <=> $size_order[ $right_key ];
+            }
+            if ( is_numeric( $left_key ) && is_numeric( $right_key ) ) {
+                return (float) $left_key <=> (float) $right_key;
+            }
+            if ( isset( $size_order[ $left_key ] ) ) {
+                return -1;
+            }
+            if ( isset( $size_order[ $right_key ] ) ) {
+                return 1;
+            }
+
+            return strnatcasecmp( $left_key, $right_key );
+        }
+    );
+    $section['sizes'] = $sizes;
+    uasort(
+        $section['rows'],
+        function( $left, $right ) {
+            return strnatcasecmp( $left['label'], $right['label'] );
+        }
+    );
+}
+unset( $section );
 ?>
 
 <div class="wrap ums-admin-wrap">
@@ -78,7 +128,7 @@ $grid_columns = array(
     <?php endif; ?>
 
     <div class="ums-panel">
-        <h2>Danh mục sản phẩm & tổng kho</h2>
+        <h2>Tổng hợp tồn kho theo danh mục</h2>
         <form method="get" class="ums-filter-bar">
             <input type="hidden" name="page" value="tvn-ums-inventory">
 
@@ -130,12 +180,63 @@ $grid_columns = array(
             <a href="<?php echo esc_url( $page_url ); ?>" class="button button-link">Xóa lọc</a>
         </form>
 
-        <div
-            id="ums-inventory-grid"
-            class="ums-jqx-grid"
-            data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows ) ); ?>"
-            data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
-        ></div>
+        <?php if ( empty( $inventory_sections ) ) : ?>
+            <div class="ums-empty-state">Không có dữ liệu tồn kho phù hợp với bộ lọc.</div>
+        <?php else : ?>
+            <?php $section_number = 0; ?>
+            <?php foreach ( $inventory_sections as $section ) : ?>
+                <?php
+                $section_number++;
+                $section_rows         = array();
+                $size_column_width    = max( 6, 38 / max( 1, count( $section['sizes'] ) ) );
+                $section_columns      = array(
+                    array( 'text' => 'Loại sản phẩm', 'datafield' => 'product_label', 'width' => '38%' ),
+                );
+
+                foreach ( $section['sizes'] as $size_index => $size ) {
+                    $section_columns[] = array(
+                        'text'          => $size,
+                        'datafield'     => 'size_' . $size_index,
+                        'width'         => $size_column_width . '%',
+                        'cellsalign'    => 'center',
+                        'filterable'    => false,
+                        'cellsrenderer' => 'html',
+                    );
+                }
+
+                $section_columns[] = array( 'text' => 'Tổng', 'datafield' => 'total', 'width' => '10%', 'cellsalign' => 'right' );
+                $section_columns[] = array( 'text' => 'Đơn giá', 'datafield' => 'base_price', 'width' => '14%', 'cellsalign' => 'right' );
+
+                foreach ( $section['rows'] as $row ) {
+                    $prices = array_values( array_unique( array_map( 'floatval', $row['prices'] ) ) );
+                    sort( $prices, SORT_NUMERIC );
+                    $price_label = count( $prices ) > 1
+                        ? number_format_i18n( reset( $prices ), 0 ) . ' - ' . number_format_i18n( end( $prices ), 0 )
+                        : number_format_i18n( reset( $prices ), 0 );
+                    $grid_row = array(
+                        'product_label' => $row['label'],
+                        'total'         => $row['total'],
+                        'base_price'    => $price_label,
+                    );
+                    foreach ( $section['sizes'] as $size_index => $size ) {
+                        $stock_item = isset( $row['items'][ $size ] ) ? $row['items'][ $size ] : null;
+                        $grid_row[ 'size_' . $size_index ] = $stock_item
+                            ? '<a href="' . esc_url( $stock_item['edit_url'] ) . '" title="Sửa size ' . esc_attr( $size ) . '">' . esc_html( $stock_item['stock_qty'] ) . '</a>'
+                            : '-';
+                    }
+
+                    $section_rows[] = $grid_row;
+                }
+                ?>
+                <h3><?php echo esc_html( $section_number . '. Tồn kho ' . $section['name'] ); ?></h3>
+                <div
+                    id="ums-inventory-grid-<?php echo esc_attr( $section_number ); ?>"
+                    class="ums-jqx-grid"
+                    data-rows="<?php echo esc_attr( wp_json_encode( $section_rows ) ); ?>"
+                    data-columns="<?php echo esc_attr( wp_json_encode( $section_columns ) ); ?>"
+                ></div>
+            <?php endforeach; ?>
+        <?php endif; ?>
     </div>
 
     <div class="ums-panel" id="ums-manual-inventory-out">

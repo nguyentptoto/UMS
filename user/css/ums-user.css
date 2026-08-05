@@ -171,10 +171,7 @@
     padding: 18px;
 }
 
-.ums-user-panel + .ums-user-panel,
-.ums-request-page .ums-user-panel + .ums-user-panel {
-    margin-top: 14px;
-}
+
 
 .ums-user-panel h3 {
     color: #111827;
@@ -881,4 +878,230 @@ button.ums-user-button-danger:hover {
     .ums-portal-footer {
         flex-direction: column;
     }
+}
+
+.ums-user-shell {
+    --ums-user-bg: #f6f8fb;
+    --ums-user-surface: #ffffff;
+    --ums-user-surface-soft: #f8fafc;
+    --ums-user-border: #dde3ea;
+    --ums-user-border-strong: #cbd5e1;
+    --ums-user-text: #1f2937;
+    --ums-user-heading: #111827;
+    --ums-user-muted: #64748b;
+    --ums-user-primary: #1d4ed8;
+    --ums-user-primary-soft: #e0ecff;
+    --ums-user-input: #ffffff;
+    --ums-user-success-bg: #ecfdf5;
+    --ums-user-success-text: #166534;
+    --ums-user-danger-bg: #fef2f2;
+    --ums-user-danger-text: #991b1b;
+    --ums-user-warning-bg: #fff7ed;
+    --ums-user-warning-text: #9a3412;
+    background: var(--ums-user-bg);
+    color: var(--ums-user-text);
+}
+
+.ums-user-shell[data-ums-theme="dark"] {
+    --ums-user-bg: #0f172a;
+    --ums-user-surface: #111827;
+    --ums-user-surface-soft: #1e293b;
+    --ums-user-border: #334155;
+    --ums-user-border-strong: #475569;
+    --ums-user-text: #e5e7eb;
+    --ums-user-heading: #f8fafc;
+    --ums-user-muted: #94a3b8;
+    --ums-user-primary: #60a5fa;
+    --ums-user-primary-soft: #172554;
+    --ums-user-input: #0b1220;
+    --ums-user-success-bg: #052e1a;
+    --ums-user-success-text: #bbf7d0;
+    --ums-user-danger-bg: #451a1a;
+    --ums-user-danger-text: #fecaca;
+    --ums-user-warning-bg: #422006;
+    --ums-user-warning-text: #fde68a;
+    color-scheme: dark;
+}
+
+.ums-theme-dark.ums-standalone-body {
+    background: #0f172a;
+}
+
+.ums-user-shell .ums-portal-topbar,
+.ums-user-shell .ums-portal-footer,
+.ums-user-shell .ums-user-panel,
+.ums-user-shell .ums-user-empty,
+.ums-user-shell .ums-modal-dialog,
+.ums-user-shell .ums-request-item,
+.ums-user-shell .ums-approval-board,
+.ums-user-shell .ums-request-detail-card,
+.ums-user-shell .ums-dashboard-card,
+.ums-user-shell .ums-metric-card,
+.ums-user-shell .ums-inventory-item {
+    background: var(--ums-user-surface);
+    border-color: var(--ums-user-border);
+    color: var(--ums-user-text);
+}
+
+.ums-user-shell h1,
+.ums-user-shell h2,
+.ums-user-shell h3,
+.ums-user-shell h4,
+.ums-user-shell .ums-portal-brand strong,
+.ums-user-shell .ums-inventory-item strong,
+.ums-user-shell .ums-inventory-item dd,
+.ums-user-shell .ums-modal-head h3,
+.ums-user-shell .ums-page-title h1,
+.ums-user-shell .ums-user-panel h3 {
+    color: var(--ums-user-heading);
+}
+
+.ums-user-shell p,
+.ums-user-shell small,
+.ums-user-shell .ums-portal-brand small,
+.ums-user-shell .ums-user-muted,
+.ums-user-shell .ums-page-title p,
+.ums-user-shell .ums-user-panel p,
+.ums-user-shell .ums-inventory-item p,
+.ums-user-shell .ums-inventory-item dt {
+    color: var(--ums-user-muted);
+}
+
+.ums-user-shell .ums-portal-nav a {
+    color: var(--ums-user-muted);
+}
+
+.ums-user-shell .ums-portal-nav a:hover,
+.ums-user-shell .ums-portal-nav a.is-active {
+    background: var(--ums-user-primary-soft);
+    color: var(--ums-user-primary);
+}
+
+.ums-user-shell input[type="text"],
+.ums-user-shell input[type="number"],
+.ums-user-shell input[type="date"],
+.ums-user-shell input[type="email"],
+.ums-user-shell select,
+.ums-user-shell textarea {
+    background: var(--ums-user-input);
+    border-color: var(--ums-user-border-strong);
+    color: var(--ums-user-text);
+}
+
+.ums-user-shell input[readonly],
+.ums-user-shell input:disabled,
+.ums-user-shell select:disabled,
+.ums-user-shell textarea:disabled {
+    background: var(--ums-user-surface-soft);
+    color: var(--ums-user-muted);
+}
+
+.ums-user-shell .ums-user-notice-success {
+    background: var(--ums-user-success-bg);
+    border-color: rgba(34, 197, 94, .38);
+    color: var(--ums-user-success-text);
+}
+
+.ums-user-shell .ums-user-notice-error {
+    background: var(--ums-user-danger-bg);
+    border-color: rgba(248, 113, 113, .38);
+    color: var(--ums-user-danger-text);
+}
+
+.ums-user-shell .ums-user-empty-inline {
+    background: var(--ums-user-warning-bg);
+    border-color: rgba(251, 191, 36, .42);
+    color: var(--ums-user-warning-text);
+}
+
+.ums-user-shell .ums-theme-toggle {
+    align-items: center;
+    background: var(--ums-user-surface-soft);
+    border: 1px solid var(--ums-user-border-strong);
+    color: var(--ums-user-text);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-weight: 800;
+    height: 38px;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0;
+    width: 38px;
+}
+
+.ums-user-shell .ums-theme-toggle::before {
+    content: "\263E";
+    display: block;
+    font-size: 19px;
+    line-height: 1;
+}
+
+.ums-user-shell .ums-theme-toggle[data-ums-theme-state="dark"]::before {
+    content: "\2600";
+}
+
+.ums-user-shell .ums-theme-toggle:hover {
+    border-color: var(--ums-user-primary);
+    color: var(--ums-user-primary);
+}
+
+.ums-user-shell .button,
+.ums-user-shell button,
+.ums-user-shell input[type="submit"] {
+    border-color: var(--ums-user-border-strong);
+}
+
+.ums-user-shell .ums-inventory-item dl div,
+.ums-user-shell .ums-modal-close {
+    background: var(--ums-user-surface-soft);
+    border-color: var(--ums-user-border-strong);
+    color: var(--ums-user-text);
+}
+
+.ums-user-shell[data-ums-theme="dark"] a {
+    color: #93c5fd;
+}
+
+.ums-user-shell[data-ums-theme="dark"] .jqx-widget,
+.ums-user-shell[data-ums-theme="dark"] .jqx-widget-content,
+.ums-user-shell[data-ums-theme="dark"] .jqx-grid,
+.ums-user-shell[data-ums-theme="dark"] .jqx-grid-content,
+.ums-user-shell[data-ums-theme="dark"] .jqx-grid-cell,
+.ums-user-shell[data-ums-theme="dark"] .jqx-tabs-content,
+.ums-user-shell[data-ums-theme="dark"] .jqx-fill-state-normal,
+.ums-user-shell[data-ums-theme="dark"] [class*="jqx-fill-state-normal-energyblue"] {
+    background: var(--ums-user-surface) !important;
+    border-color: var(--ums-user-border) !important;
+    color: var(--ums-user-text) !important;
+}
+
+.ums-user-shell[data-ums-theme="dark"] .jqx-widget-header,
+.ums-user-shell[data-ums-theme="dark"] .jqx-grid-column-header,
+.ums-user-shell[data-ums-theme="dark"] .jqx-tabs-header,
+.ums-user-shell[data-ums-theme="dark"] [class*="jqx-widget-header-energyblue"] {
+    background: var(--ums-user-surface-soft) !important;
+    border-color: var(--ums-user-border) !important;
+    color: var(--ums-user-heading) !important;
+}
+
+.ums-user-shell[data-ums-theme="dark"] .jqx-grid-cell-alt {
+    background: #0b1220 !important;
+}
+
+.ums-user-shell[data-ums-theme="dark"] .jqx-fill-state-hover,
+.ums-user-shell[data-ums-theme="dark"] .jqx-fill-state-pressed,
+.ums-user-shell[data-ums-theme="dark"] .jqx-grid-cell-selected,
+.ums-user-shell[data-ums-theme="dark"] .jqx-tabs-title-selected-top {
+    background: var(--ums-user-primary-soft) !important;
+    border-color: #2563eb !important;
+    color: var(--ums-user-heading) !important;
+}
+
+.ums-user-shell[data-ums-theme="dark"] .jqx-input,
+.ums-user-shell[data-ums-theme="dark"] .jqx-listbox,
+.ums-user-shell[data-ums-theme="dark"] .jqx-dropdownlist-state-normal {
+    background: var(--ums-user-input) !important;
+    border-color: var(--ums-user-border-strong) !important;
+    color: var(--ums-user-text) !important;
 }

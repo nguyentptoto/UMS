@@ -52,6 +52,12 @@ class UMS_DB_Product_Category extends UMS_DB_Base {
     }
 
     public static function get_tree() {
+        static $tree_cache = null;
+
+        if ( $tree_cache !== null ) {
+            return $tree_cache;
+        }
+
         $items = self::get_all();
         $tree  = array();
 
@@ -68,14 +74,27 @@ class UMS_DB_Product_Category extends UMS_DB_Base {
             }
         }
 
-        return $tree;
+        $tree_cache = $tree;
+        return $tree_cache;
     }
 
     public static function get_parent_categories() {
-        return self::get_all( array( 'parent_id' => 0, 'status' => 'active' ) );
+        static $parent_categories = null;
+
+        if ( $parent_categories === null ) {
+            $parent_categories = self::get_all( array( 'parent_id' => 0, 'status' => 'active' ) );
+        }
+
+        return $parent_categories;
     }
 
     public static function get_child_categories() {
+        static $child_categories = null;
+
+        if ( $child_categories !== null ) {
+            return $child_categories;
+        }
+
         $table = self::table();
         $sql   = "SELECT child.*, parent.category_name AS parent_name
             FROM $table child
@@ -83,7 +102,8 @@ class UMS_DB_Product_Category extends UMS_DB_Base {
             WHERE child.parent_id > 0 AND child.is_active = 1
             ORDER BY parent.category_name ASC, child.category_name ASC";
 
-        return self::db()->get_results( $sql, ARRAY_A );
+        $child_categories = self::db()->get_results( $sql, ARRAY_A );
+        return $child_categories;
     }
 
     public static function get_by_id( $category_id ) {

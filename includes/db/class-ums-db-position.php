@@ -52,7 +52,13 @@ class UMS_DB_Position extends UMS_DB_Base {
 	 * Lấy danh sách chức danh đang hoạt động.
 	 */
 	public static function get_active() {
-		return self::get_all( array( 'status' => 'active' ) );
+		static $active_positions = null;
+
+		if ( $active_positions === null ) {
+			$active_positions = self::get_all( array( 'status' => 'active' ) );
+		}
+
+		return $active_positions;
 	}
 
 	/**

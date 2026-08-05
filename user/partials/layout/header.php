@@ -24,5 +24,14 @@ if ( ! defined( 'ABSPATH' ) ) {
                 <?php echo esc_html( $page['label'] ); ?>
             </a>
         <?php endforeach; ?>
+        <button
+            class="ums-theme-toggle"
+            type="button"
+            data-ums-theme-toggle
+            data-ums-theme-state="light"
+            aria-label="Bật chế độ tối"
+            aria-pressed="false"
+            title="Bật chế độ tối"
+        ></button>
     </nav>
 </header>

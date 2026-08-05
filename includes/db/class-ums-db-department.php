@@ -19,6 +19,7 @@ class UMS_DB_Department extends UMS_DB_Base {
 
         $defaults = array(
             'search' => '',
+            'group'  => '',
             'status' => '',
         );
         $args = wp_parse_args( $args, $defaults );
@@ -28,7 +29,8 @@ class UMS_DB_Department extends UMS_DB_Base {
 
         if ( $args['search'] !== '' ) {
             $like    = '%' . self::db()->esc_like( $args['search'] ) . '%';
-            $where[] = '(department_code LIKE %s OR department_name LIKE %s)';
+            $where[] = '(department_code LIKE %s OR department_name LIKE %s OR department_group LIKE %s)';
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
         }
@@ -37,6 +39,11 @@ class UMS_DB_Department extends UMS_DB_Base {
             $where[] = 'is_active = 1';
         } elseif ( $args['status'] === 'inactive' ) {
             $where[] = 'is_active = 0';
+        }
+
+        if ( $args['group'] !== '' ) {
+            $where[]  = 'department_group = %s';
+            $params[] = sanitize_text_field( $args['group'] );
         }
 
         $sql = "SELECT * FROM $table WHERE " . implode( ' AND ', $where ) . ' ORDER BY is_active DESC, department_name ASC';
@@ -52,7 +59,21 @@ class UMS_DB_Department extends UMS_DB_Base {
      * Lấy danh sách phòng ban đang hoạt động.
      */
     public static function get_active() {
-        return self::get_all( array( 'status' => 'active' ) );
+        static $active_departments = null;
+
+        if ( $active_departments === null ) {
+            $active_departments = self::get_all( array( 'status' => 'active' ) );
+        }
+
+        return $active_departments;
+    }
+
+    /**
+     * Lấy danh sách nhóm phòng ban để dùng cho bộ lọc và gợi ý nhập liệu.
+     */
+    public static function get_groups() {
+        $table = self::table();
+        return self::db()->get_col( "SELECT DISTINCT department_group FROM $table WHERE department_group <> '' ORDER BY department_group ASC" );
     }
 
     /**
@@ -61,6 +82,19 @@ class UMS_DB_Department extends UMS_DB_Base {
     public static function get_by_id( $department_id ) {
         $table = self::table();
         $sql   = self::db()->prepare( "SELECT * FROM $table WHERE department_id = %d", absint( $department_id ) );
+        return self::db()->get_row( $sql, ARRAY_A );
+    }
+
+    /**
+     * Lấy phòng ban theo mã duy nhất.
+     */
+    public static function get_by_code( $department_code ) {
+        $table = self::table();
+        $sql   = self::db()->prepare(
+            "SELECT * FROM $table WHERE department_code = %s LIMIT 1",
+            sanitize_key( $department_code )
+        );
+
         return self::db()->get_row( $sql, ARRAY_A );
     }
 
@@ -117,6 +151,7 @@ class UMS_DB_Department extends UMS_DB_Base {
             'department_id'        => '%d',
             'department_code'      => '%s',
             'department_name'      => '%s',
+            'department_group'     => '%s',
             'is_active'            => '%d',
         );
     }
