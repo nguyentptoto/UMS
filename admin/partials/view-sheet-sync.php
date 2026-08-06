@@ -46,6 +46,13 @@ $auto_start_sync = isset( $_GET['ums_auto_sync'] ) && '1' === sanitize_text_fiel
                     <th scope="row">X-Sync-Token</th>
                     <td><input type="text" class="regular-text code" readonly value="<?php echo esc_attr( $sync_token ); ?>"></td>
                 </tr>
+                <tr>
+                    <th scope="row">Auto Bridge URL</th>
+                    <td>
+                        <input type="text" class="regular-text code" readonly value="<?php echo esc_attr( $bridge_url ); ?>">
+                        <p class="description">Dùng URL này cho Windows Task Scheduler nếu muốn đồng bộ tự động mà không cần đăng nhập WP Admin.</p>
+                    </td>
+                </tr>
             </table>
 
             <?php submit_button( 'Lưu cấu hình' ); ?>

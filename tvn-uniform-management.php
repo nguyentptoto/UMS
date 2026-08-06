@@ -23,6 +23,7 @@ function ums_schedule_daily_organization_sync() {
         wp_clear_scheduled_hook( UMS_ORGANIZATION_SYNC_CRON_HOOK );
     }
     ums_ensure_sheet_sync_token();
+    ums_ensure_auto_sync_bridge_token();
 }
 
 /**
@@ -36,6 +37,21 @@ function ums_ensure_sheet_sync_token() {
 
     $token = wp_generate_password( 48, false, false );
     update_option( 'ums_sheet_sync_token', $token, false );
+
+    return $token;
+}
+
+/**
+ * Tạo token cho bridge tự động nội bộ nếu hệ thống chưa có.
+ */
+function ums_ensure_auto_sync_bridge_token() {
+    $token = (string) get_option( 'ums_auto_sync_bridge_token', '' );
+    if ( strlen( $token ) >= 32 ) {
+        return $token;
+    }
+
+    $token = wp_generate_password( 48, false, false );
+    update_option( 'ums_auto_sync_bridge_token', $token, false );
 
     return $token;
 }
@@ -79,9 +95,11 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-password-sync.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-organization-sync.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-sheet-user-sync.php';
+    require_once UMS_PLUGIN_DIR . 'includes/class-ums-auto-sync-bridge.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-department-import.php';
     UMS_Sheet_User_Sync::init();
     UMS_Organization_Sync::init();
+    UMS_Auto_Sync_Bridge::init();
     
     // 3. Kích hoạt phân hệ Admin
     if ( is_admin() ) {

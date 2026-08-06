@@ -200,17 +200,17 @@ Do Google Workspace có SSO và WordPress chạy nội bộ, hệ thống dùng 
 
 Google Apps Script mẫu gồm `ums-organization-sync.gs` và `UmsTvnOrgIndex.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/`.
 
-### Auto Sync 1 Lần/Ngày
+### Auto Sync 1 Lần/Ngày Không Cần Đăng Nhập WP Admin
 
-Vì Google Apps Script chạy trên server Google không thể truy cập IP nội bộ `172.30.134.76`, lịch tự động cần chạy trên một máy nội bộ. Máy này cần mở được UMS và dùng Chrome profile đã đăng nhập WordPress Admin cũng như SSO Google Workspace.
+Vì Google Apps Script chạy trên server Google không thể truy cập IP nội bộ `172.30.134.76`, lịch tự động cần chạy trên một máy nội bộ. Máy này cần mở được UMS và dùng Chrome profile đã đăng nhập SSO Google Workspace. WordPress Admin không cần duy trì phiên đăng nhập.
 
-Plugin hỗ trợ URL tự chạy:
+Plugin cung cấp `Auto Bridge URL` tại Admin menu `Đồng bộ Sheet`. URL có dạng:
 
 ```text
-http://172.30.134.76/UMS/wp-admin/admin.php?page=tvn-ums-sheet-sync&ums_auto_sync=1
+http://172.30.134.76/UMS/?ums_auto_sync_bridge=1&token=...
 ```
 
-Khi URL này được mở, trang Admin tự bắt đầu đồng bộ, mở popup Apps Script, nhận dữ liệu qua `postMessage` và POST về WordPress cùng origin.
+Khi URL này được mở, bridge kiểm tra token riêng, tự mở popup Apps Script, nhận dữ liệu qua `postMessage` và POST về WordPress bằng `X-Sync-Token`.
 
 File PowerShell mẫu:
 
@@ -231,7 +231,7 @@ Trigger:
 Daily, 1 time per day
 ```
 
-Nên cho phép popup cho site `http://172.30.134.76` trong Chrome, hoặc dùng script mẫu vì script đã mở Chrome với `--disable-popup-blocking`.
+Trước khi đặt lịch, copy `Auto Bridge URL` từ UMS Admin > `Đồng bộ Sheet` và dán vào biến `$SyncUrl` trong file PowerShell mẫu. Nên cho phép popup cho site `http://172.30.134.76` trong Chrome, hoặc dùng script mẫu vì script đã mở Chrome với `--disable-popup-blocking`.
 
 ## Cấu Trúc Thư Mục Chính
 

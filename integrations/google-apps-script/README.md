@@ -104,15 +104,15 @@ Popup lúc này sẽ chạy `umsTvnOrgDoGet(e)`, không còn mở giao diện ap
 
 ## Chạy tự động 1 lần/ngày
 
-Không đặt lịch GAS Time-driven Trigger để POST về UMS, vì GAS chạy trên server Google và không truy cập được IP nội bộ `172.30.134.76`. Cách tự động phù hợp là đặt lịch trên một máy nội bộ đã đăng nhập SSO Google và WordPress Admin.
+Không đặt lịch GAS Time-driven Trigger để POST về UMS, vì GAS chạy trên server Google và không truy cập được IP nội bộ `172.30.134.76`. Cách tự động phù hợp là đặt lịch trên một máy nội bộ đã đăng nhập SSO Google. WordPress Admin không cần duy trì phiên đăng nhập.
 
-URL tự chạy của UMS:
+Copy `Auto Bridge URL` trong UMS Admin > `Đồng bộ Sheet`. URL có dạng:
 
 ```text
-http://172.30.134.76/UMS/wp-admin/admin.php?page=tvn-ums-sheet-sync&ums_auto_sync=1
+http://172.30.134.76/UMS/?ums_auto_sync_bridge=1&token=...
 ```
 
-Khi URL này mở, trang Admin tự bấm đồng bộ, mở popup Apps Script, popup đọc Sheet rồi chuyển payload về Admin bridge nếu bị chặn POST trực tiếp.
+Khi URL này mở, bridge kiểm tra token riêng, tự mở popup Apps Script, popup đọc Sheet rồi chuyển payload về bridge để ghi vào UMS.
 
 Trong repo có script mẫu:
 
@@ -133,4 +133,4 @@ Trigger:
 Daily
 ```
 
-Chrome profile dùng cho lịch phải còn phiên đăng nhập WordPress Admin và SSO Google Workspace. Nếu popup bị chặn, hãy cho phép popup cho `http://172.30.134.76`; script mẫu cũng đã chạy Chrome kèm `--disable-popup-blocking`.
+Chrome profile dùng cho lịch phải còn phiên đăng nhập SSO Google Workspace. Trước khi đặt lịch, dán `Auto Bridge URL` vào biến `$SyncUrl` trong `tools/ums-organization-auto-sync.ps1`. Nếu popup bị chặn, hãy cho phép popup cho `http://172.30.134.76`; script mẫu cũng đã chạy Chrome kèm `--disable-popup-blocking`.

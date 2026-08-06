@@ -470,6 +470,7 @@ class UMS_Admin {
         $apps_script_url = (string) get_option( 'ums_sheet_sync_apps_script_url', '' );
         $rest_endpoint   = rest_url( UMS_Organization_Sync::REST_NAMESPACE . UMS_Organization_Sync::REST_ROUTE );
         $sync_token      = UMS_Sheet_User_Sync::get_sync_token();
+        $bridge_url      = UMS_Auto_Sync_Bridge::get_bridge_url();
         $last_log        = UMS_Sheet_User_Sync::get_last_log();
         $notice          = self::get_notice();
 

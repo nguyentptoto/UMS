@@ -1,4 +1,11 @@
-$SyncUrl = 'http://172.30.134.76/UMS/wp-admin/admin.php?page=tvn-ums-sheet-sync&ums_auto_sync=1'
+# Copy Auto Bridge URL from UMS Admin > Dong bo Sheet and paste it here.
+# Example:
+# $SyncUrl = 'http://172.30.134.76/UMS/?ums_auto_sync_bridge=1&token=...'
+$SyncUrl = 'PASTE_UMS_AUTO_BRIDGE_URL_HERE'
+
+if ($SyncUrl -eq 'PASTE_UMS_AUTO_BRIDGE_URL_HERE') {
+    throw 'Hay copy Auto Bridge URL tu UMS Admin > Dong bo Sheet va dan vao bien $SyncUrl trong file nay.'
+}
 
 $ChromeCandidates = @(
     "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
@@ -12,7 +19,7 @@ if (-not $ChromePath) {
 }
 
 # Task Scheduler can run this script once per day on an internal PC that can access UMS.
-# Use a Chrome profile that is already signed in to both WordPress Admin and company SSO.
+# Use a Chrome profile that is already signed in to company SSO.
 Start-Process -FilePath $ChromePath -ArgumentList @(
     '--disable-popup-blocking',
     '--new-window',
