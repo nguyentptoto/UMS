@@ -7,6 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 $page_url = admin_url( 'admin.php?page=tvn-ums-organization' );
+$auto_start_sync = isset( $_GET['ums_auto_sync'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['ums_auto_sync'] ) );
 $grid_columns = array(
 	array( 'text' => 'STT', 'datafield' => 'sheet_stt', 'width' => 80 ),
 	array( 'text' => 'Mã nhân viên', 'datafield' => 'employee_no', 'width' => 130 ),
@@ -78,6 +79,7 @@ $grid_fields = array(
 				data-rest-endpoint="<?php echo esc_attr( $rest_endpoint ); ?>"
 				data-sync-token="<?php echo esc_attr( $sync_token ); ?>"
 				data-sync-mode="organization"
+				data-auto-start="<?php echo $auto_start_sync ? '1' : '0'; ?>"
 				<?php disabled( ! $table_ready || $apps_script_url === '' ); ?>
 			>
 				Đồng bộ từ Google Sheet

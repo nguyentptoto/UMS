@@ -101,3 +101,36 @@ UMS_TVN_ORG_SHEET_NAME=Danh sách CNV
 4. Bấm `Đồng bộ từ Google Sheet`.
 
 Popup lúc này sẽ chạy `umsTvnOrgDoGet(e)`, không còn mở giao diện app cũ nữa.
+
+## Chạy tự động 1 lần/ngày
+
+Không đặt lịch GAS Time-driven Trigger để POST về UMS, vì GAS chạy trên server Google và không truy cập được IP nội bộ `172.30.134.76`. Cách tự động phù hợp là đặt lịch trên một máy nội bộ đã đăng nhập SSO Google và WordPress Admin.
+
+URL tự chạy của UMS:
+
+```text
+http://172.30.134.76/UMS/wp-admin/admin.php?page=tvn-ums-sheet-sync&ums_auto_sync=1
+```
+
+Khi URL này mở, trang Admin tự bấm đồng bộ, mở popup Apps Script, popup đọc Sheet rồi chuyển payload về Admin bridge nếu bị chặn POST trực tiếp.
+
+Trong repo có script mẫu:
+
+```text
+tools/ums-organization-auto-sync.ps1
+```
+
+Tạo Windows Task Scheduler:
+
+```text
+Program/script:
+powershell.exe
+
+Arguments:
+-ExecutionPolicy Bypass -File "C:\xampp\htdocs\UMS\wp-content\plugins\UMS\tools\ums-organization-auto-sync.ps1"
+
+Trigger:
+Daily
+```
+
+Chrome profile dùng cho lịch phải còn phiên đăng nhập WordPress Admin và SSO Google Workspace. Nếu popup bị chặn, hãy cho phép popup cho `http://172.30.134.76`; script mẫu cũng đã chạy Chrome kèm `--disable-popup-blocking`.

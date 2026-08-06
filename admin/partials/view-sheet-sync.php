@@ -5,6 +5,8 @@
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
+
+$auto_start_sync = isset( $_GET['ums_auto_sync'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['ums_auto_sync'] ) );
 ?>
 <div class="wrap ums-admin-wrap ums-sheet-sync-page">
     <h1>UMS - Cấu hình Google Sheet Danh sách CNV</h1>
@@ -64,6 +66,7 @@ if ( ! defined( 'ABSPATH' ) ) {
                 data-rest-endpoint="<?php echo esc_attr( $rest_endpoint ); ?>"
                 data-sync-token="<?php echo esc_attr( $sync_token ); ?>"
                 data-sync-mode="organization"
+                data-auto-start="<?php echo $auto_start_sync ? '1' : '0'; ?>"
             >
                 Bắt đầu đồng bộ
             </button>

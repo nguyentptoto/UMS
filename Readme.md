@@ -200,6 +200,39 @@ Do Google Workspace có SSO và WordPress chạy nội bộ, hệ thống dùng 
 
 Google Apps Script mẫu gồm `ums-organization-sync.gs` và `UmsTvnOrgIndex.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/`.
 
+### Auto Sync 1 Lần/Ngày
+
+Vì Google Apps Script chạy trên server Google không thể truy cập IP nội bộ `172.30.134.76`, lịch tự động cần chạy trên một máy nội bộ. Máy này cần mở được UMS và dùng Chrome profile đã đăng nhập WordPress Admin cũng như SSO Google Workspace.
+
+Plugin hỗ trợ URL tự chạy:
+
+```text
+http://172.30.134.76/UMS/wp-admin/admin.php?page=tvn-ums-sheet-sync&ums_auto_sync=1
+```
+
+Khi URL này được mở, trang Admin tự bắt đầu đồng bộ, mở popup Apps Script, nhận dữ liệu qua `postMessage` và POST về WordPress cùng origin.
+
+File PowerShell mẫu:
+
+```text
+tools/ums-organization-auto-sync.ps1
+```
+
+Thiết lập Windows Task Scheduler:
+
+```text
+Program/script:
+powershell.exe
+
+Arguments:
+-ExecutionPolicy Bypass -File "C:\xampp\htdocs\UMS\wp-content\plugins\UMS\tools\ums-organization-auto-sync.ps1"
+
+Trigger:
+Daily, 1 time per day
+```
+
+Nên cho phép popup cho site `http://172.30.134.76` trong Chrome, hoặc dùng script mẫu vì script đã mở Chrome với `--disable-popup-blocking`.
+
 ## Cấu Trúc Thư Mục Chính
 
 ```text

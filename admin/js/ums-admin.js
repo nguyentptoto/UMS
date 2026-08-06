@@ -264,7 +264,12 @@
             }
         });
 
-        $button.on('click', function () {
+        function startSheetSync() {
+            if ($button.prop('disabled')) {
+                appendLog('Dong bo tu dong khong chay vi nut dong bo dang bi khoa.', 'warning');
+                return;
+            }
+
             var appsScriptUrl = String($button.attr('data-apps-script-url') || '').trim();
             var syncMode = String($button.attr('data-sync-mode') || 'users').trim() || 'users';
 
@@ -295,7 +300,16 @@
                     activePopup = null;
                 }
             }, 1000);
+        }
+
+        $button.on('click', function () {
+            startSheetSync();
         });
+
+        if (String($button.attr('data-auto-start') || '') === '1') {
+            appendLog('Che do tu dong: trang se bat dau dong bo sau khi tai xong.', 'info');
+            window.setTimeout(startSheetSync, 1200);
+        }
     }
 
     $(function () {
