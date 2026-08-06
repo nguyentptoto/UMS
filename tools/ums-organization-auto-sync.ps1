@@ -1,7 +1,7 @@
 # Copy Auto Bridge URL from UMS Admin > Dong bo Sheet and paste it here.
 # Example:
 # $SyncUrl = 'http://172.30.134.76/UMS/?ums_auto_sync_bridge=1&token=...'
-$SyncUrl = 'PASTE_UMS_AUTO_BRIDGE_URL_HERE'
+$SyncUrl = 'http://172.30.134.76/UMS/?ums_auto_sync_bridge=1&token=nmdJ1LHDXA0KHEgSkS1kuBAjFA3Rx9dqz3MTlvhQmEkFsw2f'
 
 if ($SyncUrl -eq 'PASTE_UMS_AUTO_BRIDGE_URL_HERE') {
     throw 'Hay copy Auto Bridge URL tu UMS Admin > Dong bo Sheet va dan vao bien $SyncUrl trong file nay.'
