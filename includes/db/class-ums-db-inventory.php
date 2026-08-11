@@ -30,8 +30,7 @@ class UMS_DB_Inventory extends UMS_DB_Base {
 
         if ( $args['search'] !== '' ) {
             $like    = '%' . self::db()->esc_like( $args['search'] ) . '%';
-            $where[] = '(inventory.item_type LIKE %s OR inventory.item_variant LIKE %s OR inventory.size LIKE %s OR inventory.color_code LIKE %s OR child.category_name LIKE %s OR parent.category_name LIKE %s)';
-            $params[] = $like;
+            $where[] = '(inventory.item_type LIKE %s OR inventory.item_variant LIKE %s OR inventory.size LIKE %s OR child.category_name LIKE %s OR parent.category_name LIKE %s)';
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -45,7 +44,8 @@ class UMS_DB_Inventory extends UMS_DB_Base {
         }
 
         if ( $args['parent_id'] !== '' ) {
-            $where[]  = 'child.parent_id = %d';
+            $where[]  = '(inventory.category_id = %d OR child.parent_id = %d)';
+            $params[] = absint( $args['parent_id'] );
             $params[] = absint( $args['parent_id'] );
         }
 
@@ -64,7 +64,7 @@ class UMS_DB_Inventory extends UMS_DB_Base {
             LEFT JOIN $category_table child ON child.category_id = inventory.category_id
             LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
             WHERE " . implode( ' AND ', $where ) . '
-            ORDER BY parent.category_name ASC, child.category_name ASC, inventory.item_variant ASC, inventory.size ASC';
+            ORDER BY COALESCE(parent.category_name, child.category_name) ASC, inventory.item_variant ASC, inventory.size ASC';
 
         if ( ! empty( $params ) ) {
             $sql = self::db()->prepare( $sql, $params );
@@ -106,11 +106,10 @@ class UMS_DB_Inventory extends UMS_DB_Base {
     public static function variant_exists( $data, $exclude_item_id = 0 ) {
         $table = self::table();
         $sql   = self::db()->prepare(
-            "SELECT COUNT(*) FROM $table WHERE category_id = %d AND item_variant = %s AND size = %s AND color_code = %s AND item_id <> %d",
+            "SELECT COUNT(*) FROM $table WHERE category_id = %d AND item_variant = %s AND size = %s AND item_id <> %d",
             $data['category_id'],
             $data['item_variant'],
             $data['size'],
-            $data['color_code'],
             absint( $exclude_item_id )
         );
 

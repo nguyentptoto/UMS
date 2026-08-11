@@ -28,15 +28,14 @@ $size_order = array(
 );
 
 foreach ( $inventory as $item ) {
-    $parent_id   = ! empty( $item['parent_category_id'] ) ? absint( $item['parent_category_id'] ) : 0;
+    $parent_id   = ! empty( $item['parent_category_id'] ) ? absint( $item['parent_category_id'] ) : absint( $item['category_id'] );
     $section_key = $parent_id > 0 ? 'parent-' . $parent_id : 'uncategorized';
-    $section_name = ! empty( $item['parent_category_name'] ) ? $item['parent_category_name'] : 'Chưa phân loại';
-    $category_name = ! empty( $item['category_name'] ) ? $item['category_name'] : $item['item_type'];
+    $section_name = ! empty( $item['parent_category_name'] ) ? $item['parent_category_name'] : ( ! empty( $item['category_name'] ) ? $item['category_name'] : 'Chưa phân loại' );
+    $category_name = ! empty( $item['item_variant'] ) ? $item['item_variant'] : ( ! empty( $item['category_name'] ) ? $item['category_name'] : $item['item_type'] );
     $variant        = trim( (string) $item['item_variant'] );
-    $color          = trim( (string) $item['color_code'] );
     $size           = trim( (string) $item['size'] );
     $size           = $size !== '' ? $size : 'Không size';
-    $row_key        = implode( '|', array( absint( $item['category_id'] ), $variant, $color ) );
+    $row_key        = implode( '|', array( absint( $item['category_id'] ), $variant ) );
 
     if ( ! isset( $inventory_sections[ $section_key ] ) ) {
         $inventory_sections[ $section_key ] = array(
@@ -48,13 +47,6 @@ foreach ( $inventory as $item ) {
 
     if ( ! isset( $inventory_sections[ $section_key ]['rows'][ $row_key ] ) ) {
         $label = $category_name;
-        if ( $variant !== '' ) {
-            $label .= ' - ' . $variant;
-        }
-        if ( $color !== '' ) {
-            $label .= ' (' . $color . ')';
-        }
-
         $inventory_sections[ $section_key ]['rows'][ $row_key ] = array(
             'label'  => $label,
             'items'  => array(),
@@ -138,7 +130,7 @@ unset( $section );
                     type="search"
                     name="s"
                     value="<?php echo esc_attr( $filters['search'] ); ?>"
-                    placeholder="Tìm danh mục, biến thể, size, màu"
+                    placeholder="Tìm danh mục, tên sản phẩm, size"
                 >
             </label>
 
@@ -149,18 +141,6 @@ unset( $section );
                     <?php foreach ( $category_tree as $parent ) : ?>
                         <option value="<?php echo esc_attr( $parent['category_id'] ); ?>" <?php selected( $filters['parent_id'], (string) $parent['category_id'] ); ?>>
                             <?php echo esc_html( $parent['category_name'] ); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-
-            <label>
-                <span class="screen-reader-text">Lọc danh mục con</span>
-                <select name="category_id">
-                    <option value="">Tất cả danh mục con</option>
-                    <?php foreach ( $child_categories as $category ) : ?>
-                        <option value="<?php echo esc_attr( $category['category_id'] ); ?>" <?php selected( $filters['category_id'], (string) $category['category_id'] ); ?>>
-                            <?php echo esc_html( $category['parent_name'] . ' / ' . $category['category_name'] ); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -247,7 +227,7 @@ unset( $section );
 
             <div class="ums-form-grid">
                 <label>
-                    <span>Sản phẩm / biến thể <b>*</b></span>
+                    <span>Sản phẩm <b>*</b></span>
                     <select name="ums_manual_out[item_id]" required>
                         <option value="">Chọn sản phẩm còn tồn</option>
                         <?php foreach ( $available_items as $item ) : ?>
@@ -305,18 +285,18 @@ unset( $section );
 
             <div class="ums-form-grid">
                 <label>
-                    <span>Danh mục con <b>*</b></span>
+                    <span>Danh mục cha <b>*</b></span>
                     <select name="ums_inventory[category_id]" required>
-                        <option value="">Chọn danh mục con</option>
-                        <?php foreach ( $child_categories as $category ) : ?>
+                        <option value="">Chọn danh mục cha</option>
+                        <?php foreach ( $category_tree as $category ) : ?>
                             <option value="<?php echo esc_attr( $category['category_id'] ); ?>" <?php selected( (int) $form_values['category_id'], (int) $category['category_id'] ); ?>>
-                                <?php echo esc_html( $category['parent_name'] . ' / ' . $category['category_name'] ); ?>
+                                <?php echo esc_html( $category['category_name'] ); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <?php if ( empty( $child_categories ) ) : ?>
+                    <?php if ( empty( $category_tree ) ) : ?>
                         <p class="description">
-                            Hãy tạo danh mục cha-con tại
+                            Hãy tạo danh mục cha tại
                             <a href="<?php echo esc_url( admin_url( 'admin.php?page=tvn-ums-product-categories' ) ); ?>">Danh mục SP</a>
                             trước khi thêm sản phẩm.
                         </p>
@@ -324,8 +304,8 @@ unset( $section );
                 </label>
 
                 <label>
-                    <span>Biến thể</span>
-                    <input type="text" name="ums_inventory[item_variant]" value="<?php echo esc_attr( $form_values['item_variant'] ); ?>" placeholder="Cộc tay, dài tay, TS5511...">
+                    <span>Tên sản phẩm <b>*</b></span>
+                    <input type="text" name="ums_inventory[item_variant]" value="<?php echo esc_attr( $form_values['item_variant'] ); ?>" placeholder="Áo phông xám, giày KPR 010..." required>
                 </label>
 
                 <label>
@@ -333,10 +313,7 @@ unset( $section );
                     <input type="text" name="ums_inventory[size]" value="<?php echo esc_attr( $form_values['size'] ); ?>" required>
                 </label>
 
-                <label>
-                    <span>Màu/Mã màu</span>
-                    <input type="text" name="ums_inventory[color_code]" value="<?php echo esc_attr( $form_values['color_code'] ); ?>">
-                </label>
+                <input type="hidden" name="ums_inventory[color_code]" value="">
 
                 <label>
                     <span>Số lượng tồn kho <b>*</b></span>

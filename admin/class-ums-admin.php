@@ -372,7 +372,7 @@ class UMS_Admin {
         $filters = array(
             'search'      => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
             'parent_id'   => isset( $_GET['parent_id'] ) ? sanitize_text_field( wp_unslash( $_GET['parent_id'] ) ) : '',
-            'category_id' => isset( $_GET['category_id'] ) ? sanitize_text_field( wp_unslash( $_GET['category_id'] ) ) : '',
+            'category_id' => '',
             'stock'       => isset( $_GET['stock'] ) ? sanitize_key( wp_unslash( $_GET['stock'] ) ) : '',
         );
 
@@ -1707,7 +1707,7 @@ class UMS_Admin {
             'item_type'    => $category ? $category['category_name'] : '',
             'item_variant' => isset( $raw['item_variant'] ) ? sanitize_text_field( $raw['item_variant'] ) : '',
             'size'         => isset( $raw['size'] ) ? sanitize_text_field( $raw['size'] ) : '',
-            'color_code'   => isset( $raw['color_code'] ) ? sanitize_text_field( $raw['color_code'] ) : '',
+            'color_code'   => '',
             'stock_qty'    => isset( $raw['stock_qty'] ) ? (int) $raw['stock_qty'] : 0,
             'base_price'   => isset( $raw['base_price'] ) ? self::normalize_money_value( $raw['base_price'] ) : 0,
         );
@@ -1979,17 +1979,17 @@ class UMS_Admin {
         }
 
         if ( $data['category_id'] <= 0 ) {
-            $errors[] = 'Vui lòng chọn danh mục con cho sản phẩm.';
+            $errors[] = 'Vui lòng chọn danh mục cha cho sản phẩm.';
         } else {
             $category = UMS_DB_Product_Category::get_by_id( $data['category_id'] );
-            if ( ! $category || empty( $category['parent_id'] ) || (int) $category['is_active'] !== 1 ) {
-                $errors[] = 'Sản phẩm phải thuộc một danh mục con đang sử dụng.';
+            if ( ! $category || (int) $category['parent_id'] !== 0 || (int) $category['is_active'] !== 1 ) {
+                $errors[] = 'Sản phẩm phải thuộc một danh mục cha đang sử dụng.';
             }
         }
 
-        foreach ( array( 'size' ) as $field ) {
+        foreach ( array( 'item_variant', 'size' ) as $field ) {
             if ( $data[ $field ] === '' ) {
-                $errors[] = 'Vui lòng nhập đầy đủ size.';
+                $errors[] = 'Vui lòng nhập đầy đủ tên sản phẩm và size.';
                 break;
             }
         }
@@ -2003,7 +2003,7 @@ class UMS_Admin {
         }
 
         if ( UMS_DB_Inventory::variant_exists( $data, $is_edit ? $data['item_id'] : 0 ) ) {
-            $errors[] = 'Biến thể sản phẩm này đã tồn tại trong kho.';
+            $errors[] = 'Sản phẩm và size này đã tồn tại trong kho.';
         }
 
         return array_unique( $errors );
