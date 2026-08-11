@@ -176,6 +176,8 @@ Admin quản lý tại menu `Sơ đồ tổ chức TVN`. Giao diện dùng jqxGr
 
 Nút `Đồng bộ từ Google Sheet` trên trang này mở Google Apps Script Web App bằng Popup Bridge và gửi dữ liệu Sheet `Danh sách CNV` về receiver `POST /wp-json/ums/v1/sync-organization`. Dữ liệu được upsert vào bảng nội bộ theo `Mã nhân viên`; cột `STT` chỉ dùng để hiển thị. Batch cuối gửi `finalize=true` để xóa các bản ghi không còn trong Sheet.
 
+Sau khi lưu dữ liệu sơ đồ tổ chức, hệ thống tự tạo/cập nhật tài khoản WordPress theo `employee_no` để nhân sự có thể đăng nhập. `user_login` là mã nhân viên, tên hiển thị lấy từ `Họ và tên`, mật khẩu được đồng bộ từ server password hiện tại `172.30.134.15`; nếu đồng bộ password thất bại, hệ thống dùng mật khẩu mặc định `12345678`. Điều kiện chỉ tạo tài khoản cho email công ty `@toto...` đã được đặt TODO trong code và sẽ bật lại khi Sheet bổ sung cột `Email`.
+
 Module này không còn kết nối database ngoài. Plugin không tự tạo bảng; cần import bảng `wp_uniform_organization_employees` từ `ums.sql` trước lần đồng bộ đầu tiên.
 
 Với database đã có bảng tổ chức từ bản cũ, chạy thủ công:

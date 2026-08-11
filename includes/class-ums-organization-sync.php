@@ -85,6 +85,13 @@ class UMS_Organization_Sync {
 		}
 
 		$upserted = 0;
+		$user_sync = array(
+			'created'          => 0,
+			'updated'          => 0,
+			'password_synced'  => 0,
+			'password_default' => 0,
+			'errors'           => array(),
+		);
 		if ( ! empty( $normalized ) ) {
 			$upserted = UMS_DB_Organization::upsert_batch( $normalized, $sync_token, $synced_at );
 			if ( $upserted === false ) {
@@ -94,6 +101,8 @@ class UMS_Organization_Sync {
 					array( 'status' => 500 )
 				);
 			}
+
+			$user_sync = self::sync_wp_users_from_organization_rows( $normalized );
 		}
 
 		$finalize = ! empty( $payload['finalize'] );
@@ -118,6 +127,7 @@ class UMS_Organization_Sync {
 				'ended_at'   => current_time( 'mysql' ),
 				'total'      => count( $normalized ),
 				'deleted'    => (int) $deleted,
+				'user_sync'  => $user_sync,
 				'source'     => 'google-sheet-popup-bridge',
 			),
 			false
@@ -131,9 +141,121 @@ class UMS_Organization_Sync {
 				'updated' => count( $normalized ),
 				'failed'  => $failed,
 				'deleted' => (int) $deleted,
+				'users_created' => $user_sync['created'],
+				'users_updated' => $user_sync['updated'],
+				'password_synced' => $user_sync['password_synced'],
+				'password_default' => $user_sync['password_default'],
+				'user_errors' => $user_sync['errors'],
 				'results' => $results,
 			),
 			$failed > 0 ? 207 : 200
+		);
+	}
+
+	private static function sync_wp_users_from_organization_rows( $rows ) {
+		$summary = array(
+			'created'          => 0,
+			'updated'          => 0,
+			'password_synced'  => 0,
+			'password_default' => 0,
+			'errors'           => array(),
+		);
+
+		foreach ( $rows as $row ) {
+			$result = self::ensure_wp_user_from_organization_row( $row );
+			if ( is_wp_error( $result ) ) {
+				$summary['errors'][] = $result->get_error_message();
+				continue;
+			}
+
+			$summary[ $result['action'] ]++;
+
+			$password_result = UMS_Password_Sync::sync_user_password_with_default_fallback( $result['user_id'] );
+			if ( is_wp_error( $password_result ) ) {
+				$summary['errors'][] = $row['emp_no'] . ': ' . $password_result->get_error_message();
+				continue;
+			}
+
+			if ( ! empty( $password_result['source'] ) && $password_result['source'] === 'external' ) {
+				$summary['password_synced']++;
+			} else {
+				$summary['password_default']++;
+			}
+		}
+
+		$summary['errors'] = array_slice( $summary['errors'], 0, 30 );
+		return $summary;
+	}
+
+	private static function ensure_wp_user_from_organization_row( $row ) {
+		$employee_no = isset( $row['emp_no'] ) ? trim( (string) $row['emp_no'] ) : '';
+		$user_login  = sanitize_user( $employee_no, true );
+		if ( $user_login === '' ) {
+			return new WP_Error( 'organization_wp_user_login_invalid', 'Mã nhân viên không thể dùng để tạo tài khoản WordPress: ' . $employee_no );
+		}
+
+		$email = isset( $row['email'] ) ? sanitize_email( (string) $row['email'] ) : '';
+
+		/*
+		 * TODO: Khi Google Sheet bổ sung cột email, bật lại điều kiện dưới đây
+		 * để chỉ tạo tài khoản đăng nhập cho email công ty dạng @toto...
+		 *
+		 * if ( $email === '' || ! preg_match( '/@toto/i', $email ) ) {
+		 *     return new WP_Error( 'organization_wp_user_email_not_allowed', 'Nhân sự không có email TOTO hợp lệ: ' . $employee_no );
+		 * }
+		 */
+
+		$display_name = ! empty( $row['fname'] ) ? sanitize_text_field( $row['fname'] ) : $user_login;
+		$user_id      = username_exists( $user_login );
+		$is_new       = ! $user_id;
+
+		if ( $is_new ) {
+			$user_data = array(
+				'user_login'   => $user_login,
+				'user_pass'    => UMS_Password_Sync::DEFAULT_PASSWORD,
+				'display_name' => $display_name,
+				'nickname'     => $display_name,
+				'role'         => 'subscriber',
+				'user_status'  => 0,
+			);
+
+			if ( $email !== '' && is_email( $email ) ) {
+				$user_data['user_email'] = $email;
+			}
+
+			$user_id = wp_insert_user( $user_data );
+			if ( is_wp_error( $user_id ) ) {
+				return $user_id;
+			}
+		} else {
+			$user_data = array(
+				'ID'           => absint( $user_id ),
+				'display_name' => $display_name,
+				'nickname'     => $display_name,
+				'user_status'  => 0,
+			);
+
+			if ( $email !== '' && is_email( $email ) ) {
+				$user_data['user_email'] = $email;
+			}
+
+			$updated = wp_update_user( $user_data );
+			if ( is_wp_error( $updated ) ) {
+				return $updated;
+			}
+			$user_id = absint( $updated );
+		}
+
+		update_user_meta( $user_id, 'ums_employee_code', $employee_no );
+		update_user_meta( $user_id, 'ums_organization_source_id', absint( $row['id'] ) );
+		update_user_meta( $user_id, 'ums_department', isset( $row['department'] ) ? sanitize_text_field( $row['department'] ) : '' );
+		update_user_meta( $user_id, 'ums_job_position', isset( $row['position'] ) ? sanitize_text_field( $row['position'] ) : '' );
+		update_user_meta( $user_id, 'ums_date_joined', isset( $row['date_joined'] ) ? sanitize_text_field( $row['date_joined'] ) : '' );
+		update_user_meta( $user_id, 'ums_organization_synced_at', current_time( 'mysql', 0 ) );
+
+		return array(
+			'user_id' => absint( $user_id ),
+			'action'  => $is_new ? 'created' : 'updated',
 		);
 	}
 
@@ -330,7 +452,7 @@ class UMS_Organization_Sync {
 			'section'     => '',
 			'team'        => sanitize_text_field( self::first_scalar( $row, array( 'team', 'nhom', 'nhóm' ) ) ),
 			'position'    => sanitize_text_field( self::first_scalar( $row, array( 'position', 'chuc_danh', 'chức danh' ) ) ),
-			'email'       => '',
+			'email'       => sanitize_email( self::first_scalar( $row, array( 'email', 'e-mail', 'mail' ) ) ),
 			'factory'     => '',
 			'cost_center' => sanitize_text_field( self::first_scalar( $row, array( 'cost_center', 'mã cost center', 'ma cost center' ) ) ),
 			'date_joined' => self::normalize_date( self::first_scalar( $row, array( 'date_joined', 'ngày vào', 'ngay vao' ) ) ),

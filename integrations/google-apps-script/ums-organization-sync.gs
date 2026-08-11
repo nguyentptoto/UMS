@@ -163,6 +163,9 @@ function umsTvnOrgMapHeader_(header) {
     'vị trí': 'position',
     'vi tri': 'position',
     position: 'position',
+    email: 'email',
+    mail: 'email',
+    'e-mail': 'email',
     'vị trí trước tt': 'previous_position',
     'vi tri truoc tt': 'previous_position',
     previous_position: 'previous_position'
