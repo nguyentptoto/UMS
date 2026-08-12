@@ -167,8 +167,8 @@ class UMS_DB_Organization extends UMS_DB_Base {
 
 		if ( $args['search'] !== '' ) {
 			$like = '%' . self::db()->esc_like( sanitize_text_field( $args['search'] ) ) . '%';
-			$where[] = '(employee_no LIKE %s OR full_name LIKE %s OR department LIKE %s OR team LIKE %s OR position LIKE %s OR previous_position LIKE %s OR cost_center LIKE %s)';
-			$params = array_merge( $params, array_fill( 0, 7, $like ) );
+			$where[] = '(employee_no LIKE %s OR full_name LIKE %s OR email LIKE %s OR department LIKE %s OR team LIKE %s OR position LIKE %s OR previous_position LIKE %s OR cost_center LIKE %s)';
+			$params = array_merge( $params, array_fill( 0, 8, $like ) );
 		}
 
 		foreach ( array( 'division', 'department', 'factory' ) as $field ) {

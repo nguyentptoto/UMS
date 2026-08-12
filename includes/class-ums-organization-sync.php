@@ -143,6 +143,7 @@ class UMS_Organization_Sync {
 				'deleted' => (int) $deleted,
 				'users_created' => $user_sync['created'],
 				'users_updated' => $user_sync['updated'],
+				'users_skipped' => $user_sync['skipped'],
 				'password_synced' => $user_sync['password_synced'],
 				'password_default' => $user_sync['password_default'],
 				'user_errors' => $user_sync['errors'],
@@ -156,6 +157,7 @@ class UMS_Organization_Sync {
 		$summary = array(
 			'created'          => 0,
 			'updated'          => 0,
+			'skipped'          => 0,
 			'password_synced'  => 0,
 			'password_default' => 0,
 			'errors'           => array(),
@@ -165,6 +167,11 @@ class UMS_Organization_Sync {
 			$result = self::ensure_wp_user_from_organization_row( $row );
 			if ( is_wp_error( $result ) ) {
 				$summary['errors'][] = $result->get_error_message();
+				continue;
+			}
+
+			if ( isset( $result['action'] ) && $result['action'] === 'skipped' ) {
+				$summary['skipped']++;
 				continue;
 			}
 
@@ -196,14 +203,13 @@ class UMS_Organization_Sync {
 
 		$email = isset( $row['email'] ) ? sanitize_email( (string) $row['email'] ) : '';
 
-		/*
-		 * TODO: Khi Google Sheet bổ sung cột email, bật lại điều kiện dưới đây
-		 * để chỉ tạo tài khoản đăng nhập cho email công ty dạng @toto...
-		 *
-		 * if ( $email === '' || ! preg_match( '/@toto/i', $email ) ) {
-		 *     return new WP_Error( 'organization_wp_user_email_not_allowed', 'Nhân sự không có email TOTO hợp lệ: ' . $employee_no );
-		 * }
-		 */
+		// Sheet đã có email: chỉ nhân sự có email công ty @toto mới được tạo/cập nhật tài khoản đăng nhập.
+		if ( $email === '' || ! preg_match( '/@toto/i', $email ) ) {
+			return array(
+				'action' => 'skipped',
+				'reason' => 'email_not_allowed',
+			);
+		}
 
 		$display_name = ! empty( $row['fname'] ) ? sanitize_text_field( $row['fname'] ) : $user_login;
 		$user_id      = username_exists( $user_login );

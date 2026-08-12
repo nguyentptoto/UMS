@@ -12,6 +12,7 @@ $grid_columns = array(
 	array( 'text' => 'STT', 'datafield' => 'sheet_stt', 'width' => 80 ),
 	array( 'text' => 'Mã nhân viên', 'datafield' => 'employee_no', 'width' => 130 ),
 	array( 'text' => 'Họ và tên', 'datafield' => 'full_name', 'width' => 220 ),
+	array( 'text' => 'Email', 'datafield' => 'email', 'width' => 220 ),
 	array( 'text' => 'Phòng', 'datafield' => 'department', 'width' => 230 ),
 	array( 'text' => 'Nhóm', 'datafield' => 'team', 'width' => 230 ),
 	array( 'text' => 'Mã cost center', 'datafield' => 'cost_center', 'width' => 140 ),
@@ -26,6 +27,7 @@ $grid_fields = array(
 	array( 'name' => 'source_version', 'type' => 'number' ),
 	array( 'name' => 'employee_no', 'type' => 'string' ),
 	array( 'name' => 'full_name', 'type' => 'string' ),
+	array( 'name' => 'email', 'type' => 'string' ),
 	array( 'name' => 'department', 'type' => 'string' ),
 	array( 'name' => 'team', 'type' => 'string' ),
 	array( 'name' => 'cost_center', 'type' => 'string' ),
@@ -101,7 +103,7 @@ $grid_fields = array(
 
 			<label>
 				<span class="screen-reader-text">Tìm nhân viên</span>
-				<input type="search" name="s" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Mã NV, họ tên, phòng, nhóm, cost center">
+				<input type="search" name="s" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Mã NV, họ tên, email, phòng, nhóm, cost center">
 			</label>
 
 			<label>

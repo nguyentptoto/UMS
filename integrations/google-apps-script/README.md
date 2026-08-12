@@ -14,6 +14,7 @@ Mã cost center
 Ngày vào
 Vị trí
 Vị trí trước TT
+Email
 ```
 
 ## Vì sao popup đang mở giao diện app cũ?
