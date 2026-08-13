@@ -97,14 +97,12 @@ Khi user tạo hoặc sửa phiếu, hệ thống kiểm tra định mức trư�
 
 Trang `Định mức năm` hỗ trợ import trực tiếp file `.xlsx` theo template quản lý đồng phục. Khi cài mới, import toàn bộ file `ums.sql`; bảng định mức linh hoạt và bảng `wp_uniform_allowance_import_batches` đã có sẵn trong cấu trúc hoàn chỉnh.
 
-Form thêm/sửa thủ công dùng cùng schema với dữ liệu import: loại định mức định kỳ/New Comer, sản phẩm mọi size, điều kiện Phòng/Nhóm/Cost center/Vị trí, khoảng ngày vào làm, độ ưu tiên, tần suất và số lượng theo tháng. Khóa rule cũng được sinh chung để tầng kiểm tra định mức xử lý thống nhất.
+Form thêm/sửa thủ công bám đúng ma trận của hai sheet: Bộ phận, Nhóm, Code center, Vị trí, Sản phẩm, số lượng Tháng 4, số lượng Tháng 9, Lưu ý và Trạng thái. Khóa rule được sinh chung với dữ liệu import để tầng kiểm tra định mức xử lý thống nhất.
 
-Các sheet được đọc:
+Importer chỉ đọc hai sheet định mức chính và giữ cố định 25 cột sản phẩm từ `E` đến `AC`:
 
 - `Phát T4`: định mức định kỳ tháng 4.
 - `Phát T9`: định mức định kỳ tháng 9.
-- `New commer`: cấp lần đầu cho CNV mới theo khoảng ngày vào công ty.
-- `Phát T9 - CNV mới`: cấp bù tháng 9 cho CNV vào trong năm.
 
 Điều kiện áp dụng được lấy từ Sơ đồ tổ chức TVN theo `Mã nhân viên`: phòng, nhóm, cost center, vị trí và ngày vào công ty. Tên sản phẩm trong Excel được ánh xạ với sản phẩm UMS trước khi xác nhận import; một mapping áp dụng cho toàn bộ size của sản phẩm đó.
 

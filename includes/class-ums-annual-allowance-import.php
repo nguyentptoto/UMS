@@ -9,25 +9,44 @@ class UMS_Annual_Allowance_Import {
 	private static $sheet_configs = array(
 		'Phát T4' => array(
 			'scope' => 'annual', 'header' => 1, 'start' => 2, 'month' => 4,
-			'department' => 'A', 'team' => 'B', 'cost_center' => 'C', 'position' => 'D',
-			'product_start' => 'E', 'product_end' => 'AC', 'note' => 'AD',
 		),
 		'Phát T9' => array(
 			'scope' => 'annual', 'header' => 1, 'start' => 2, 'month' => 9,
-			'department' => 'A', 'team' => 'B', 'cost_center' => 'C', 'position' => 'D',
-			'product_start' => 'E', 'product_end' => 'AC', 'note' => 'AD',
-		),
-		'New commer' => array(
-			'scope' => 'newcomer', 'header' => 2, 'start' => 3, 'months' => 'all',
-			'department' => 'A', 'team' => '', 'cost_center' => 'B', 'position' => 'C',
-			'product_start' => 'D', 'product_end' => 'R', 'period' => 'S', 'note' => '',
-		),
-		'Phát T9 - CNV mới' => array(
-			'scope' => 'newcomer_september', 'header' => 2, 'start' => 3, 'month' => 9,
-			'department' => 'A', 'team' => 'B', 'cost_center' => 'C', 'position' => 'D',
-			'product_start' => 'E', 'product_end' => 'X', 'period' => 'Y', 'note' => 'Z',
 		),
 	);
+
+	/**
+	 * Ma trận sản phẩm cố định E:AC dùng chung cho Phát T4 và Phát T9.
+	 */
+	public static function get_product_columns() {
+		return array(
+			'E'  => 'Áo phông cộc tay',
+			'F'  => 'Quần CN',
+			'G'  => 'Áo XLNT',
+			'H'  => 'Áo phông tím cộc tay',
+			'I'  => 'Áo kỹ thuật',
+			'J'  => 'Quần kỹ thuật',
+			'K'  => 'Áo khoác kỹ thuật',
+			'L'  => 'Áo khoác CN',
+			'M'  => 'Áo phao',
+			'N'  => 'Mũ hồng',
+			'O'  => 'Mũ phối trắng',
+			'P'  => 'Mũ phối ghi',
+			'Q'  => 'Mũ phối hồng',
+			'R'  => 'Mũ phối tím',
+			'S'  => 'Mũ phối xanh biển',
+			'T'  => 'Mũ phối xi măng',
+			'U'  => 'Mũ phối trắng ngà',
+			'V'  => 'Mũ phối xanh lá',
+			'W'  => 'Mũ Xanh lá',
+			'X'  => 'Mũ xanh biển',
+			'Y'  => 'Mũ đỏ',
+			'Z'  => 'Giầy KPR O-775',
+			'AA' => 'Giầy KPR O-010',
+			'AB' => 'Giầy Simon TS5511',
+			'AC' => 'Giầy Simon TS7011',
+		);
+	}
 
 	public static function analyze( $file_path, $file_name ) {
 		$reader = new UMS_XLSX_Reader( $file_path );
@@ -51,14 +70,15 @@ class UMS_Annual_Allowance_Import {
 		}
 		unset( $rule );
 
-		$product_names = array_values( array_unique( array_column( $rules, 'source_product_name' ) ) );
-		sort( $product_names, SORT_NATURAL | SORT_FLAG_CASE );
+		$product_names = array_values( self::get_product_columns() );
+		$used_product_names = array_values( array_unique( array_column( $rules, 'source_product_name' ) ) );
 
 		return array(
 			'file_name'     => sanitize_file_name( $file_name ),
 			'file_hash'     => hash_file( 'sha256', $file_path ),
 			'rules'         => array_values( $rules ),
 			'product_names' => $product_names,
+			'used_product_names' => $used_product_names,
 			'errors'        => array_values( array_unique( $errors ) ),
 			'summary'       => self::build_summary( $rules ),
 		);
@@ -84,7 +104,10 @@ class UMS_Annual_Allowance_Import {
 		$errors = array();
 		$mapped = array();
 
-		foreach ( $preview['product_names'] as $product_name ) {
+		$required_products = isset( $preview['used_product_names'] ) && is_array( $preview['used_product_names'] )
+			? $preview['used_product_names']
+			: $preview['product_names'];
+		foreach ( $required_products as $product_name ) {
 			$map_key     = hash( 'sha256', $product_name );
 			$mapping_raw = isset( $mappings[ $map_key ] ) ? sanitize_text_field( $mappings[ $map_key ] ) : '';
 			$parts       = explode( '|', $mapping_raw, 2 );
@@ -174,79 +197,114 @@ class UMS_Annual_Allowance_Import {
 			return;
 		}
 
-		$header   = $rows[ $config['header'] ];
-		$products = array();
-		for ( $column = self::column_number( $config['product_start'] ); $column <= self::column_number( $config['product_end'] ); $column++ ) {
-			$letter = self::column_name( $column );
-			if ( ! empty( $header[ $letter ] ) ) {
-				$products[ $letter ] = self::normalize_space( $header[ $letter ] );
+		$layout = self::discover_sheet_layout( $rows[ $config['header'] ] );
+		if ( empty( $layout['department'] ) || empty( $layout['position'] ) || empty( $layout['products'] ) ) {
+			$errors[] = 'Sheet ' . $sheet_name . ' thiếu cột Bộ phận, Vị trí hoặc các cột sản phẩm.';
+			return;
+		}
+		$products = self::get_product_columns();
+		foreach ( $products as $column => $product_name ) {
+			$actual_header = self::normalize_space( $rows[ $config['header'] ][ $column ] ?? '' );
+			if ( self::normalize_header( $actual_header ) !== self::normalize_header( $product_name ) ) {
+				$errors[] = sprintf( 'Sheet %s cột %s phải là "%s".', $sheet_name, $column, $product_name );
 			}
 		}
 
 		foreach ( $rows as $row_number => $row ) {
-			if ( $row_number < $config['start'] || empty( $row[ $config['department'] ] ) ) {
+			if ( $row_number < $config['start'] || empty( $row[ $layout['department'] ] ) ) {
 				continue;
 			}
 
 			$condition = array(
-				'department' => self::normalize_space( $row[ $config['department'] ] ),
-				'team' => $config['team'] !== '' ? self::normalize_space( $row[ $config['team'] ] ?? '' ) : '',
-				'cost_center' => $config['cost_center'] !== '' ? self::normalize_space( $row[ $config['cost_center'] ] ?? '' ) : '',
-				'position_code' => $config['position'] !== '' ? UMS_DB_Annual_Allowance::normalize_position_code( $row[ $config['position'] ] ?? '' ) : '',
+				'department' => self::normalize_space( $row[ $layout['department'] ] ),
+				'team' => $layout['team'] !== '' ? self::normalize_space( $row[ $layout['team'] ] ?? '' ) : '',
+				'cost_center' => $layout['cost_center'] !== '' ? self::normalize_space( $row[ $layout['cost_center'] ] ?? '' ) : '',
+				'position_code' => UMS_DB_Annual_Allowance::normalize_position_code( $row[ $layout['position'] ] ?? '' ),
 			);
-			$period = isset( $config['period'] ) ? self::parse_period( $row[ $config['period'] ] ?? '' ) : array( '', '' );
-			if ( $config['scope'] !== 'annual' && ( $period[0] === '' || $period[1] === '' ) ) {
-				$errors[] = $sheet_name . ' dòng ' . $row_number . ' thiếu khoảng ngày nhận việc hợp lệ.';
-				continue;
-			}
+			$period = array( '', '' );
 			$position_codes = array_filter( array_map( 'trim', explode( ',', $condition['position_code'] ) ) );
 			if ( empty( $position_codes ) ) {
 				$position_codes = array( '' );
 			}
 
 			foreach ( $position_codes as $position_code ) {
-			foreach ( $products as $column => $product_name ) {
-				$quantity = isset( $row[ $column ] ) && is_numeric( $row[ $column ] ) ? max( 0, (int) $row[ $column ] ) : 0;
-				if ( $quantity <= 0 ) {
-					continue;
-				}
-
-				$key = implode( '|', array( $config['scope'], $condition['department'], $condition['team'], $condition['cost_center'], $position_code, $period[0], $period[1], $product_name ) );
-				if ( ! isset( $rules[ $key ] ) ) {
-					$rule_condition                  = $condition;
-					$rule_condition['position_code'] = $position_code;
-					$rules[ $key ] = array_merge(
-						$rule_condition,
-						array(
-							'rule_scope' => $config['scope'], 'apply_type' => 'product', 'category_id' => 0,
-							'item_id' => 0, 'item_variant' => '', 'source_product_name' => $product_name,
-							'target_type' => 'organization', 'position_id' => 0,
-							'employment_start_md' => $period[0], 'employment_end_md' => $period[1],
-							'eligibility_note' => isset( $config['note'] ) && $config['note'] !== '' ? self::normalize_space( $row[ $config['note'] ] ?? '' ) : '',
-							'frequency_count' => 1, 'frequency_years' => $config['scope'] === 'annual' ? 1 : 100,
-							'monthly_quantities' => array_fill( 1, 12, 0 ), 'priority' => self::scope_priority( $config['scope'] ),
-							'is_active' => 1, 'source_sheet' => $sheet_name, 'source_row' => $row_number,
-						)
-					);
-				}
-
-				if ( isset( $config['months'] ) && $config['months'] === 'all' ) {
-					for ( $month = 1; $month <= 12; $month++ ) {
-						$rules[ $key ]['monthly_quantities'][ $month ] = $quantity;
+				foreach ( $products as $column => $product_name ) {
+					$quantity = isset( $row[ $column ] ) && is_numeric( $row[ $column ] ) ? max( 0, (int) $row[ $column ] ) : 0;
+					if ( $quantity <= 0 ) {
+						continue;
 					}
-				} else {
+
+					$key = implode( '|', array( $config['scope'], $condition['department'], $condition['team'], $condition['cost_center'], $position_code, $period[0], $period[1], $product_name ) );
+					if ( ! isset( $rules[ $key ] ) ) {
+						$rule_condition                  = $condition;
+						$rule_condition['position_code'] = $position_code;
+						$rules[ $key ] = array_merge(
+							$rule_condition,
+							array(
+								'rule_scope' => $config['scope'], 'apply_type' => 'product', 'category_id' => 0,
+								'item_id' => 0, 'item_variant' => '', 'source_product_name' => $product_name,
+								'target_type' => 'organization', 'position_id' => 0,
+								'employment_start_md' => $period[0], 'employment_end_md' => $period[1],
+								'eligibility_note' => $layout['note'] !== '' ? self::normalize_space( $row[ $layout['note'] ] ?? '' ) : '',
+								'frequency_count' => 1, 'frequency_years' => 1,
+								'monthly_quantities' => array_fill( 1, 12, 0 ), 'priority' => self::scope_priority( $config['scope'] ),
+								'is_active' => 1, 'source_sheet' => $sheet_name, 'source_row' => $row_number,
+							)
+						);
+					}
+
 					$rules[ $key ]['monthly_quantities'][ $config['month'] ] = $quantity;
 				}
-			}
 			}
 		}
 	}
 
-	private static function parse_period( $value ) {
-		if ( preg_match( '/(\d{1,2})\/(\d{1,2})\s*-\s*(\d{1,2})\/(\d{1,2})/', (string) $value, $matches ) ) {
-			return array( sprintf( '%02d-%02d', $matches[2], $matches[1] ), sprintf( '%02d-%02d', $matches[4], $matches[3] ) );
+	/**
+	 * Tự nhận diện cột nghiệp vụ; mọi cột tiêu đề còn lại là sản phẩm.
+	 */
+	private static function discover_sheet_layout( $header ) {
+		$layout = array(
+			'department' => '',
+			'team'        => '',
+			'cost_center' => '',
+			'position'    => '',
+			'note'        => '',
+			'products'    => array(),
+		);
+		$field_aliases = array(
+			'department' => array( 'bo phan', 'phong' ),
+			'team'        => array( 'nhom' ),
+			'cost_center' => array( 'code center', 'cost center', 'ma cost center' ),
+			'position'    => array( 'vi tri', 'chuc vu', 'chuc danh' ),
+			'note'        => array( 'luu y', 'ghi chu' ),
+		);
+
+		foreach ( $header as $column => $label ) {
+			$label = self::normalize_space( $label );
+			if ( $label === '' ) {
+				continue;
+			}
+			$normalized = self::normalize_header( $label );
+			$matched = false;
+			foreach ( $field_aliases as $field => $aliases ) {
+				if ( in_array( $normalized, $aliases, true ) ) {
+					$layout[ $field ] = $column;
+					$matched = true;
+					break;
+				}
+			}
+			if ( ! $matched ) {
+				$layout['products'][ $column ] = $label;
+			}
 		}
-		return array( '', '' );
+
+		return $layout;
+	}
+
+	private static function normalize_header( $value ) {
+		$value = function_exists( 'remove_accents' ) ? remove_accents( $value ) : $value;
+		$value = strtolower( self::normalize_space( $value ) );
+		return trim( preg_replace( '/[^a-z0-9]+/', ' ', $value ) );
 	}
 
 	private static function build_summary( $rules ) {
@@ -267,21 +325,4 @@ class UMS_Annual_Allowance_Import {
 		return trim( preg_replace( '/\s+/u', ' ', (string) $value ) );
 	}
 
-	private static function column_number( $letters ) {
-		$number = 0;
-		for ( $index = 0; $index < strlen( $letters ); $index++ ) {
-			$number = $number * 26 + ord( $letters[ $index ] ) - 64;
-		}
-		return $number;
-	}
-
-	private static function column_name( $number ) {
-		$name = '';
-		while ( $number > 0 ) {
-			$number--;
-			$name   = chr( 65 + ( $number % 26 ) ) . $name;
-			$number = (int) floor( $number / 26 );
-		}
-		return $name;
-	}
 }
