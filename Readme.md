@@ -99,6 +99,8 @@ Trang `Định mức năm` hỗ trợ import trực tiếp file `.xlsx` theo tem
 
 Form thêm/sửa thủ công bám đúng ma trận của hai sheet: Bộ phận, Nhóm, Code center, Vị trí, Sản phẩm, số lượng Tháng 4, số lượng Tháng 9, Lưu ý và Trạng thái. Khóa rule được sinh chung với dữ liệu import để tầng kiểm tra định mức xử lý thống nhất.
 
+Danh sách định mức được trình bày bằng hai jqxGrid độc lập cho Tháng 4 và Tháng 9. Hai bảng giữ cùng các cột tổ chức và 25 cột sản phẩm E:AC, nhưng mỗi ô chỉ hiển thị số lượng của tháng tương ứng.
+
 Importer chỉ đọc hai sheet định mức chính và giữ cố định 25 cột sản phẩm từ `E` đến `AC`:
 
 - `Phát T4`: định mức định kỳ tháng 4.

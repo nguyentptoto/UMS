@@ -11,8 +11,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $is_editing = ! empty( $editing_rule );
 $page_url   = admin_url( 'admin.php?page=tvn-ums-annual-allowances' );
-$grid_rows  = array();
-$matrix_rows = array();
+$grid_rows_april     = array();
+$grid_rows_september = array();
+$matrix_rows         = array();
 $normalize_product = function( $value ) {
 	return strtolower( remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) ) );
 };
@@ -33,16 +34,33 @@ foreach ( $rules as $rule ) {
 			'status' => (int) $rule['is_active'] === 1 ? 'Đang áp dụng' : 'Ngừng áp dụng',
 		);
 		foreach ( $allowance_product_columns as $column => $unused ) {
-			$matrix_rows[ $row_key ][ 'product_' . strtolower( $column ) ] = '-';
+			$product_field = 'product_' . strtolower( $column );
+			$matrix_rows[ $row_key ][ $product_field . '_april' ]     = '-';
+			$matrix_rows[ $row_key ][ $product_field . '_september' ] = '-';
 		}
 	}
-	$source_product = (string) ( $rule['source_product_name'] ?: $rule['item_variant'] );
+	$source_product = ! empty( $rule['source_product_name'] ) ? (string) $rule['source_product_name'] : (string) $rule['item_variant'];
 	$normalized_product = $normalize_product( $source_product );
 	if ( isset( $product_fields[ $normalized_product ] ) ) {
-		$matrix_rows[ $row_key ][ $product_fields[ $normalized_product ] ] = absint( $monthly_quantities[4] ?? 0 ) . ' / ' . absint( $monthly_quantities[9] ?? 0 );
+		$product_field = $product_fields[ $normalized_product ];
+		$matrix_rows[ $row_key ][ $product_field . '_april' ]     = absint( $monthly_quantities[4] ?? 0 );
+		$matrix_rows[ $row_key ][ $product_field . '_september' ] = absint( $monthly_quantities[9] ?? 0 );
 	}
 }
-$grid_rows = array_values( $matrix_rows );
+
+foreach ( $matrix_rows as $matrix_row ) {
+	$april_row     = $matrix_row;
+	$september_row = $matrix_row;
+	foreach ( $allowance_product_columns as $column => $unused ) {
+		$product_field = 'product_' . strtolower( $column );
+		$april_row[ $product_field ]     = $matrix_row[ $product_field . '_april' ];
+		$september_row[ $product_field ] = $matrix_row[ $product_field . '_september' ];
+		unset( $april_row[ $product_field . '_april' ], $april_row[ $product_field . '_september' ] );
+		unset( $september_row[ $product_field . '_april' ], $september_row[ $product_field . '_september' ] );
+	}
+	$grid_rows_april[]     = $april_row;
+	$grid_rows_september[] = $september_row;
+}
 
 $grid_columns = array(
 	array( 'text' => 'Bộ phận', 'datafield' => 'department', 'width' => 220, 'pinned' => true ),
@@ -131,8 +149,8 @@ $grid_columns[] = array( 'text' => 'Trạng thái', 'datafield' => 'status', 'wi
 	<?php endif; ?>
 
 	<div class="ums-panel">
-		<h2>Ma trận định mức Tháng 4 / Tháng 9</h2>
-		<p class="description">Mỗi ô sản phẩm hiển thị theo thứ tự <strong>Tháng 4 / Tháng 9</strong>.</p>
+		<h2>Danh sách định mức cấp phát</h2>
+		<p class="description">Dữ liệu Tháng 4 và Tháng 9 được tách thành hai bảng để dễ theo dõi.</p>
 		<form method="get" class="ums-filter-bar">
 			<input type="hidden" name="page" value="tvn-ums-annual-allowances">
 
@@ -159,10 +177,19 @@ $grid_columns[] = array( 'text' => 'Trạng thái', 'datafield' => 'status', 'wi
 			<a href="<?php echo esc_url( $page_url ); ?>" class="button button-link">Xóa lọc</a>
 		</form>
 
+		<h2>1. Định mức cấp phát Tháng 4</h2>
 		<div
-			id="ums-annual-allowance-grid"
+			id="ums-annual-allowance-grid-april"
 			class="ums-jqx-grid"
-			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows ) ); ?>"
+			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_april ) ); ?>"
+			data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
+		></div>
+
+		<h2 style="margin-top:28px;">2. Định mức cấp phát Tháng 9</h2>
+		<div
+			id="ums-annual-allowance-grid-september"
+			class="ums-jqx-grid"
+			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_september ) ); ?>"
 			data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
 		></div>
 	</div>
