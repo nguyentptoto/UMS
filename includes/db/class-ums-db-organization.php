@@ -83,7 +83,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 	}
 
 	public static function get_distinct_values( $column ) {
-		$allowed = array( 'division', 'department', 'factory' );
+		$allowed = array( 'division', 'department', 'section', 'team', 'position', 'cost_center', 'factory' );
 		if ( ! in_array( $column, $allowed, true ) ) {
 			return array();
 		}

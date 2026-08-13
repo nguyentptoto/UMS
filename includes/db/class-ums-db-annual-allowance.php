@@ -371,6 +371,33 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	}
 
 	/**
+	 * Sinh khóa ổn định cho cả rule nhập thủ công và rule import Excel.
+	 */
+	public static function build_rule_key( $rule ) {
+		return hash(
+			'sha256',
+			implode(
+				'|',
+				array(
+					$rule['rule_scope'] ?? 'annual',
+					$rule['apply_type'] ?? 'item',
+					absint( $rule['category_id'] ?? 0 ),
+					absint( $rule['item_id'] ?? 0 ),
+					$rule['item_variant'] ?? '',
+					$rule['target_type'] ?? 'all',
+					absint( $rule['position_id'] ?? 0 ),
+					$rule['department'] ?? '',
+					$rule['team'] ?? '',
+					$rule['cost_center'] ?? '',
+					self::normalize_position_code( $rule['position_code'] ?? '' ),
+					$rule['employment_start_md'] ?? '',
+					$rule['employment_end_md'] ?? '',
+				)
+			)
+		);
+	}
+
+	/**
 	 * Tạo context kiểm tra định mức từ hồ sơ và Sơ đồ tổ chức TVN.
 	 */
 	public static function get_employee_context( $profile ) {

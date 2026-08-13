@@ -125,7 +125,7 @@ class UMS_Annual_Allowance_Import {
 			$rule['category_id']    = $product['category_id'];
 			$rule['item_variant']    = $product['item_variant'];
 			$rule['source_batch_id'] = $batch_id;
-			$rule['rule_key']        = self::build_rule_key( $rule );
+			$rule['rule_key']        = UMS_DB_Annual_Allowance::build_rule_key( $rule );
 			unset( $rule['source_sheet'], $rule['source_row'] );
 			$prepared_rules[] = $rule;
 		}
@@ -240,13 +240,6 @@ class UMS_Annual_Allowance_Import {
 			}
 			}
 		}
-	}
-
-	private static function build_rule_key( $rule ) {
-		return hash( 'sha256', implode( '|', array(
-			$rule['rule_scope'], $rule['category_id'], $rule['item_variant'], $rule['department'], $rule['team'],
-			$rule['cost_center'], $rule['position_code'], $rule['employment_start_md'], $rule['employment_end_md'],
-		) ) );
 	}
 
 	private static function parse_period( $value ) {

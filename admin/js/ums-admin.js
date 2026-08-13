@@ -49,6 +49,60 @@
         });
     }
 
+    function initializeAnnualAllowanceConditionFields() {
+        $('[data-ums-annual-target-type]').each(function () {
+            var $targetType = $(this);
+            var $form = $targetType.closest('form');
+            var $fields = $form.find('[data-ums-annual-target-field]');
+
+            function updateTargetFields() {
+                var selectedType = $targetType.val();
+                $fields.each(function () {
+                    var $field = $(this);
+                    var isActive = $field.attr('data-ums-annual-target-field') === selectedType;
+                    $field.prop('hidden', !isActive);
+                    $field.find(':input').prop('disabled', !isActive);
+                });
+                $form.find('[data-ums-annual-target-field="position"] select').prop('required', selectedType === 'position');
+            }
+
+            $targetType.on('change', updateTargetFields);
+            updateTargetFields();
+        });
+
+        $('[data-ums-annual-rule-scope]').each(function () {
+            var $scope = $(this);
+            var $form = $scope.closest('form');
+            var $fields = $form.find('[data-ums-annual-newcomer-fields]');
+
+            function updateScopeFields() {
+                var isNewcomer = $scope.val() === 'newcomer' || $scope.val() === 'newcomer_september';
+                var priorityByScope = { annual: 100, newcomer: 200, newcomer_september: 300 };
+                var $priority = $form.find('[data-ums-annual-priority]');
+                var $frequencyYears = $form.find('[data-ums-annual-frequency-years]');
+                var previousScope = $scope.data('previous-scope') || 'annual';
+                var currentPriority = parseInt($priority.val(), 10);
+                var currentFrequencyYears = parseInt($frequencyYears.val(), 10);
+
+                $fields.prop('hidden', !isNewcomer);
+                $fields.find(':input').prop('disabled', !isNewcomer).prop('required', isNewcomer);
+
+                if (currentPriority === priorityByScope[previousScope]) {
+                    $priority.val(priorityByScope[$scope.val()]);
+                }
+                if ((previousScope === 'annual' && currentFrequencyYears === 1) ||
+                    (previousScope !== 'annual' && currentFrequencyYears === 100)) {
+                    $frequencyYears.val(isNewcomer ? 100 : 1);
+                }
+                $scope.data('previous-scope', $scope.val());
+            }
+
+            $scope.data('previous-scope', $scope.val());
+            $scope.on('change', updateScopeFields);
+            updateScopeFields();
+        });
+    }
+
     function initializeOrganizationGrid() {
         $('.ums-jqx-remote-grid').each(function () {
             var $grid = $(this);
@@ -315,6 +369,7 @@
     $(function () {
         initializeApprovalStepOrder();
         initializeAnnualAllowanceApplyFields();
+        initializeAnnualAllowanceConditionFields();
         initializeOrganizationGrid();
         initializeSheetSyncBridge();
 

@@ -216,7 +216,7 @@ class UMS_Admin {
             'ums-admin-js', 
             UMS_PLUGIN_URL . 'admin/js/ums-admin.js', 
             array( 'jquery', 'ums-jqx-all' ),
-            '1.1.0',
+            '1.2.0',
             true 
         );
 
@@ -431,6 +431,11 @@ class UMS_Admin {
         $preview_token = isset( $_GET['preview_token'] ) ? sanitize_key( wp_unslash( $_GET['preview_token'] ) ) : '';
         $import_preview = $preview_token !== '' ? UMS_Annual_Allowance_Import::get_preview( $preview_token ) : null;
         $product_groups = UMS_DB_Inventory::get_product_groups();
+        $organization_ready = UMS_DB_Organization::table_exists();
+        $organization_departments = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'department' ) : array();
+        $organization_teams = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'team' ) : array();
+        $organization_cost_centers = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'cost_center' ) : array();
+        $organization_positions = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'position' ) : array();
         $allowance_import_ready = UMS_DB_Annual_Allowance::is_import_ready();
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php' ) ) {
@@ -1728,21 +1733,45 @@ class UMS_Admin {
             $monthly_quantities[ $month ] = isset( $raw_months[ $month ] ) ? max( 0, absint( $raw_months[ $month ] ) ) : 0;
         }
 
-        $target_type = isset( $raw['target_type'] ) ? sanitize_key( $raw['target_type'] ) : 'all';
-        $apply_type  = isset( $raw['apply_type'] ) ? sanitize_key( $raw['apply_type'] ) : 'item';
+        $target_type = isset( $raw['target_type'] ) ? sanitize_key( $raw['target_type'] ) : 'organization';
+        $apply_type  = isset( $raw['apply_type'] ) ? sanitize_key( $raw['apply_type'] ) : 'product';
+        $product     = isset( $raw['product_group'] ) ? explode( '|', sanitize_text_field( $raw['product_group'] ), 2 ) : array();
+        $rule_scope  = isset( $raw['rule_scope'] ) ? sanitize_key( $raw['rule_scope'] ) : 'annual';
+        $category_id = $apply_type === 'category' && isset( $raw['category_id'] ) ? absint( $raw['category_id'] ) : 0;
+        $item_id     = $apply_type === 'item' && isset( $raw['item_id'] ) ? absint( $raw['item_id'] ) : 0;
+        $item_variant = '';
 
-        return array(
+        if ( $apply_type === 'product' && count( $product ) === 2 ) {
+            $category_id = absint( $product[0] );
+            $item_variant = sanitize_text_field( $product[1] );
+        }
+
+        $data = array(
             'rule_id'            => isset( $raw['rule_id'] ) ? absint( $raw['rule_id'] ) : 0,
+            'rule_scope'         => $rule_scope,
             'apply_type'         => $apply_type,
-            'category_id'        => $apply_type === 'category' && isset( $raw['category_id'] ) ? absint( $raw['category_id'] ) : 0,
-            'item_id'            => $apply_type === 'item' && isset( $raw['item_id'] ) ? absint( $raw['item_id'] ) : 0,
+            'category_id'        => $category_id,
+            'item_id'            => $item_id,
+            'item_variant'       => $item_variant,
+            'source_product_name'=> $item_variant,
             'target_type'        => $target_type,
             'position_id'        => $target_type === 'position' && isset( $raw['position_id'] ) ? absint( $raw['position_id'] ) : 0,
+            'department'         => $target_type === 'organization' && isset( $raw['department'] ) ? sanitize_text_field( $raw['department'] ) : '',
+            'team'               => $target_type === 'organization' && isset( $raw['team'] ) ? sanitize_text_field( $raw['team'] ) : '',
+            'cost_center'        => $target_type === 'organization' && isset( $raw['cost_center'] ) ? sanitize_text_field( $raw['cost_center'] ) : '',
+            'position_code'      => $target_type === 'organization' && isset( $raw['position_code'] ) ? UMS_DB_Annual_Allowance::normalize_position_code( sanitize_text_field( $raw['position_code'] ) ) : '',
+            'employment_start_md'=> in_array( $rule_scope, array( 'newcomer', 'newcomer_september' ), true ) && isset( $raw['employment_start_md'] ) ? sanitize_text_field( $raw['employment_start_md'] ) : '',
+            'employment_end_md'  => in_array( $rule_scope, array( 'newcomer', 'newcomer_september' ), true ) && isset( $raw['employment_end_md'] ) ? sanitize_text_field( $raw['employment_end_md'] ) : '',
+            'eligibility_note'   => isset( $raw['eligibility_note'] ) ? sanitize_text_field( $raw['eligibility_note'] ) : '',
             'frequency_count'    => isset( $raw['frequency_count'] ) ? max( 1, absint( $raw['frequency_count'] ) ) : 1,
             'frequency_years'    => isset( $raw['frequency_years'] ) ? max( 1, absint( $raw['frequency_years'] ) ) : 1,
             'monthly_quantities' => wp_json_encode( $monthly_quantities ),
+            'priority'           => isset( $raw['priority'] ) ? (int) $raw['priority'] : ( $rule_scope === 'newcomer_september' ? 300 : ( $rule_scope === 'newcomer' ? 200 : 100 ) ),
             'is_active'          => ! empty( $raw['is_active'] ) ? 1 : 0,
         );
+
+        $data['rule_key'] = UMS_DB_Annual_Allowance::build_rule_key( $data );
+        return $data;
     }
 
     private static function normalize_money_value( $value ) {
@@ -2023,7 +2052,11 @@ class UMS_Admin {
             $errors[] = 'Không tìm thấy định mức cần cập nhật.';
         }
 
-        if ( ! in_array( $data['apply_type'], array( 'category', 'item' ), true ) ) {
+        if ( ! in_array( $data['rule_scope'], array( 'annual', 'newcomer', 'newcomer_september' ), true ) ) {
+            $errors[] = 'Loại định mức không hợp lệ.';
+        }
+
+        if ( ! in_array( $data['apply_type'], array( 'category', 'item', 'product' ), true ) ) {
             $errors[] = 'Kiểu áp dụng định mức không hợp lệ.';
         }
 
@@ -2035,12 +2068,26 @@ class UMS_Admin {
             $errors[] = 'Vui lòng chọn sản phẩm hợp lệ.';
         }
 
-        if ( ! in_array( $data['target_type'], array( 'all', 'position' ), true ) ) {
+        if ( $data['apply_type'] === 'product' && ( $data['category_id'] <= 0 || $data['item_variant'] === '' || ! UMS_DB_Inventory::product_group_exists( $data['category_id'], $data['item_variant'] ) ) ) {
+            $errors[] = 'Vui lòng chọn sản phẩm áp dụng hợp lệ.';
+        }
+
+        if ( ! in_array( $data['target_type'], array( 'all', 'position', 'organization' ), true ) ) {
             $errors[] = 'Đối tượng áp dụng không hợp lệ.';
         }
 
         if ( $data['target_type'] === 'position' && ( $data['position_id'] <= 0 || ! UMS_DB_Position::get_by_id( $data['position_id'] ) ) ) {
             $errors[] = 'Vui lòng chọn chức vụ áp dụng hợp lệ.';
+        }
+
+        if ( $data['target_type'] === 'organization' && $data['department'] === '' && $data['team'] === '' && $data['cost_center'] === '' && $data['position_code'] === '' ) {
+            $errors[] = 'Vui lòng nhập ít nhất một điều kiện tổ chức.';
+        }
+
+        if ( in_array( $data['rule_scope'], array( 'newcomer', 'newcomer_september' ), true ) ) {
+            if ( ! preg_match( '/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/', $data['employment_start_md'] ) || ! preg_match( '/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/', $data['employment_end_md'] ) ) {
+                $errors[] = 'Khoảng ngày vào làm phải đúng định dạng MM-DD.';
+            }
         }
 
         if ( $data['frequency_count'] <= 0 || $data['frequency_years'] <= 0 ) {
@@ -2347,13 +2394,23 @@ class UMS_Admin {
 
         $defaults = array(
             'rule_id'            => 0,
-            'apply_type'         => 'item',
+            'rule_scope'         => 'annual',
+            'apply_type'         => 'product',
             'category_id'        => 0,
             'item_id'            => 0,
-            'target_type'        => 'all',
+            'item_variant'       => '',
+            'target_type'        => 'organization',
             'position_id'        => 0,
+            'department'         => '',
+            'team'               => '',
+            'cost_center'        => '',
+            'position_code'      => '',
+            'employment_start_md'=> '',
+            'employment_end_md'  => '',
+            'eligibility_note'   => '',
             'frequency_count'    => 1,
             'frequency_years'    => 1,
+            'priority'           => 100,
             'monthly_quantities' => $monthly_quantities,
             'is_active'          => 1,
         );
@@ -2372,6 +2429,9 @@ class UMS_Admin {
                 : 0;
         }
         $values['monthly_quantities'] = $normalised_months;
+        $values['product_group'] = $values['apply_type'] === 'product'
+            ? absint( $values['category_id'] ) . '|' . (string) $values['item_variant']
+            : '';
 
         return $values;
     }

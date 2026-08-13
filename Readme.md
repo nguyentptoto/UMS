@@ -95,7 +95,9 @@ Khi user tạo hoặc sửa phiếu, hệ thống kiểm tra định mức trư�
 
 ### Import định mức từ Excel
 
-Trang `Định mức năm` hỗ trợ import trực tiếp file `.xlsx` theo template quản lý đồng phục. Trước khi sử dụng, chạy phần nâng cấp bảng định mức và bảng `wp_uniform_allowance_import_batches` trong `ums.sql`.
+Trang `Định mức năm` hỗ trợ import trực tiếp file `.xlsx` theo template quản lý đồng phục. Khi cài mới, import toàn bộ file `ums.sql`; bảng định mức linh hoạt và bảng `wp_uniform_allowance_import_batches` đã có sẵn trong cấu trúc hoàn chỉnh.
+
+Form thêm/sửa thủ công dùng cùng schema với dữ liệu import: loại định mức định kỳ/New Comer, sản phẩm mọi size, điều kiện Phòng/Nhóm/Cost center/Vị trí, khoảng ngày vào làm, độ ưu tiên, tần suất và số lượng theo tháng. Khóa rule cũng được sinh chung để tầng kiểm tra định mức xử lý thống nhất.
 
 Các sheet được đọc:
 

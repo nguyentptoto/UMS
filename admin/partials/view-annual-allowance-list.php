@@ -287,10 +287,20 @@ $grid_columns = array(
 
 			<div class="ums-form-grid">
 				<label>
+					<span>Loại định mức <b>*</b></span>
+					<select name="ums_annual_allowance[rule_scope]" data-ums-annual-rule-scope required>
+						<option value="annual" <?php selected( $form_values['rule_scope'], 'annual' ); ?>>Định kỳ</option>
+						<option value="newcomer" <?php selected( $form_values['rule_scope'], 'newcomer' ); ?>>CNV mới (New Comer)</option>
+						<option value="newcomer_september" <?php selected( $form_values['rule_scope'], 'newcomer_september' ); ?>>Cấp bù tháng 9 cho CNV mới</option>
+					</select>
+				</label>
+
+				<label>
 					<span>Kiểu áp dụng <b>*</b></span>
 					<select name="ums_annual_allowance[apply_type]" data-ums-annual-apply-type required>
 						<option value="category" <?php selected( $form_values['apply_type'], 'category' ); ?>>Theo danh mục</option>
-						<option value="item" <?php selected( $form_values['apply_type'], 'item' ); ?>>Theo sản phẩm cố định</option>
+						<option value="product" <?php selected( $form_values['apply_type'], 'product' ); ?>>Theo sản phẩm (mọi size)</option>
+						<option value="item" <?php selected( $form_values['apply_type'], 'item' ); ?>>Theo sản phẩm và size cố định</option>
 					</select>
 				</label>
 
@@ -305,6 +315,23 @@ $grid_columns = array(
 						<?php foreach ( $categories as $category ) : ?>
 							<option value="<?php echo esc_attr( $category['category_id'] ); ?>" <?php selected( (int) $form_values['category_id'], (int) $category['category_id'] ); ?>>
 								<?php echo esc_html( $build_category_label( $category ) ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+
+				<label
+					class="ums-field-wide ums-conditional-field"
+					data-ums-annual-apply-field="product"
+					<?php echo $form_values['apply_type'] === 'product' ? '' : 'hidden'; ?>
+				>
+					<span>Sản phẩm áp dụng</span>
+					<select name="ums_annual_allowance[product_group]" <?php echo $form_values['apply_type'] === 'product' ? 'required' : 'disabled'; ?>>
+						<option value="">Chọn sản phẩm áp dụng cho toàn bộ size</option>
+						<?php foreach ( $product_groups as $product_group ) : ?>
+							<?php $product_value = absint( $product_group['category_id'] ) . '|' . $product_group['item_variant']; ?>
+							<option value="<?php echo esc_attr( $product_value ); ?>" <?php selected( $form_values['product_group'], $product_value ); ?>>
+								<?php echo esc_html( $product_group['category_name'] . ' / ' . $product_group['item_variant'] ); ?>
 							</option>
 						<?php endforeach; ?>
 					</select>
@@ -328,15 +355,16 @@ $grid_columns = array(
 
 				<label>
 					<span>Đối tượng áp dụng <b>*</b></span>
-					<select name="ums_annual_allowance[target_type]" required>
+					<select name="ums_annual_allowance[target_type]" data-ums-annual-target-type required>
 						<option value="all" <?php selected( $form_values['target_type'], 'all' ); ?>>Toàn bộ</option>
 						<option value="position" <?php selected( $form_values['target_type'], 'position' ); ?>>Theo chức vụ</option>
+						<option value="organization" <?php selected( $form_values['target_type'], 'organization' ); ?>>Theo sơ đồ tổ chức TVN</option>
 					</select>
 				</label>
 
-				<label>
+				<label data-ums-annual-target-field="position" <?php echo $form_values['target_type'] === 'position' ? '' : 'hidden'; ?>>
 					<span>Chức vụ áp dụng</span>
-					<select name="ums_annual_allowance[position_id]">
+					<select name="ums_annual_allowance[position_id]" <?php echo $form_values['target_type'] === 'position' ? 'required' : 'disabled'; ?>>
 						<option value="">Chọn khi đối tượng là chức vụ</option>
 						<?php foreach ( $positions as $position ) : ?>
 							<option value="<?php echo esc_attr( $position['position_id'] ); ?>" <?php selected( (int) $form_values['position_id'], (int) $position['position_id'] ); ?>>
@@ -346,6 +374,67 @@ $grid_columns = array(
 					</select>
 				</label>
 
+				<div class="ums-field-wide ums-form-grid" data-ums-annual-target-field="organization" <?php echo $form_values['target_type'] === 'organization' ? '' : 'hidden'; ?>>
+					<label>
+						<span>Phòng</span>
+						<input type="text" name="ums_annual_allowance[department]" value="<?php echo esc_attr( $form_values['department'] ); ?>" list="ums-allowance-departments" placeholder="Để trống nếu áp dụng mọi phòng">
+						<datalist id="ums-allowance-departments">
+							<?php foreach ( $organization_departments as $department ) : ?>
+								<option value="<?php echo esc_attr( $department ); ?>">
+							<?php endforeach; ?>
+						</datalist>
+					</label>
+					<label>
+						<span>Nhóm</span>
+						<input type="text" name="ums_annual_allowance[team]" value="<?php echo esc_attr( $form_values['team'] ); ?>" list="ums-allowance-teams" placeholder="Để trống nếu áp dụng mọi nhóm">
+						<datalist id="ums-allowance-teams">
+							<?php foreach ( $organization_teams as $team ) : ?>
+								<option value="<?php echo esc_attr( $team ); ?>">
+							<?php endforeach; ?>
+						</datalist>
+					</label>
+					<label>
+						<span>Mã cost center</span>
+						<input type="text" name="ums_annual_allowance[cost_center]" value="<?php echo esc_attr( $form_values['cost_center'] ); ?>" list="ums-allowance-cost-centers">
+						<datalist id="ums-allowance-cost-centers">
+							<?php foreach ( $organization_cost_centers as $cost_center ) : ?>
+								<option value="<?php echo esc_attr( $cost_center ); ?>">
+							<?php endforeach; ?>
+						</datalist>
+					</label>
+					<label>
+						<span>Vị trí</span>
+						<input type="text" name="ums_annual_allowance[position_code]" value="<?php echo esc_attr( $form_values['position_code'] ); ?>" list="ums-allowance-positions" placeholder="Ví dụ: WK, FM, SV">
+						<datalist id="ums-allowance-positions">
+							<?php foreach ( $organization_positions as $position_code ) : ?>
+								<option value="<?php echo esc_attr( $position_code ); ?>">
+							<?php endforeach; ?>
+						</datalist>
+					</label>
+				</div>
+
+				<div class="ums-field-wide ums-form-grid" data-ums-annual-newcomer-fields <?php echo in_array( $form_values['rule_scope'], array( 'newcomer', 'newcomer_september' ), true ) ? '' : 'hidden'; ?>>
+					<label>
+						<span>Ngày vào từ <b>*</b></span>
+						<input type="text" name="ums_annual_allowance[employment_start_md]" value="<?php echo esc_attr( $form_values['employment_start_md'] ); ?>" pattern="(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])" placeholder="MM-DD">
+					</label>
+					<label>
+						<span>Ngày vào đến <b>*</b></span>
+						<input type="text" name="ums_annual_allowance[employment_end_md]" value="<?php echo esc_attr( $form_values['employment_end_md'] ); ?>" pattern="(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])" placeholder="MM-DD">
+					</label>
+				</div>
+
+				<label class="ums-field-wide">
+					<span>Ghi chú điều kiện</span>
+					<input type="text" name="ums_annual_allowance[eligibility_note]" value="<?php echo esc_attr( $form_values['eligibility_note'] ); ?>">
+				</label>
+
+				<label>
+					<span>Độ ưu tiên</span>
+					<input type="number" name="ums_annual_allowance[priority]" value="<?php echo esc_attr( $form_values['priority'] ); ?>" step="1" data-ums-annual-priority>
+					<p class="description">Số lớn hơn được ưu tiên khi nhiều rule cùng khớp.</p>
+				</label>
+
 				<label>
 					<span>Số lần <b>*</b></span>
 					<input type="number" name="ums_annual_allowance[frequency_count]" value="<?php echo esc_attr( $form_values['frequency_count'] ); ?>" min="1" step="1" required>
@@ -353,7 +442,7 @@ $grid_columns = array(
 
 				<label>
 					<span>Số năm <b>*</b></span>
-					<input type="number" name="ums_annual_allowance[frequency_years]" value="<?php echo esc_attr( $form_values['frequency_years'] ); ?>" min="1" step="1" required>
+					<input type="number" name="ums_annual_allowance[frequency_years]" value="<?php echo esc_attr( $form_values['frequency_years'] ); ?>" min="1" step="1" required data-ums-annual-frequency-years>
 					<p class="description">Ví dụ: Số lần = 1, Số năm = 2 nghĩa là 1 lần / 2 năm.</p>
 				</label>
 

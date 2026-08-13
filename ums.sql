@@ -128,7 +128,7 @@ CREATE TABLE `wp_uniform_annual_allowance_rules` (
     `rule_id` INT AUTO_INCREMENT NOT NULL,
     `rule_key` CHAR(64) DEFAULT NULL COMMENT 'Khóa duy nhất sinh từ nguồn import và điều kiện áp dụng',
     `rule_scope` VARCHAR(30) NOT NULL DEFAULT 'annual' COMMENT 'annual, newcomer, newcomer_september, maternity, special',
-    `apply_type` VARCHAR(20) NOT NULL DEFAULT 'item' COMMENT 'category, item',
+    `apply_type` VARCHAR(20) NOT NULL DEFAULT 'item' COMMENT 'category, item, product',
     `category_id` INT DEFAULT NULL,
     `item_id` INT DEFAULT NULL,
     `item_variant` VARCHAR(100) DEFAULT NULL COMMENT 'Tên sản phẩm áp dụng cho toàn bộ size trong danh mục',
@@ -186,30 +186,6 @@ CREATE TABLE `wp_uniform_allowance_import_batches` (
     KEY `idx_import_status` (`import_status`),
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- NANG CAP BANG DINH MUC CU (MariaDB): chay khoi nay neu bang wp_uniform_annual_allowance_rules da ton tai.
-ALTER TABLE `wp_uniform_annual_allowance_rules`
-    ADD COLUMN IF NOT EXISTS `rule_key` CHAR(64) DEFAULT NULL COMMENT 'Khóa duy nhất sinh từ nguồn import và điều kiện áp dụng' AFTER `rule_id`,
-    ADD COLUMN IF NOT EXISTS `rule_scope` VARCHAR(30) NOT NULL DEFAULT 'annual' COMMENT 'annual, newcomer, newcomer_september, maternity, special' AFTER `rule_key`,
-    ADD COLUMN IF NOT EXISTS `item_variant` VARCHAR(100) DEFAULT NULL COMMENT 'Tên sản phẩm áp dụng cho toàn bộ size trong danh mục' AFTER `item_id`,
-    ADD COLUMN IF NOT EXISTS `source_product_name` VARCHAR(150) DEFAULT NULL AFTER `item_variant`,
-    ADD COLUMN IF NOT EXISTS `department` VARCHAR(255) NOT NULL DEFAULT '' AFTER `position_id`,
-    ADD COLUMN IF NOT EXISTS `team` VARCHAR(255) NOT NULL DEFAULT '' AFTER `department`,
-    ADD COLUMN IF NOT EXISTS `cost_center` VARCHAR(100) NOT NULL DEFAULT '' AFTER `team`,
-    ADD COLUMN IF NOT EXISTS `position_code` VARCHAR(100) NOT NULL DEFAULT '' AFTER `cost_center`,
-    ADD COLUMN IF NOT EXISTS `employment_start_md` CHAR(5) DEFAULT NULL COMMENT 'MM-DD, dùng cho CNV mới' AFTER `position_code`,
-    ADD COLUMN IF NOT EXISTS `employment_end_md` CHAR(5) DEFAULT NULL COMMENT 'MM-DD, hỗ trợ khoảng qua năm' AFTER `employment_start_md`,
-    ADD COLUMN IF NOT EXISTS `eligibility_note` VARCHAR(255) DEFAULT NULL AFTER `employment_end_md`,
-    ADD COLUMN IF NOT EXISTS `priority` INT NOT NULL DEFAULT 0 AFTER `monthly_quantities`,
-    ADD COLUMN IF NOT EXISTS `source_batch_id` BIGINT(20) UNSIGNED DEFAULT NULL AFTER `priority`,
-    ADD UNIQUE INDEX IF NOT EXISTS `idx_rule_key` (`rule_key`),
-    ADD INDEX IF NOT EXISTS `idx_rule_scope` (`rule_scope`),
-    ADD INDEX IF NOT EXISTS `idx_product_group` (`category_id`, `item_variant`),
-    ADD INDEX IF NOT EXISTS `idx_org_department` (`department`(100)),
-    ADD INDEX IF NOT EXISTS `idx_org_team` (`team`(100)),
-    ADD INDEX IF NOT EXISTS `idx_org_cost_center` (`cost_center`),
-    ADD INDEX IF NOT EXISTS `idx_org_position` (`position_code`),
-    ADD INDEX IF NOT EXISTS `idx_source_batch_id` (`source_batch_id`);
 
 -- 10. BANG LICH SU NHAP/XUAT/DIEU CHINH KHO
 CREATE TABLE `wp_uniform_inventory_movements` (
