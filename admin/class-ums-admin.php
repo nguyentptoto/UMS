@@ -386,7 +386,7 @@ class UMS_Admin {
         $notice            = self::get_notice();
         $form_values       = self::get_default_inventory_values( $editing_item );
         $available_items   = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
-        $recipient_options = UMS_DB_User::get_all( array( 'status' => 'active' ) );
+        $recipient_options = UMS_DB_Organization::get_recipient_options();
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php';
@@ -1466,7 +1466,7 @@ class UMS_Admin {
         $raw            = isset( $_POST['ums_manual_out'] ) && is_array( $_POST['ums_manual_out'] ) ? wp_unslash( $_POST['ums_manual_out'] ) : array();
         $item_id        = isset( $raw['item_id'] ) ? absint( $raw['item_id'] ) : 0;
         $quantity       = isset( $raw['quantity'] ) ? absint( $raw['quantity'] ) : 0;
-        $target_user_id = isset( $raw['target_user_id'] ) ? absint( $raw['target_user_id'] ) : 0;
+        $target_employee_no = isset( $raw['target_employee_no'] ) ? sanitize_text_field( $raw['target_employee_no'] ) : '';
         $note           = isset( $raw['note'] ) ? sanitize_textarea_field( $raw['note'] ) : '';
 
         if ( $item_id <= 0 || $quantity <= 0 ) {
@@ -1476,7 +1476,7 @@ class UMS_Admin {
             ) );
         }
 
-        if ( $target_user_id <= 0 ) {
+        if ( $target_employee_no === '' ) {
             self::redirect_to_inventory( array(
                 'notice'       => 'validation_error',
                 'notice_extra' => 'Vui lòng chọn người nhận để kiểm tra định mức trước khi xuất kho chủ động.',
@@ -1488,13 +1488,35 @@ class UMS_Admin {
             self::redirect_to_inventory( array( 'notice' => 'invalid_inventory_item' ) );
         }
 
-        $target_profile = UMS_DB_User::get_by_wp_user_id( $target_user_id );
-        if ( ! $target_profile || ! empty( $target_profile['user_status'] ) ) {
+        $target_organization = UMS_DB_Organization::get_by_employee_no( $target_employee_no );
+        if ( ! $target_organization ) {
             self::redirect_to_inventory( array(
                 'notice'       => 'validation_error',
-                'notice_extra' => 'Người nhận xuất kho không hợp lệ hoặc đang bị khóa.',
+                'notice_extra' => 'Người nhận không tồn tại trong Sơ đồ tổ chức TVN.',
             ) );
         }
+
+        $target_user = get_user_by( 'login', $target_employee_no );
+        if ( ! $target_user ) {
+            $matched_users = get_users(
+                array(
+                    'meta_key'   => 'ums_employee_code',
+                    'meta_value' => $target_employee_no,
+                    'number'     => 1,
+                    'fields'     => 'all',
+                )
+            );
+            $target_user = ! empty( $matched_users ) ? reset( $matched_users ) : null;
+        }
+        $target_user_id = $target_user instanceof WP_User ? (int) $target_user->ID : 0;
+        $target_profile = array(
+            'user_id'       => $target_user_id,
+            'employee_code' => (string) $target_organization['employee_no'],
+            'full_name'     => (string) $target_organization['full_name'],
+            'department'    => (string) $target_organization['department'],
+            'job_position'  => (string) $target_organization['position'],
+            'date_joined'   => (string) $target_organization['date_joined'],
+        );
 
         $allowance_errors = self::validate_manual_inventory_out_allowance( $item, $quantity, $target_profile );
         if ( ! empty( $allowance_errors ) ) {
@@ -1544,6 +1566,7 @@ class UMS_Admin {
                 'total_price'    => $unit_price * $quantity,
                 'actor_user_id'  => get_current_user_id(),
                 'target_user_id' => $target_user_id > 0 ? $target_user_id : null,
+                'target_employee_no' => $target_employee_no,
                 'note'           => $note !== '' ? $note : 'Admin xuất kho chủ động.',
             )
         );
@@ -1635,7 +1658,8 @@ class UMS_Admin {
             (int) $target_profile['user_id'],
             $rule,
             $month_start,
-            $month_end
+            $month_end,
+            (string) $target_profile['employee_code']
         );
         $used_in_month = (int) $request_month_usage['quantity'] + (int) $manual_month_usage['quantity'];
 
@@ -1656,7 +1680,8 @@ class UMS_Admin {
             (int) $target_profile['user_id'],
             $rule,
             $period_start,
-            $period_end
+            $period_end,
+            (string) $target_profile['employee_code']
         );
         $used_times      = (int) $request_usage['request_count'] + (int) $manual_usage['request_count'];
 

@@ -200,11 +200,14 @@ CREATE TABLE `wp_uniform_inventory_movements` (
     `total_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
     `actor_user_id` BIGINT(20) UNSIGNED DEFAULT NULL,
     `target_user_id` BIGINT(20) UNSIGNED DEFAULT NULL,
+    `target_employee_no` VARCHAR(100) DEFAULT NULL,
     `note` TEXT DEFAULT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`movement_id`),
     KEY `idx_item_id` (`item_id`),
     KEY `idx_request_id` (`request_id`),
+    KEY `idx_target_user_id` (`target_user_id`),
+    KEY `idx_target_employee_no` (`target_employee_no`),
     KEY `idx_movement_type` (`movement_type`),
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

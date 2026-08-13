@@ -524,7 +524,8 @@ class UMS_User {
                 (int) $target_profile['user_id'],
                 $rule,
                 $month_start,
-                $month_end
+                $month_end,
+                (string) $target_profile['employee_code']
             );
             $used_in_month = (int) $month_usage['quantity'] + (int) $manual_month_usage['quantity'];
 
@@ -546,7 +547,8 @@ class UMS_User {
                 (int) $target_profile['user_id'],
                 $rule,
                 $period_start,
-                $period_end
+                $period_end,
+                (string) $target_profile['employee_code']
             );
             $used_times = (int) $period_usage['request_count'] + (int) $manual_period_usage['request_count'];
 

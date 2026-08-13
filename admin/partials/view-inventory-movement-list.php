@@ -46,7 +46,9 @@ foreach ( $movements as $movement ) {
         'unit_price'     => number_format_i18n( (float) $movement['unit_price'], 0 ),
         'total_price'    => number_format_i18n( (float) $movement['total_price'], 0 ),
         'actor_login'    => $movement['actor_login'] ?: '-',
-        'target_login'   => $movement['target_login'] ?: '-',
+        'target_login'   => ! empty( $movement['target_name'] )
+            ? trim( (string) $movement['target_login'] . ' - ' . (string) $movement['target_name'], ' -' )
+            : ( $movement['target_login'] ?: '-' ),
         'note'           => $movement['note'] ?: '-',
     );
 }

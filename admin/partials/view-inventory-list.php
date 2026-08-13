@@ -221,6 +221,9 @@ unset( $section );
 
     <div class="ums-panel" id="ums-manual-inventory-out">
         <h2>Xuất kho chủ động</h2>
+        <?php if ( empty( $recipient_options ) ) : ?>
+            <div class="notice notice-warning inline"><p>Chưa có dữ liệu Sơ đồ tổ chức TVN để chọn người nhận.</p></div>
+        <?php endif; ?>
         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ums-profile-form">
             <?php wp_nonce_field( 'ums_manual_inventory_out' ); ?>
             <input type="hidden" name="action" value="ums_manual_inventory_out">
@@ -247,14 +250,22 @@ unset( $section );
 
                 <label>
                     <span>Người nhận <b>*</b></span>
-                    <select name="ums_manual_out[target_user_id]" required>
-                        <option value="">Chọn người nhận để kiểm tra định mức</option>
+                    <input
+                        type="text"
+                        name="ums_manual_out[target_employee_no]"
+                        list="ums-organization-recipients"
+                        placeholder="Nhập mã hoặc chọn CNV từ Sơ đồ tổ chức"
+                        autocomplete="off"
+                        required
+                    >
+                    <datalist id="ums-organization-recipients">
                         <?php foreach ( $recipient_options as $recipient ) : ?>
-                            <option value="<?php echo esc_attr( $recipient['user_id'] ); ?>">
-                                <?php echo esc_html( $recipient['employee_code'] . ' - ' . $recipient['full_name'] ); ?>
+                            <option value="<?php echo esc_attr( $recipient['employee_no'] ); ?>">
+                                <?php echo esc_html( $recipient['full_name'] . ' - ' . $recipient['department'] . ' - ' . $recipient['position'] ); ?>
                             </option>
                         <?php endforeach; ?>
-                    </select>
+                    </datalist>
+                    <small>Người nhận được kiểm tra lại theo mã nhân viên trong Sơ đồ tổ chức trước khi xuất kho.</small>
                 </label>
 
                 <label>

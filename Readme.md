@@ -101,6 +101,8 @@ Form thêm/sửa thủ công bám đúng ma trận của hai sheet: Bộ phận,
 
 Danh sách định mức được trình bày bằng hai jqxGrid độc lập cho Tháng 4 và Tháng 9. Hai bảng giữ cùng các cột tổ chức và 25 cột sản phẩm E:AC, nhưng mỗi ô chỉ hiển thị số lượng của tháng tương ứng.
 
+Chức năng xuất kho chủ động lấy người nhận trực tiếp từ Sơ đồ tổ chức TVN bằng mã nhân viên. Lịch sử kho lưu thêm `target_employee_no`, do đó Admin có thể xuất cho CNV không có tài khoản WordPress mà vẫn kiểm tra định mức, ngày vào và truy vết đúng người nhận.
+
 Importer chỉ đọc hai sheet định mức chính và giữ cố định 25 cột sản phẩm từ `E` đến `AC`:
 
 - `Phát T4`: định mức định kỳ tháng 4.

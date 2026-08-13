@@ -92,6 +92,23 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		return self::db()->get_col( "SELECT DISTINCT $column FROM $table WHERE $column <> '' ORDER BY $column ASC" );
 	}
 
+	/**
+	 * Danh sách người nhận dùng tại form xuất kho chủ động.
+	 */
+	public static function get_recipient_options() {
+		if ( ! self::table_exists() ) {
+			return array();
+		}
+
+		return self::db()->get_results(
+			'SELECT employee_no, full_name, department, team, position, date_joined
+			FROM ' . self::table() . "
+			WHERE employee_no <> ''
+			ORDER BY employee_no ASC",
+			ARRAY_A
+		);
+	}
+
 	public static function get_last_synced_at() {
 		return self::db()->get_var( 'SELECT MAX(synced_at) FROM ' . self::table() );
 	}

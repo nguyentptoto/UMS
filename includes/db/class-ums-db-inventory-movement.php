@@ -20,14 +20,22 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
             'total_price'    => 0,
             'actor_user_id'  => null,
             'target_user_id' => null,
+            'target_employee_no' => '',
             'note'           => '',
         );
         $data = wp_parse_args( $data, $defaults );
 
+        if ( $data['target_employee_no'] === '' && ! empty( $data['target_user_id'] ) ) {
+            $organization = UMS_DB_Organization::get_by_wp_user_id( $data['target_user_id'] );
+            if ( is_array( $organization ) && ! empty( $organization['employee_no'] ) ) {
+                $data['target_employee_no'] = (string) $organization['employee_no'];
+            }
+        }
+
         return self::db()->insert(
             self::table(),
             $data,
-            array( '%d', '%d', '%s', '%d', '%d', '%d', '%f', '%f', '%d', '%d', '%s' )
+            array( '%d', '%d', '%s', '%d', '%d', '%d', '%f', '%f', '%d', '%d', '%s', '%s' )
         );
     }
 
@@ -36,6 +44,7 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         $inventory      = UMS_DB_Inventory::table();
         $category_table = UMS_DB_Product_Category::table();
         $users_table    = self::db()->users;
+        $organization   = UMS_DB_Organization::table();
 
         $defaults = array(
             'search'        => '',
@@ -66,7 +75,9 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
 
         if ( $args['search'] !== '' ) {
             $like    = '%' . self::db()->esc_like( $args['search'] ) . '%';
-            $where[] = '(inventory.item_variant LIKE %s OR inventory.size LIKE %s OR child.category_name LIKE %s OR parent.category_name LIKE %s OR actor.user_login LIKE %s OR target.user_login LIKE %s OR movement.note LIKE %s)';
+            $where[] = '(inventory.item_variant LIKE %s OR inventory.size LIKE %s OR child.category_name LIKE %s OR parent.category_name LIKE %s OR actor.user_login LIKE %s OR target.user_login LIKE %s OR movement.target_employee_no LIKE %s OR organization.full_name LIKE %s OR movement.note LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -79,13 +90,17 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         $limit = max( 1, min( 1000, absint( $args['limit'] ) ) );
         $sql = "SELECT movement.*, inventory.item_variant, inventory.size, child.category_name,
                 parent.category_id AS parent_category_id, parent.category_name AS parent_category_name,
-                actor.user_login AS actor_login, target.user_login AS target_login
+                actor.user_login AS actor_login,
+                COALESCE(NULLIF(movement.target_employee_no, ''), organization.employee_no, target.user_login) AS target_login,
+                organization.full_name AS target_name
             FROM $table movement
             LEFT JOIN $inventory inventory ON inventory.item_id = movement.item_id
             LEFT JOIN $category_table child ON child.category_id = inventory.category_id
             LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
             LEFT JOIN $users_table actor ON actor.ID = movement.actor_user_id
             LEFT JOIN $users_table target ON target.ID = movement.target_user_id
+            LEFT JOIN $organization organization
+                ON organization.employee_no = COALESCE(NULLIF(movement.target_employee_no, ''), target.user_login)
             WHERE " . implode( ' AND ', $where ) . "
             ORDER BY movement.created_at DESC, movement.movement_id DESC
             LIMIT %d";
@@ -94,23 +109,35 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         return self::db()->get_results( self::db()->prepare( $sql, $params ), ARRAY_A );
     }
 
-    public static function get_manual_allowance_usage( $target_user_id, $rule, $start_date, $end_date ) {
+    public static function get_manual_allowance_usage( $target_user_id, $rule, $start_date, $end_date, $target_employee_no = '' ) {
         $table          = self::table();
         $inventory      = UMS_DB_Inventory::table();
         $category_table = UMS_DB_Product_Category::table();
 
+        $target_user_id     = absint( $target_user_id );
+        $target_employee_no = trim( sanitize_text_field( (string) $target_employee_no ) );
         $where  = array(
-            'movement.target_user_id = %d',
             "movement.movement_type = 'out'",
             'movement.request_id IS NULL',
             'movement.created_at >= %s',
             'movement.created_at <= %s',
         );
         $params = array(
-            absint( $target_user_id ),
             sanitize_text_field( $start_date ),
             sanitize_text_field( $end_date ),
         );
+
+        if ( $target_user_id > 0 && $target_employee_no !== '' ) {
+            $where[]  = '(movement.target_user_id = %d OR movement.target_employee_no = %s)';
+            $params[] = $target_user_id;
+            $params[] = $target_employee_no;
+        } elseif ( $target_employee_no !== '' ) {
+            $where[]  = 'movement.target_employee_no = %s';
+            $params[] = $target_employee_no;
+        } else {
+            $where[]  = 'movement.target_user_id = %d';
+            $params[] = $target_user_id;
+        }
 
         if ( isset( $rule['apply_type'] ) && $rule['apply_type'] === 'category' ) {
             $where[]  = '(inventory.category_id = %d OR category.parent_id = %d)';
