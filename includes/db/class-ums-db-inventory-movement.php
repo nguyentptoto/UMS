@@ -99,8 +99,7 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
             LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
             LEFT JOIN $users_table actor ON actor.ID = movement.actor_user_id
             LEFT JOIN $users_table target ON target.ID = movement.target_user_id
-            LEFT JOIN $organization organization
-                ON organization.employee_no = COALESCE(NULLIF(movement.target_employee_no, ''), target.user_login)
+            LEFT JOIN $organization organization ON organization.employee_no = movement.target_employee_no
             WHERE " . implode( ' AND ', $where ) . "
             ORDER BY movement.created_at DESC, movement.movement_id DESC
             LIMIT %d";
