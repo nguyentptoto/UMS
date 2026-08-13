@@ -401,19 +401,48 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	 * Tạo context kiểm tra định mức từ hồ sơ và Sơ đồ tổ chức TVN.
 	 */
 	public static function get_employee_context( $profile ) {
+		$user_id       = absint( $profile['user_id'] ?? 0 );
 		$employee_code = trim( (string) ( $profile['employee_code'] ?? '' ) );
-		$organization  = $employee_code !== '' ? UMS_DB_Organization::get_by_employee_no( $employee_code ) : null;
+		$organization  = UMS_DB_Organization::get_by_wp_user_id( $user_id, $employee_code );
 		$organization  = is_array( $organization ) ? $organization : array();
+		$employee_code = ! empty( $organization['employee_no'] )
+			? trim( (string) $organization['employee_no'] )
+			: $employee_code;
+
+		$date_joined = self::normalize_context_date( $organization['date_joined'] ?? '' );
+		$date_source = $date_joined !== '' ? 'organization' : '';
+		if ( $date_joined === '' && $user_id > 0 ) {
+			$date_joined = self::normalize_context_date( get_user_meta( $user_id, 'ums_date_joined', true ) );
+			$date_source = $date_joined !== '' ? 'usermeta' : '';
+		}
+		if ( $date_joined === '' ) {
+			$date_joined = self::normalize_context_date( $profile['date_joined'] ?? '' );
+			$date_source = $date_joined !== '' ? 'legacy_profile' : '';
+		}
 
 		return array(
 			'department' => ! empty( $organization['department'] ) ? $organization['department'] : ( $profile['department'] ?? '' ),
 			'team' => ! empty( $organization['team'] ) ? $organization['team'] : '',
 			'cost_center' => ! empty( $organization['cost_center'] ) ? $organization['cost_center'] : '',
 			'position' => ! empty( $organization['position'] ) ? $organization['position'] : ( $profile['job_position'] ?? '' ),
-			'date_joined' => ! empty( $organization['date_joined'] ) ? $organization['date_joined'] : ( $profile['date_joined'] ?? '' ),
+			'date_joined' => $date_joined,
+			'date_joined_source' => $date_source,
 			'employee_no' => $employee_code,
 			'evaluation_date' => current_time( 'Y-m-d' ),
 		);
+	}
+
+	/**
+	 * Chỉ nhận ngày chuẩn để việc so sánh khoảng ngày vào của CNV mới ổn định.
+	 */
+	private static function normalize_context_date( $value ) {
+		$value = trim( (string) $value );
+		if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ) {
+			return '';
+		}
+
+		list( $year, $month, $day ) = array_map( 'intval', explode( '-', $value ) );
+		return checkdate( $month, $day, $year ) ? $value : '';
 	}
 
 	public static function upsert_import_rule( $data ) {

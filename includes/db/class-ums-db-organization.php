@@ -114,6 +114,28 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		);
 	}
 
+	/**
+	 * Lấy nhân sự tổ chức gắn với một tài khoản WordPress.
+	 *
+	 * Mã nhân viên trong usermeta là nguồn liên kết chính. user_login chỉ là
+	 * phương án dự phòng cho các tài khoản được tạo trước cơ chế đồng bộ Sheet.
+	 */
+	public static function get_by_wp_user_id( $user_id, $employee_no = '' ) {
+		$user_id     = absint( $user_id );
+		$employee_no = trim( sanitize_text_field( (string) $employee_no ) );
+
+		if ( $employee_no === '' && $user_id > 0 ) {
+			$employee_no = trim( (string) get_user_meta( $user_id, 'ums_employee_code', true ) );
+		}
+
+		if ( $employee_no === '' && $user_id > 0 ) {
+			$user = get_userdata( $user_id );
+			$employee_no = $user instanceof WP_User ? trim( (string) $user->user_login ) : '';
+		}
+
+		return $employee_no !== '' ? self::get_by_employee_no( $employee_no ) : null;
+	}
+
 	public static function upsert_batch( $rows, $sync_token, $synced_at ) {
 		if ( empty( $rows ) ) {
 			return 0;

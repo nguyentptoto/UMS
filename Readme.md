@@ -106,7 +106,7 @@ Importer chỉ đọc hai sheet định mức chính và giữ cố định 25 c
 - `Phát T4`: định mức định kỳ tháng 4.
 - `Phát T9`: định mức định kỳ tháng 9.
 
-Điều kiện áp dụng được lấy từ Sơ đồ tổ chức TVN theo `Mã nhân viên`: phòng, nhóm, cost center, vị trí và ngày vào công ty. Tên sản phẩm trong Excel được ánh xạ với sản phẩm UMS trước khi xác nhận import; một mapping áp dụng cho toàn bộ size của sản phẩm đó.
+Điều kiện áp dụng được lấy từ Sơ đồ tổ chức TVN theo `Mã nhân viên`: phòng, nhóm, cost center, vị trí và ngày vào công ty. Đối với rule `newcomer` và `newcomer_september`, hệ thống dùng cột `date_joined` của Sơ đồ tổ chức để xác định CNV có thuộc khoảng ngày nhận việc hay không; ngày trong usermeta/hồ sơ cũ chỉ được dùng dự phòng khi dữ liệu tổ chức chưa có. Tên sản phẩm trong Excel được ánh xạ với sản phẩm UMS trước khi xác nhận import; một mapping áp dụng cho toàn bộ size của sản phẩm đó.
 
 Quy trình import gồm hai bước:
 
