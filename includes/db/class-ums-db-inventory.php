@@ -82,6 +82,34 @@ class UMS_DB_Inventory extends UMS_DB_Base {
         return self::db()->get_col( $sql );
     }
 
+	/**
+	 * Danh sách sản phẩm logic, gộp các dòng size của cùng một sản phẩm.
+	 */
+	public static function get_product_groups() {
+		$table          = self::table();
+		$category_table = UMS_DB_Product_Category::table();
+		$sql = "SELECT inventory.category_id, inventory.item_variant,
+			COALESCE(parent.category_name, child.category_name) AS category_name,
+			COUNT(*) AS size_count
+			FROM $table inventory
+			LEFT JOIN $category_table child ON child.category_id = inventory.category_id
+			LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
+			WHERE inventory.category_id IS NOT NULL AND inventory.item_variant <> ''
+			GROUP BY inventory.category_id, inventory.item_variant, category_name
+			ORDER BY category_name ASC, inventory.item_variant ASC";
+
+		return self::db()->get_results( $sql, ARRAY_A );
+	}
+
+	public static function product_group_exists( $category_id, $item_variant ) {
+		$sql = self::db()->prepare(
+			'SELECT COUNT(*) FROM ' . self::table() . ' WHERE category_id = %d AND item_variant = %s',
+			absint( $category_id ),
+			sanitize_text_field( $item_variant )
+		);
+		return (int) self::db()->get_var( $sql ) > 0;
+	}
+
     /**
      * Lấy chi tiết một dòng tồn kho.
      */

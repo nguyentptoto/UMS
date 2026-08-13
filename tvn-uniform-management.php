@@ -97,6 +97,8 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-sheet-user-sync.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-auto-sync-bridge.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-department-import.php';
+    require_once UMS_PLUGIN_DIR . 'includes/class-ums-xlsx-reader.php';
+    require_once UMS_PLUGIN_DIR . 'includes/class-ums-annual-allowance-import.php';
     UMS_Sheet_User_Sync::init();
     UMS_Organization_Sync::init();
     UMS_Auto_Sync_Bridge::init();

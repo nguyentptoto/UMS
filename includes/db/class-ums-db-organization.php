@@ -96,6 +96,24 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		return self::db()->get_var( 'SELECT MAX(synced_at) FROM ' . self::table() );
 	}
 
+	/**
+	 * Lấy dữ liệu tổ chức mới nhất của một nhân viên theo mã nhân viên.
+	 */
+	public static function get_by_employee_no( $employee_no ) {
+		$employee_no = trim( sanitize_text_field( (string) $employee_no ) );
+		if ( $employee_no === '' || ! self::table_exists() ) {
+			return null;
+		}
+
+		return self::db()->get_row(
+			self::db()->prepare(
+				'SELECT * FROM ' . self::table() . ' WHERE employee_no = %s LIMIT 1',
+				$employee_no
+			),
+			ARRAY_A
+		);
+	}
+
 	public static function upsert_batch( $rows, $sync_token, $synced_at ) {
 		if ( empty( $rows ) ) {
 			return 0;

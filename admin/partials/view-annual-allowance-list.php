@@ -82,6 +82,10 @@ foreach ( $rules as $rule ) {
 		),
 		'ums_delete_annual_allowance_' . absint( $rule['rule_id'] )
 	);
+	$actions = '<a href="' . esc_url( $edit_url . '#ums-annual-allowance-form' ) . '">Sửa</a> | <a href="' . esc_url( $delete_url ) . '" class="ums-delete-link" data-confirm="Xóa định mức này?">Xóa</a>';
+	if ( ! empty( $rule['source_batch_id'] ) ) {
+		$actions = '<span>Quản lý bằng import</span>';
+	}
 
 	$monthly_quantities = json_decode( (string) $rule['monthly_quantities'], true );
 	$monthly_quantities = is_array( $monthly_quantities ) ? $monthly_quantities : array();
@@ -98,29 +102,44 @@ foreach ( $rules as $rule ) {
 	if ( $rule['target_type'] === 'position' ) {
 		$position_text = trim( (string) ( $rule['position_code'] ?? '' ) . ' - ' . (string) ( $rule['position_name'] ?? '' ), ' -' );
 		$target_label  = 'Chức vụ: ' . ( $position_text ?: '#' . absint( $rule['position_id'] ) );
+	} elseif ( $rule['target_type'] === 'organization' ) {
+		$target_parts = array_filter(
+			array(
+				$rule['department'] ?? '',
+				$rule['team'] ?? '',
+				$rule['cost_center'] ?? '',
+				$rule['position_code'] ?? '',
+			)
+		);
+		$target_label = implode( ' / ', $target_parts );
 	}
 
 	$apply_label = 'Sản phẩm: ' . $build_item_label( $rule );
 	if ( isset( $rule['apply_type'] ) && $rule['apply_type'] === 'category' ) {
 		$category_name = trim( (string) ( $rule['apply_parent_category_name'] ?? '' ) . ' / ' . (string) ( $rule['apply_category_name'] ?? '' ), ' /' );
 		$apply_label   = 'Danh mục: ' . ( $category_name ?: '#' . absint( $rule['category_id'] ) );
+	} elseif ( isset( $rule['apply_type'] ) && $rule['apply_type'] === 'product' ) {
+		$apply_label = 'Sản phẩm: ' . ( $rule['item_variant'] ?? $rule['source_product_name'] ?? '' );
 	}
 
+	$scope_labels = array( 'annual' => 'Định kỳ', 'newcomer' => 'CNV mới', 'newcomer_september' => 'Cấp bù T9' );
 	$grid_rows[] = array(
+		'rule_scope'        => $scope_labels[ $rule['rule_scope'] ?? 'annual' ] ?? ( $rule['rule_scope'] ?? 'Định kỳ' ),
 		'apply_label'        => $apply_label,
 		'target_label'       => $target_label,
 		'frequency'          => max( 1, absint( $rule['frequency_count'] ?? 1 ) ) . ' lần / ' . max( 1, absint( $rule['frequency_years'] ) ) . ' năm',
 		'monthly_quantities' => empty( $month_labels ) ? '-' : implode( ', ', $month_labels ),
 		'status'             => (int) $rule['is_active'] === 1 ? 'Đang áp dụng' : 'Ngừng áp dụng',
-		'actions'            => '<a href="' . esc_url( $edit_url . '#ums-annual-allowance-form' ) . '">Sửa</a> | <a href="' . esc_url( $delete_url ) . '" class="ums-delete-link" data-confirm="Xóa định mức này?">Xóa</a>',
+		'actions'            => $actions,
 	);
 }
 
 $grid_columns = array(
-	array( 'text' => 'Áp dụng cho', 'datafield' => 'apply_label', 'width' => '26%' ),
+	array( 'text' => 'Loại rule', 'datafield' => 'rule_scope', 'width' => '10%' ),
+	array( 'text' => 'Áp dụng cho', 'datafield' => 'apply_label', 'width' => '21%' ),
 	array( 'text' => 'Đối tượng', 'datafield' => 'target_label', 'width' => '17%' ),
 	array( 'text' => 'Tần suất', 'datafield' => 'frequency', 'width' => '12%' ),
-	array( 'text' => 'Số lượng theo tháng', 'datafield' => 'monthly_quantities', 'width' => '23%' ),
+	array( 'text' => 'Số lượng theo tháng', 'datafield' => 'monthly_quantities', 'width' => '18%' ),
 	array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '10%' ),
 	array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '12%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
 );
@@ -133,6 +152,71 @@ $grid_columns = array(
 	<?php if ( ! empty( $notice ) ) : ?>
 		<div class="notice notice-<?php echo esc_attr( $notice['type'] ); ?> is-dismissible">
 			<p><?php echo esc_html( $notice['message'] ); ?></p>
+		</div>
+	<?php endif; ?>
+
+	<div class="ums-panel" id="ums-annual-allowance-import">
+		<h2>Import định mức từ Excel</h2>
+		<?php if ( ! $allowance_import_ready ) : ?>
+			<div class="notice notice-warning inline"><p>Database chưa được nâng cấp theo cấu trúc định mức linh hoạt trong ums.sql.</p></div>
+		<?php endif; ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-filter-bar">
+			<?php wp_nonce_field( 'ums_preview_annual_allowance_import' ); ?>
+			<input type="hidden" name="action" value="ums_preview_annual_allowance_import">
+			<input type="file" name="ums_allowance_import_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+			<button type="submit" class="button button-primary" <?php disabled( ! $allowance_import_ready ); ?>>Đọc và xem trước</button>
+		</form>
+		<p class="description">Đọc các sheet Phát T4, Phát T9, New commer và Phát T9 - CNV mới. Dữ liệu chỉ được ghi sau bước xác nhận.</p>
+	</div>
+
+	<?php if ( is_array( $import_preview ) ) : ?>
+		<div class="ums-panel ums-allowance-import-preview">
+			<h2>Xem trước: <?php echo esc_html( $import_preview['file_name'] ); ?></h2>
+			<p>
+				Tổng <?php echo esc_html( number_format_i18n( $import_preview['summary']['total'] ) ); ?> rule;
+				định kỳ <?php echo esc_html( number_format_i18n( $import_preview['summary']['annual'] ) ); ?>;
+				CNV mới <?php echo esc_html( number_format_i18n( $import_preview['summary']['newcomer'] ) ); ?>;
+				cấp bù tháng 9 <?php echo esc_html( number_format_i18n( $import_preview['summary']['newcomer_september'] ) ); ?>.
+			</p>
+
+			<?php if ( ! empty( $import_preview['errors'] ) ) : ?>
+				<div class="notice notice-error inline"><p><?php echo esc_html( implode( ' ', $import_preview['errors'] ) ); ?></p></div>
+			<?php else : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<?php wp_nonce_field( 'ums_confirm_annual_allowance_import' ); ?>
+					<input type="hidden" name="action" value="ums_confirm_annual_allowance_import">
+					<input type="hidden" name="preview_token" value="<?php echo esc_attr( $preview_token ); ?>">
+					<table class="widefat striped">
+						<thead><tr><th>Sản phẩm trong Excel</th><th>Sản phẩm trong UMS</th></tr></thead>
+						<tbody>
+						<?php foreach ( $import_preview['product_names'] as $source_product_name ) : ?>
+							<?php
+							$source_normalized = strtolower( remove_accents( preg_replace( '/\s+/u', ' ', trim( $source_product_name ) ) ) );
+							$mapping_key       = hash( 'sha256', $source_product_name );
+							?>
+							<tr>
+								<td><?php echo esc_html( $source_product_name ); ?></td>
+								<td>
+									<select name="product_mapping[<?php echo esc_attr( $mapping_key ); ?>]" required>
+										<option value="">Chọn sản phẩm tương ứng</option>
+										<?php foreach ( $product_groups as $product_group ) : ?>
+											<?php
+											$option_value = absint( $product_group['category_id'] ) . '|' . $product_group['item_variant'];
+											$target_normalized = strtolower( remove_accents( preg_replace( '/\s+/u', ' ', trim( $product_group['item_variant'] ) ) ) );
+											?>
+											<option value="<?php echo esc_attr( $option_value ); ?>" <?php selected( $source_normalized, $target_normalized ); ?>>
+												<?php echo esc_html( $product_group['category_name'] . ' / ' . $product_group['item_variant'] ); ?>
+											</option>
+										<?php endforeach; ?>
+									</select>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+						</tbody>
+					</table>
+					<p class="submit"><button type="submit" class="button button-primary">Xác nhận import</button></p>
+				</form>
+			<?php endif; ?>
 		</div>
 	<?php endif; ?>
 
@@ -157,6 +241,7 @@ $grid_columns = array(
 					<option value="">Tất cả kiểu áp dụng</option>
 					<option value="category" <?php selected( $filters['apply_type'], 'category' ); ?>>Theo danh mục</option>
 					<option value="item" <?php selected( $filters['apply_type'], 'item' ); ?>>Theo sản phẩm</option>
+					<option value="product" <?php selected( $filters['apply_type'], 'product' ); ?>>Sản phẩm mọi size (import)</option>
 				</select>
 			</label>
 
@@ -166,6 +251,7 @@ $grid_columns = array(
 					<option value="">Tất cả đối tượng</option>
 					<option value="all" <?php selected( $filters['target_type'], 'all' ); ?>>Toàn bộ</option>
 					<option value="position" <?php selected( $filters['target_type'], 'position' ); ?>>Theo chức vụ</option>
+					<option value="organization" <?php selected( $filters['target_type'], 'organization' ); ?>>Theo sơ đồ tổ chức</option>
 				</select>
 			</label>
 

@@ -93,6 +93,35 @@ Khi user tạo hoặc sửa phiếu, hệ thống kiểm tra định mức trư�
 - Phiếu bị `rejected` không tính vào định mức đã dùng.
 - Khi sửa phiếu, hệ thống loại trừ chính phiếu đang sửa để tránh tính trùng.
 
+### Import định mức từ Excel
+
+Trang `Định mức năm` hỗ trợ import trực tiếp file `.xlsx` theo template quản lý đồng phục. Trước khi sử dụng, chạy phần nâng cấp bảng định mức và bảng `wp_uniform_allowance_import_batches` trong `ums.sql`.
+
+Các sheet được đọc:
+
+- `Phát T4`: định mức định kỳ tháng 4.
+- `Phát T9`: định mức định kỳ tháng 9.
+- `New commer`: cấp lần đầu cho CNV mới theo khoảng ngày vào công ty.
+- `Phát T9 - CNV mới`: cấp bù tháng 9 cho CNV vào trong năm.
+
+Điều kiện áp dụng được lấy từ Sơ đồ tổ chức TVN theo `Mã nhân viên`: phòng, nhóm, cost center, vị trí và ngày vào công ty. Tên sản phẩm trong Excel được ánh xạ với sản phẩm UMS trước khi xác nhận import; một mapping áp dụng cho toàn bộ size của sản phẩm đó.
+
+Quy trình import gồm hai bước:
+
+1. Chọn Excel và bấm `Đọc và xem trước`.
+2. Kiểm tra thống kê, ánh xạ toàn bộ sản phẩm rồi bấm `Xác nhận import`.
+
+Import chạy theo batch trong transaction. Lần import mới cập nhật rule trùng khóa và vô hiệu hóa các rule thuộc lần import cũ nhưng không còn trong file mới. Các rule nhập thủ công không bị xóa.
+
+Thứ tự ưu tiên khi kiểm tra cấp phát:
+
+1. `newcomer_september`: cấp bù tháng 9 cho CNV vào trong năm.
+2. `newcomer`: cấp ban đầu cho CNV mới.
+3. `annual`: định mức định kỳ tháng 4/tháng 9.
+4. Rule thủ công cũ khi nhân viên không thuộc ma trận Excel.
+
+Một ô số lượng `0` trong ma trận có nghĩa là không được cấp sản phẩm ở kỳ tương ứng. Hệ thống không tự rơi xuống rule tổng quát khi nhân viên đã thuộc một ma trận import.
+
 ## User Portal
 
 Tạo một page WordPress và chèn shortcode:

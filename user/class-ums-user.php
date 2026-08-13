@@ -459,6 +459,7 @@ class UMS_User {
         $errors      = array();
         $rule_groups = array();
         $position_id = self::get_profile_position_id( $target_profile );
+        $allowance_context = UMS_DB_Annual_Allowance::get_employee_context( $target_profile );
 
         foreach ( $details as $detail ) {
             $item_id   = isset( $detail['item_id'] ) ? absint( $detail['item_id'] ) : 0;
@@ -470,7 +471,7 @@ class UMS_User {
                 continue;
             }
 
-            $rule = UMS_DB_Annual_Allowance::get_active_rule_for_item( $item_id, $position_id );
+            $rule = UMS_DB_Annual_Allowance::get_active_rule_for_item( $item_id, $position_id, $allowance_context );
             if ( ! $rule ) {
                 $errors[] = 'Sản phẩm "' . self::get_inventory_label( $inventory ) . '" chưa có định mức cấp phát phù hợp với người nhận.';
                 continue;

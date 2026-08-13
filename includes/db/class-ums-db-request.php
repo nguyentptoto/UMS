@@ -452,6 +452,10 @@ class UMS_DB_Request extends UMS_DB_Base {
 			$where[]  = '(inventory.category_id = %d OR category.parent_id = %d)';
 			$params[] = absint( $rule['category_id'] );
 			$params[] = absint( $rule['category_id'] );
+		} elseif ( isset( $rule['apply_type'] ) && $rule['apply_type'] === 'product' ) {
+			$where[]  = 'inventory.category_id = %d AND inventory.item_variant = %s';
+			$params[] = absint( $rule['category_id'] );
+			$params[] = sanitize_text_field( $rule['item_variant'] );
 		} else {
 			$where[]  = 'details.item_id = %d';
 			$params[] = absint( $rule['item_id'] );

@@ -35,6 +35,8 @@ class UMS_Admin {
         add_action( 'admin_post_ums_manual_inventory_out', array( __CLASS__, 'handle_manual_inventory_out' ) );
         add_action( 'admin_post_ums_save_annual_allowance', array( __CLASS__, 'handle_save_annual_allowance' ) );
         add_action( 'admin_post_ums_delete_annual_allowance', array( __CLASS__, 'handle_delete_annual_allowance' ) );
+        add_action( 'admin_post_ums_preview_annual_allowance_import', array( __CLASS__, 'handle_preview_annual_allowance_import' ) );
+        add_action( 'admin_post_ums_confirm_annual_allowance_import', array( __CLASS__, 'handle_confirm_annual_allowance_import' ) );
         add_action( 'admin_post_ums_sync_organization', array( __CLASS__, 'handle_sync_organization' ) );
         add_action( 'admin_post_ums_save_sheet_sync_settings', array( __CLASS__, 'handle_save_sheet_sync_settings' ) );
         add_action( 'wp_ajax_ums_sync_user_password', array( __CLASS__, 'handle_sync_user_password' ) );
@@ -426,6 +428,10 @@ class UMS_Admin {
         $positions     = UMS_DB_Position::get_active();
         $notice        = self::get_notice();
         $form_values   = self::get_default_annual_allowance_values( $editing_rule );
+        $preview_token = isset( $_GET['preview_token'] ) ? sanitize_key( wp_unslash( $_GET['preview_token'] ) ) : '';
+        $import_preview = $preview_token !== '' ? UMS_Annual_Allowance_Import::get_preview( $preview_token ) : null;
+        $product_groups = UMS_DB_Inventory::get_product_groups();
+        $allowance_import_ready = UMS_DB_Annual_Allowance::is_import_ready();
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php';
@@ -1509,7 +1515,8 @@ class UMS_Admin {
     private static function validate_manual_inventory_out_allowance( $item, $quantity, $target_profile ) {
         $errors      = array();
         $position_id = self::get_profile_position_id( $target_profile );
-        $rule        = UMS_DB_Annual_Allowance::get_active_rule_for_item( (int) $item['item_id'], $position_id );
+        $allowance_context = UMS_DB_Annual_Allowance::get_employee_context( $target_profile );
+        $rule        = UMS_DB_Annual_Allowance::get_active_rule_for_item( (int) $item['item_id'], $position_id, $allowance_context );
 
         if ( ! $rule ) {
             return array( 'Sản phẩm "' . self::get_inventory_label( $item ) . '" chưa có định mức cấp phát phù hợp với người nhận.' );
@@ -2053,6 +2060,86 @@ class UMS_Admin {
         return $parsed && $parsed->format( 'Y-m-d' ) === $date;
     }
 
+    public static function handle_preview_annual_allowance_import() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        check_admin_referer( 'ums_preview_annual_allowance_import' );
+
+        if ( ! UMS_DB_Annual_Allowance::is_import_ready() ) {
+            self::redirect_to_annual_allowances( array( 'notice' => 'allowance_import_schema_missing' ) );
+        }
+        $file = isset( $_FILES['ums_allowance_import_file'] ) ? $_FILES['ums_allowance_import_file'] : array();
+
+        if ( empty( $file['tmp_name'] ) || ! empty( $file['error'] ) ) {
+            self::redirect_to_annual_allowances( array( 'notice' => 'allowance_import_invalid_file' ) );
+        }
+
+        if ( (int) $file['size'] > 10 * MB_IN_BYTES || strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
+            self::redirect_to_annual_allowances( array( 'notice' => 'allowance_import_invalid_file' ) );
+        }
+
+        try {
+            $preview = UMS_Annual_Allowance_Import::analyze( $file['tmp_name'], $file['name'] );
+            $token   = UMS_Annual_Allowance_Import::store_preview( $preview );
+            self::redirect_to_annual_allowances(
+                array(
+                    'notice'        => empty( $preview['errors'] ) ? 'allowance_import_preview_ready' : 'allowance_import_preview_warning',
+                    'preview_token' => $token,
+                )
+            );
+        } catch ( Throwable $error ) {
+            self::redirect_to_annual_allowances(
+                array(
+                    'notice'       => 'allowance_import_invalid_file',
+                    'notice_extra' => $error->getMessage(),
+                )
+            );
+        }
+    }
+
+    public static function handle_confirm_annual_allowance_import() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+        }
+
+        check_admin_referer( 'ums_confirm_annual_allowance_import' );
+        $token   = isset( $_POST['preview_token'] ) ? sanitize_key( wp_unslash( $_POST['preview_token'] ) ) : '';
+        $preview = UMS_Annual_Allowance_Import::get_preview( $token );
+        $mappings = isset( $_POST['product_mapping'] ) && is_array( $_POST['product_mapping'] )
+            ? wp_unslash( $_POST['product_mapping'] )
+            : array();
+
+        if ( ! is_array( $preview ) ) {
+            self::redirect_to_annual_allowances( array( 'notice' => 'allowance_import_preview_expired' ) );
+        }
+
+        if ( ! empty( $preview['errors'] ) ) {
+            self::redirect_to_annual_allowances(
+                array( 'notice' => 'allowance_import_preview_warning', 'preview_token' => $token )
+            );
+        }
+
+        $result = UMS_Annual_Allowance_Import::import( $preview, $mappings, get_current_user_id() );
+        if ( empty( $result['success'] ) ) {
+            self::redirect_to_annual_allowances(
+                array(
+                    'notice' => 'allowance_import_failed', 'preview_token' => $token,
+                    'notice_extra' => implode( ' ', array_slice( $result['errors'], 0, 5 ) ),
+                )
+            );
+        }
+
+        UMS_Annual_Allowance_Import::delete_preview( $token );
+        self::redirect_to_annual_allowances(
+            array(
+                'notice' => 'allowance_import_completed',
+                'notice_extra' => sprintf( 'Đã thêm %d và cập nhật %d rule.', $result['inserted'], $result['updated'] ),
+            )
+        );
+    }
+
     private static function text_length( $value ) {
         return function_exists( 'mb_strlen' ) ? mb_strlen( (string) $value, 'UTF-8' ) : strlen( (string) $value );
     }
@@ -2390,6 +2477,13 @@ class UMS_Admin {
             'annual_allowance_created' => array( 'success', 'Đã thêm định mức cấp phát hàng năm.' ),
             'annual_allowance_updated' => array( 'success', 'Đã cập nhật định mức cấp phát hàng năm.' ),
             'annual_allowance_deleted' => array( 'success', 'Đã xóa định mức cấp phát hàng năm.' ),
+            'allowance_import_preview_ready' => array( 'success', 'Đã đọc Excel. Hãy kiểm tra và ánh xạ sản phẩm trước khi import.' ),
+            'allowance_import_preview_warning' => array( 'warning', 'Đã đọc Excel nhưng còn lỗi cần xử lý.' ),
+            'allowance_import_invalid_file' => array( 'error', 'File định mức không hợp lệ hoặc không đọc được.' ),
+            'allowance_import_schema_missing' => array( 'error', 'Database chưa có cấu trúc định mức linh hoạt. Hãy chạy phần nâng cấp trong ums.sql trước khi import.' ),
+            'allowance_import_preview_expired' => array( 'error', 'Dữ liệu xem trước đã hết hạn. Vui lòng tải lại file Excel.' ),
+            'allowance_import_failed' => array( 'error', 'Import định mức không thành công.' ),
+            'allowance_import_completed' => array( 'success', 'Import định mức hoàn tất.' ),
             'organization_synced' => array( 'success', 'Đồng bộ sơ đồ tổ chức thành công.' ),
             'organization_sync_failed' => array( 'error', 'Không thể đồng bộ sơ đồ tổ chức.' ),
             'invalid_user'     => array( 'error', 'Không tìm thấy nhân sự cần xử lý.' ),
