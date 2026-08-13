@@ -1648,6 +1648,10 @@ class UMS_Admin {
             return array( 'Định mức của "' . $label . '" không cho phép cấp trong tháng ' . $month . '.' );
         }
 
+        if ( UMS_DB_Annual_Allowance::requires_exact_quantity( $rule ) && (int) $quantity !== $month_quota ) {
+            return array( 'Định mức CNV mới của "' . $label . '" yêu cầu xuất đúng ' . $month_quota . ' sản phẩm; số lượng đã nhập là ' . (int) $quantity . '.' );
+        }
+
         $request_month_usage = UMS_DB_Request::get_allowance_usage(
             (int) $target_profile['user_id'],
             $rule,

@@ -513,6 +513,11 @@ class UMS_User {
                 continue;
             }
 
+            if ( UMS_DB_Annual_Allowance::requires_exact_quantity( $rule ) && $requested !== $month_quota ) {
+                $errors[] = 'Định mức CNV mới của "' . $labels . '" yêu cầu đúng ' . $month_quota . ' sản phẩm; số lượng đã nhập là ' . $requested . '.';
+                continue;
+            }
+
             $month_usage = UMS_DB_Request::get_allowance_usage(
                 (int) $target_profile['user_id'],
                 $rule,

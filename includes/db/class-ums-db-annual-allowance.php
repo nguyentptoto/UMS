@@ -371,6 +371,14 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	}
 
 	/**
+	 * Rule cấp cho CNV mới yêu cầu nhận đúng số lượng, không nhận thiếu hoặc dư.
+	 */
+	public static function requires_exact_quantity( $rule ) {
+		$scope = isset( $rule['rule_scope'] ) ? sanitize_key( $rule['rule_scope'] ) : '';
+		return in_array( $scope, array( 'newcomer', 'newcomer_september' ), true );
+	}
+
+	/**
 	 * Sinh khóa ổn định cho cả rule nhập thủ công và rule import Excel.
 	 */
 	public static function build_rule_key( $rule ) {

@@ -124,6 +124,8 @@ Thứ tự ưu tiên khi kiểm tra cấp phát:
 3. `annual`: định mức định kỳ tháng 4/tháng 9.
 4. Rule thủ công cũ khi nhân viên không thuộc ma trận Excel.
 
+Với rule `newcomer` và `newcomer_september`, số lượng trên phiếu hoặc lần xuất kho chủ động phải đúng tuyệt đối với định mức. Ví dụ định mức mũ là `2` thì nhập `1` hoặc `3` đều bị từ chối; hệ thống vẫn cộng lịch sử đã cấp để ngăn cấp lặp.
+
 Một ô số lượng `0` trong ma trận có nghĩa là không được cấp sản phẩm ở kỳ tương ứng. Hệ thống không tự rơi xuống rule tổng quát khi nhân viên đã thuộc một ma trận import.
 
 ## User Portal
