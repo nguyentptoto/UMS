@@ -190,7 +190,7 @@ Nguồn dữ liệu nằm ở `wp_uniform_inventory_movements`:
 
 Trang `Sản phẩm & Tổng kho` có chức năng tải template `.xlsx` được sinh trực tiếp từ dữ liệu kho hiện hành. Mỗi biến thể/size có đúng một dòng; Admin chỉ nhập `Số lượng` và `Ghi chú`, không nhập tên sản phẩm thủ công.
 
-Các cột `STT`, `Loại sản phẩm`, `Size` và hai cột định danh ẩn được khóa trong Excel. Khi đọc file, UMS xác minh đồng thời `item_id`, tên sản phẩm, size và chữ ký HMAC. Template đã cũ hoặc bị sửa thông tin nhận diện sẽ bị từ chối và phải tải lại template mới.
+Hai cột định danh hệ thống được ẩn trong Excel. Khi đọc file, UMS xác minh đồng thời `item_id`, tên sản phẩm, size và chữ ký HMAC. Vì vậy Admin có thể nhập hoặc dán số lượng thuận tiện, nhưng template đã cũ hay bị sửa thông tin nhận diện vẫn bị từ chối và phải tải lại template mới.
 
 Luồng xử lý gồm `Tải template nhập kho` -> nhập số lượng -> `Đọc và xem trước` -> kiểm tra tồn trước/sau -> `Xác nhận nhập kho`. Việc cộng tồn và ghi lịch sử chạy trong một transaction; nếu một dòng lỗi, toàn bộ file được rollback. Hash file đã nhập thành công được lưu để ngăn import trùng.
 
