@@ -280,9 +280,9 @@ class UMS_Inventory_Import {
 			. '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
 			. '<sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="42" customWidth="1"/><col min="3" max="3" width="14" customWidth="1"/><col min="4" max="4" width="16" customWidth="1"/><col min="5" max="5" width="42" customWidth="1"/><col min="6" max="7" hidden="1"/></cols>'
 			. '<sheetData>' . implode( '', $rows ) . '</sheetData>'
+			. '<sheetProtection sheet="1" objects="1" scenarios="1" selectLockedCells="0" selectUnlockedCells="1"/>'
 			. '<autoFilter ref="A1:E' . $last_row . '"/>'
 			. '<dataValidations count="1"><dataValidation type="whole" operator="between" allowBlank="1" showErrorMessage="1" errorTitle="Số lượng không hợp lệ" error="Chỉ nhập số nguyên từ 1 đến 1000000." sqref="D2:D' . $last_row . '"><formula1>1</formula1><formula2>1000000</formula2></dataValidation></dataValidations>'
-			. '<sheetProtection sheet="1" objects="1" scenarios="1" selectLockedCells="0" selectUnlockedCells="1"/>'
 			. '</worksheet>';
 	}
 
@@ -295,6 +295,9 @@ class UMS_Inventory_Import {
 	}
 
 	private static function xml( $value ) {
+		$value = wp_check_invalid_utf8( (string) $value, true );
+		$value = preg_replace( '/[^\x09\x0A\x0D\x20-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u', '', $value );
+
 		return htmlspecialchars( (string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8' );
 	}
 
