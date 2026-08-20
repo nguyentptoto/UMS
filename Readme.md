@@ -20,6 +20,7 @@ Các bảng nghiệp vụ chính:
 - `wp_uniform_user_profiles`
 - `wp_uniform_product_categories`
 - `wp_uniform_inventory`
+- `wp_uniform_inventory_import_batches`
 - `wp_uniform_annual_allowance_rules`
 - `wp_uniform_inventory_movements`
 - `wp_uniform_requests`
@@ -184,6 +185,16 @@ Khi phiếu đi qua từng bước duyệt:
 Admin xem tại menu `Lịch sử kho`.
 
 Nguồn dữ liệu nằm ở `wp_uniform_inventory_movements`:
+
+### Import nhập kho bằng template UMS
+
+Trang `Sản phẩm & Tổng kho` có chức năng tải template `.xlsx` được sinh trực tiếp từ dữ liệu kho hiện hành. Mỗi biến thể/size có đúng một dòng; Admin chỉ nhập `Số lượng` và `Ghi chú`, không nhập tên sản phẩm thủ công.
+
+Các cột `STT`, `Loại sản phẩm`, `Size` và hai cột định danh ẩn được khóa trong Excel. Khi đọc file, UMS xác minh đồng thời `item_id`, tên sản phẩm, size và chữ ký HMAC. Template đã cũ hoặc bị sửa thông tin nhận diện sẽ bị từ chối và phải tải lại template mới.
+
+Luồng xử lý gồm `Tải template nhập kho` -> nhập số lượng -> `Đọc và xem trước` -> kiểm tra tồn trước/sau -> `Xác nhận nhập kho`. Việc cộng tồn và ghi lịch sử chạy trong một transaction; nếu một dòng lỗi, toàn bộ file được rollback. Hash file đã nhập thành công được lưu để ngăn import trùng.
+
+Chức năng cần bảng `wp_uniform_inventory_import_batches` cùng hai cột `import_batch_id`, `source_row` trong `wp_uniform_inventory_movements`, đã được khai báo trong `ums.sql`. Plugin không tự tạo hoặc tự sửa bảng.
 
 - `in`: nhập kho hoặc tăng tồn kho từ Admin.
 - `out`: xuất kho chủ động từ Admin hoặc xuất kho sau khi phiếu được duyệt hoàn toàn.

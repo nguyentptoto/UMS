@@ -33,6 +33,9 @@ class UMS_Admin {
         add_action( 'admin_post_ums_save_inventory_item', array( __CLASS__, 'handle_save_inventory_item' ) );
         add_action( 'admin_post_ums_delete_inventory_item', array( __CLASS__, 'handle_delete_inventory_item' ) );
         add_action( 'admin_post_ums_manual_inventory_out', array( __CLASS__, 'handle_manual_inventory_out' ) );
+		add_action( 'admin_post_ums_download_inventory_import_template', array( __CLASS__, 'handle_download_inventory_import_template' ) );
+		add_action( 'admin_post_ums_preview_inventory_import', array( __CLASS__, 'handle_preview_inventory_import' ) );
+		add_action( 'admin_post_ums_confirm_inventory_import', array( __CLASS__, 'handle_confirm_inventory_import' ) );
         add_action( 'admin_post_ums_save_annual_allowance', array( __CLASS__, 'handle_save_annual_allowance' ) );
         add_action( 'admin_post_ums_delete_annual_allowance', array( __CLASS__, 'handle_delete_annual_allowance' ) );
         add_action( 'admin_post_ums_preview_annual_allowance_import', array( __CLASS__, 'handle_preview_annual_allowance_import' ) );
@@ -387,6 +390,9 @@ class UMS_Admin {
         $form_values       = self::get_default_inventory_values( $editing_item );
         $available_items   = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
         $recipient_options = UMS_DB_Organization::get_recipient_options();
+		$inventory_import_ready = UMS_DB_Inventory_Import::is_ready();
+		$inventory_preview_token = isset( $_GET['inventory_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['inventory_preview_token'] ) ) : '';
+		$inventory_import_preview = $inventory_preview_token !== '' ? UMS_Inventory_Import::get_preview( $inventory_preview_token ) : null;
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php';
@@ -1455,6 +1461,92 @@ class UMS_Admin {
         $result = UMS_DB_Annual_Allowance::delete( $rule_id );
         self::redirect_to_annual_allowances( array( 'notice' => $result === false ? 'db_error' : 'annual_allowance_deleted' ) );
     }
+
+	public static function handle_download_inventory_import_template() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+
+		check_admin_referer( 'ums_download_inventory_import_template' );
+
+		try {
+			UMS_Inventory_Import::stream_template( UMS_DB_Inventory::get_all() );
+		} catch ( Throwable $error ) {
+			self::redirect_to_inventory(
+				array( 'notice' => 'inventory_import_invalid_file', 'notice_extra' => $error->getMessage() )
+			);
+		}
+	}
+
+	public static function handle_preview_inventory_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+
+		check_admin_referer( 'ums_preview_inventory_import' );
+		if ( ! UMS_DB_Inventory_Import::is_ready() ) {
+			self::redirect_to_inventory( array( 'notice' => 'inventory_import_schema_missing' ) );
+		}
+
+		$file = isset( $_FILES['ums_inventory_import_file'] ) ? $_FILES['ums_inventory_import_file'] : array();
+		if ( empty( $file['tmp_name'] ) || ! empty( $file['error'] )
+			|| (int) $file['size'] > 10 * MB_IN_BYTES
+			|| strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
+			self::redirect_to_inventory( array( 'notice' => 'inventory_import_invalid_file' ) );
+		}
+
+		try {
+			$preview = UMS_Inventory_Import::analyze( $file['tmp_name'], $file['name'] );
+			$token   = UMS_Inventory_Import::store_preview( $preview );
+			self::redirect_to_inventory(
+				array(
+					'notice' => empty( $preview['errors'] ) ? 'inventory_import_preview_ready' : 'inventory_import_preview_warning',
+					'inventory_preview_token' => $token,
+				)
+			);
+		} catch ( Throwable $error ) {
+			self::redirect_to_inventory(
+				array( 'notice' => 'inventory_import_invalid_file', 'notice_extra' => $error->getMessage() )
+			);
+		}
+	}
+
+	public static function handle_confirm_inventory_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+
+		check_admin_referer( 'ums_confirm_inventory_import' );
+		$token   = isset( $_POST['inventory_preview_token'] ) ? sanitize_key( wp_unslash( $_POST['inventory_preview_token'] ) ) : '';
+		$preview = UMS_Inventory_Import::get_preview( $token );
+		if ( ! is_array( $preview ) ) {
+			self::redirect_to_inventory( array( 'notice' => 'inventory_import_preview_expired' ) );
+		}
+		if ( ! empty( $preview['errors'] ) ) {
+			self::redirect_to_inventory(
+				array( 'notice' => 'inventory_import_preview_warning', 'inventory_preview_token' => $token )
+			);
+		}
+
+		$result = UMS_Inventory_Import::import( $preview, get_current_user_id() );
+		if ( empty( $result['success'] ) ) {
+			self::redirect_to_inventory(
+				array(
+					'notice' => 'inventory_import_failed',
+					'inventory_preview_token' => $token,
+					'notice_extra' => implode( ' ', array_slice( $result['errors'], 0, 5 ) ),
+				)
+			);
+		}
+
+		UMS_Inventory_Import::delete_preview( $token );
+		self::redirect_to_inventory(
+			array(
+				'notice' => 'inventory_import_completed',
+				'notice_extra' => sprintf( 'Đã nhập %d dòng, cộng tổng %s sản phẩm.', $result['imported'], number_format_i18n( $result['total'] ) ),
+			)
+		);
+	}
 
     public static function handle_manual_inventory_out() {
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -2607,6 +2699,13 @@ class UMS_Admin {
             'inventory_updated'  => array( 'success', 'Đã cập nhật sản phẩm/tồn kho.' ),
             'inventory_deleted'  => array( 'success', 'Đã xóa sản phẩm khỏi danh mục kho.' ),
             'inventory_manual_out_created' => array( 'success', 'Đã ghi nhận xuất kho chủ động và trừ tồn kho.' ),
+			'inventory_import_preview_ready' => array( 'success', 'Đã đọc template nhập kho. Hãy kiểm tra số lượng trước khi xác nhận.' ),
+			'inventory_import_preview_warning' => array( 'warning', 'Template nhập kho còn lỗi và chưa thể xác nhận.' ),
+			'inventory_import_invalid_file' => array( 'error', 'File nhập kho không hợp lệ hoặc không đọc được.' ),
+			'inventory_import_schema_missing' => array( 'error', 'Database chưa có cấu trúc import kho. Hãy cập nhật các bảng trong ums.sql.' ),
+			'inventory_import_preview_expired' => array( 'error', 'Dữ liệu xem trước nhập kho đã hết hạn. Vui lòng tải lại file.' ),
+			'inventory_import_failed' => array( 'error', 'Import nhập kho không thành công.' ),
+			'inventory_import_completed' => array( 'success', 'Import nhập kho hoàn tất.' ),
             'annual_allowance_created' => array( 'success', 'Đã thêm định mức cấp phát hàng năm.' ),
             'annual_allowance_updated' => array( 'success', 'Đã cập nhật định mức cấp phát hàng năm.' ),
             'annual_allowance_deleted' => array( 'success', 'Đã xóa định mức cấp phát hàng năm.' ),

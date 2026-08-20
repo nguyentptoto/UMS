@@ -32,11 +32,18 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
             }
         }
 
-        return self::db()->insert(
-            self::table(),
-            $data,
-            array( '%d', '%d', '%s', '%d', '%d', '%d', '%f', '%f', '%d', '%d', '%s', '%s' )
-        );
+		$format_map = array(
+			'item_id' => '%d', 'request_id' => '%d', 'movement_type' => '%s', 'quantity' => '%d',
+			'before_qty' => '%d', 'after_qty' => '%d', 'unit_price' => '%f', 'total_price' => '%f',
+			'actor_user_id' => '%d', 'target_user_id' => '%d', 'target_employee_no' => '%s', 'note' => '%s',
+			'import_batch_id' => '%d', 'source_row' => '%d',
+		);
+		$formats = array();
+		foreach ( array_keys( $data ) as $field ) {
+			$formats[] = isset( $format_map[ $field ] ) ? $format_map[ $field ] : '%s';
+		}
+
+		return self::db()->insert( self::table(), $data, $formats );
     }
 
     public static function get_all( $args = array() ) {

@@ -188,6 +188,25 @@ CREATE TABLE `wp_uniform_allowance_import_batches` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 10. BANG LICH SU NHAP/XUAT/DIEU CHINH KHO
+CREATE TABLE `wp_uniform_inventory_import_batches` (
+    `batch_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+    `file_name` VARCHAR(255) NOT NULL,
+    `file_hash` CHAR(64) NOT NULL,
+    `import_status` VARCHAR(20) NOT NULL DEFAULT 'processing' COMMENT 'processing, completed, failed',
+    `total_rows` INT NOT NULL DEFAULT 0,
+    `imported_rows` INT NOT NULL DEFAULT 0,
+    `total_quantity` INT NOT NULL DEFAULT 0,
+    `error_count` INT NOT NULL DEFAULT 0,
+    `error_log` LONGTEXT DEFAULT NULL,
+    `imported_by` BIGINT(20) UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `completed_at` DATETIME DEFAULT NULL,
+    PRIMARY KEY (`batch_id`),
+    KEY `idx_file_hash` (`file_hash`),
+    KEY `idx_import_status` (`import_status`),
+    KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `wp_uniform_inventory_movements` (
     `movement_id` INT AUTO_INCREMENT NOT NULL,
     `item_id` INT NOT NULL,
@@ -202,12 +221,15 @@ CREATE TABLE `wp_uniform_inventory_movements` (
     `target_user_id` BIGINT(20) UNSIGNED DEFAULT NULL,
     `target_employee_no` VARCHAR(100) DEFAULT NULL,
     `note` TEXT DEFAULT NULL,
+    `import_batch_id` BIGINT(20) UNSIGNED DEFAULT NULL,
+    `source_row` INT DEFAULT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`movement_id`),
     KEY `idx_item_id` (`item_id`),
     KEY `idx_request_id` (`request_id`),
     KEY `idx_target_user_id` (`target_user_id`),
     KEY `idx_target_employee_no` (`target_employee_no`),
+    KEY `idx_import_batch_id` (`import_batch_id`),
     KEY `idx_movement_type` (`movement_type`),
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

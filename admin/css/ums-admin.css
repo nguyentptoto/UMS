@@ -357,3 +357,22 @@
     background: var(--ums-admin-warning-bg);
     color: var(--ums-admin-warning-text);
 }
+
+.ums-inline-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.ums-inline-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ums-table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+}

@@ -128,6 +128,18 @@ class UMS_DB_Inventory extends UMS_DB_Base {
         return self::db()->get_row( $sql, ARRAY_A );
     }
 
+	/**
+	 * Lock an inventory row while an import transaction is running.
+	 */
+	public static function get_by_id_for_update( $item_id ) {
+		$sql = self::db()->prepare(
+			'SELECT * FROM ' . self::table() . ' WHERE item_id = %d FOR UPDATE',
+			absint( $item_id )
+		);
+
+		return self::db()->get_row( $sql, ARRAY_A );
+	}
+
     /**
      * Kiểm tra một biến thể sản phẩm đã tồn tại chưa.
      */

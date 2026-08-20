@@ -219,6 +219,64 @@ unset( $section );
         <?php endif; ?>
     </div>
 
+	<div class="ums-panel" id="ums-inventory-import">
+		<h2>Import nhập kho</h2>
+		<p>Template lấy trực tiếp toàn bộ sản phẩm và size đang có trong UMS. Chỉ nhập cột <strong>Số lượng</strong> và <strong>Ghi chú</strong>; không thêm, xóa hoặc sửa các dòng sản phẩm.</p>
+
+		<div class="ums-inline-actions">
+			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ums_download_inventory_import_template' ), 'ums_download_inventory_import_template' ) ); ?>">
+				Tải template nhập kho
+			</a>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
+				<?php wp_nonce_field( 'ums_preview_inventory_import' ); ?>
+				<input type="hidden" name="action" value="ums_preview_inventory_import">
+				<input type="file" name="ums_inventory_import_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+				<button type="submit" class="button button-primary" <?php disabled( ! $inventory_import_ready ); ?>>Đọc và xem trước</button>
+			</form>
+		</div>
+
+		<?php if ( ! $inventory_import_ready ) : ?>
+			<div class="notice notice-warning inline"><p>Hãy cập nhật bảng import kho và hai cột lịch sử theo <code>ums.sql</code> trước khi sử dụng.</p></div>
+		<?php endif; ?>
+	</div>
+
+	<?php if ( is_array( $inventory_import_preview ) ) : ?>
+		<div class="ums-panel ums-inventory-import-preview">
+			<h2>Xem trước nhập kho: <?php echo esc_html( $inventory_import_preview['file_name'] ); ?></h2>
+			<p><?php echo esc_html( sprintf( '%d dòng hợp lệ, tổng số lượng %s.', count( $inventory_import_preview['rows'] ), number_format_i18n( $inventory_import_preview['total_quantity'] ) ) ); ?></p>
+
+			<?php if ( ! empty( $inventory_import_preview['errors'] ) ) : ?>
+				<div class="notice notice-error inline"><p><?php echo esc_html( implode( ' ', array_slice( $inventory_import_preview['errors'], 0, 10 ) ) ); ?></p></div>
+			<?php else : ?>
+				<div class="ums-table-scroll">
+					<table class="widefat striped">
+						<thead><tr><th>Dòng Excel</th><th>Loại sản phẩm</th><th>Size</th><th>SL nhập</th><th>Tồn trước</th><th>Tồn sau</th><th>Ghi chú</th></tr></thead>
+						<tbody>
+						<?php foreach ( $inventory_import_preview['rows'] as $preview_row ) : ?>
+							<tr>
+								<td><?php echo esc_html( $preview_row['source_row'] ); ?></td>
+								<td><?php echo esc_html( $preview_row['product'] ); ?></td>
+								<td><?php echo esc_html( $preview_row['size'] ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $preview_row['quantity'] ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $preview_row['before_qty'] ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $preview_row['after_qty'] ) ); ?></td>
+								<td><?php echo esc_html( $preview_row['note'] ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<?php wp_nonce_field( 'ums_confirm_inventory_import' ); ?>
+					<input type="hidden" name="action" value="ums_confirm_inventory_import">
+					<input type="hidden" name="inventory_preview_token" value="<?php echo esc_attr( $inventory_preview_token ); ?>">
+					<p class="submit"><button type="submit" class="button button-primary">Xác nhận nhập kho</button></p>
+				</form>
+			<?php endif; ?>
+		</div>
+	<?php endif; ?>
+
     <div class="ums-panel" id="ums-manual-inventory-out">
         <h2>Xuất kho chủ động</h2>
         <?php if ( empty( $recipient_options ) ) : ?>
