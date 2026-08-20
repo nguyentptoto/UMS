@@ -1470,7 +1470,7 @@ class UMS_Admin {
 		check_admin_referer( 'ums_download_inventory_import_template' );
 
 		try {
-			UMS_Inventory_Import::stream_template( UMS_DB_Inventory::get_all() );
+			UMS_Inventory_Import::stream_template();
 		} catch ( Throwable $error ) {
 			self::redirect_to_inventory(
 				array( 'notice' => 'inventory_import_invalid_file', 'notice_extra' => $error->getMessage() )

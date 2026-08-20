@@ -221,7 +221,7 @@ unset( $section );
 
 	<div class="ums-panel" id="ums-inventory-import">
 		<h2>Import nhập kho</h2>
-		<p>Template lấy trực tiếp toàn bộ sản phẩm và size đang có trong UMS. Chỉ nhập cột <strong>Số lượng</strong> và <strong>Ghi chú</strong>; không thêm, xóa hoặc sửa các dòng sản phẩm.</p>
+		<p>Nhập <strong>Loại sản phẩm</strong>, <strong>Size</strong>, <strong>Số lượng</strong> và <strong>Ghi chú</strong> nếu có. UMS sẽ đối chiếu Loại sản phẩm + Size với dữ liệu kho trước khi cho phép xác nhận.</p>
 
 		<div class="ums-inline-actions">
 			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ums_download_inventory_import_template' ), 'ums_download_inventory_import_template' ) ); ?>">

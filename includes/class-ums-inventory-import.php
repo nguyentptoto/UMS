@@ -4,17 +4,14 @@
  */
 class UMS_Inventory_Import {
 	const SHEET_NAME              = 'Template';
+	const TEMPLATE_ROW_COUNT      = 500;
 	const PREVIEW_TRANSIENT_PREFIX = 'ums_inventory_import_preview_';
 	const PREVIEW_TTL              = 3600;
 
-	public static function stream_template( $items ) {
+	public static function stream_template() {
 		if ( ! class_exists( 'ZipArchive' ) ) {
 			throw new RuntimeException( 'Máy chủ PHP chưa bật ZipArchive.' );
 		}
-		if ( empty( $items ) ) {
-			throw new RuntimeException( 'Kho chưa có sản phẩm để tạo template.' );
-		}
-
 		$temp_file = tempnam( get_temp_dir(), 'ums-inventory-' );
 		if ( false === $temp_file ) {
 			throw new RuntimeException( 'Không tạo được file tạm trên máy chủ.' );
@@ -31,7 +28,7 @@ class UMS_Inventory_Import {
 		$zip->addFromString( 'xl/workbook.xml', self::workbook_xml() );
 		$zip->addFromString( 'xl/_rels/workbook.xml.rels', self::workbook_relationships_xml() );
 		$zip->addFromString( 'xl/styles.xml', self::styles_xml() );
-		$zip->addFromString( 'xl/worksheets/sheet1.xml', self::worksheet_xml( $items ) );
+		$zip->addFromString( 'xl/worksheets/sheet1.xml', self::worksheet_xml() );
 		$zip->close();
 
 		if ( ! is_file( $temp_file ) ) {
@@ -61,8 +58,7 @@ class UMS_Inventory_Import {
 		$rows   = array();
 		$headers = isset( $sheet[1] ) ? $sheet[1] : array();
 		$expected_headers = array(
-			'A' => 'STT', 'B' => 'Loại sản phẩm', 'C' => 'Size', 'D' => 'Số lượng',
-			'E' => 'Ghi chú', 'F' => 'UMS_ITEM_ID', 'G' => 'UMS_SIGNATURE',
+			'A' => 'STT', 'B' => 'Loại sản phẩm', 'C' => 'Size', 'D' => 'Số lượng', 'E' => 'Ghi chú',
 		);
 
 		foreach ( $expected_headers as $column => $header ) {
@@ -71,53 +67,53 @@ class UMS_Inventory_Import {
 			}
 		}
 
-		$used_items = array();
+		$catalog = self::build_catalog_index( UMS_DB_Inventory::get_all() );
 		foreach ( $sheet as $row_number => $row ) {
 			if ( $row_number < 2 ) {
 				continue;
 			}
+			$product      = sanitize_text_field( isset( $row['B'] ) ? $row['B'] : '' );
+			$size         = sanitize_text_field( isset( $row['C'] ) ? $row['C'] : '' );
 			$quantity_raw = trim( (string) ( isset( $row['D'] ) ? $row['D'] : '' ) );
-			if ( $quantity_raw === '' || ( is_numeric( $quantity_raw ) && (float) $quantity_raw === 0.0 ) ) {
+			$note         = sanitize_textarea_field( isset( $row['E'] ) ? $row['E'] : '' );
+			if ( $product === '' && $size === '' && $quantity_raw === '' && $note === '' ) {
 				continue;
 			}
 
-			$item_id   = absint( isset( $row['F'] ) ? $row['F'] : 0 );
-			$product   = sanitize_text_field( isset( $row['B'] ) ? $row['B'] : '' );
-			$size      = sanitize_text_field( isset( $row['C'] ) ? $row['C'] : '' );
-			$signature = sanitize_text_field( isset( $row['G'] ) ? $row['G'] : '' );
 			$quantity  = filter_var( $quantity_raw, FILTER_VALIDATE_INT );
-			$item      = $item_id > 0 ? UMS_DB_Inventory::get_by_id( $item_id ) : null;
 
+			if ( $product === '' ) {
+				$errors[] = sprintf( 'Dòng %d: Chưa nhập Loại sản phẩm.', $row_number );
+				continue;
+			}
+			if ( $size === '' ) {
+				$errors[] = sprintf( 'Dòng %d: Chưa nhập Size.', $row_number );
+				continue;
+			}
 			if ( false === $quantity || $quantity <= 0 || $quantity > 1000000 ) {
 				$errors[] = sprintf( 'Dòng %d: Số lượng phải là số nguyên từ 1 đến 1.000.000.', $row_number );
 				continue;
 			}
-			if ( ! $item ) {
-				$errors[] = sprintf( 'Dòng %d: Không tìm thấy sản phẩm UMS tương ứng.', $row_number );
+
+			$catalog_key = self::catalog_key( $product, $size );
+			$matches     = isset( $catalog[ $catalog_key ] ) ? $catalog[ $catalog_key ] : array();
+			if ( empty( $matches ) ) {
+				$errors[] = sprintf( 'Dòng %d: Loại sản phẩm "%s" với size "%s" không tồn tại trong hệ thống.', $row_number, $product, $size );
 				continue;
 			}
-			if ( isset( $used_items[ $item_id ] ) ) {
-				$errors[] = sprintf( 'Dòng %d: Sản phẩm bị lặp trong file.', $row_number );
+			if ( count( $matches ) > 1 ) {
+				$errors[] = sprintf( 'Dòng %d: Loại sản phẩm "%s" với size "%s" đang bị trùng trong kho UMS.', $row_number, $product, $size );
 				continue;
 			}
 
-			$expected_product = self::product_label( $item );
-			$expected_size    = trim( (string) $item['size'] );
-			if ( ! hash_equals( self::signature( $item_id, $expected_product, $expected_size ), $signature )
-				|| self::normalize( $product ) !== self::normalize( $expected_product )
-				|| self::normalize( $size ) !== self::normalize( $expected_size ) ) {
-				$errors[] = sprintf( 'Dòng %d: Thông tin sản phẩm đã bị sửa hoặc template đã cũ. Hãy tải template mới.', $row_number );
-				continue;
-			}
-
-			$used_items[ $item_id ] = true;
+			$item = reset( $matches );
 			$rows[] = array(
 				'source_row'  => (int) $row_number,
-				'item_id'     => $item_id,
-				'product'     => $expected_product,
-				'size'        => $expected_size,
+				'item_id'     => (int) $item['item_id'],
+				'product'     => self::product_label( $item ),
+				'size'        => trim( (string) $item['size'] ),
 				'quantity'    => (int) $quantity,
-				'note'        => sanitize_textarea_field( isset( $row['E'] ) ? $row['E'] : '' ),
+				'note'        => $note,
 				'before_qty'  => (int) $item['stock_qty'],
 				'after_qty'   => (int) $item['stock_qty'] + (int) $quantity,
 				'unit_price'  => (float) $item['base_price'],
@@ -186,6 +182,10 @@ class UMS_Inventory_Import {
 				$errors[] = sprintf( 'Dòng %d: Sản phẩm không còn tồn tại.', $row['source_row'] );
 				break;
 			}
+			if ( self::catalog_key( self::product_label( $item ), $item['size'] ) !== self::catalog_key( $row['product'], $row['size'] ) ) {
+				$errors[] = sprintf( 'Dòng %d: Sản phẩm hoặc size đã thay đổi sau bước xem trước. Hãy tải lại file.', $row['source_row'] );
+				break;
+			}
 			$before = (int) $item['stock_qty'];
 			$after  = $before + (int) $row['quantity'];
 			if ( false === UMS_DB_Inventory::update( $row['item_id'], array( 'stock_qty' => $after ) ) ) {
@@ -240,8 +240,21 @@ class UMS_Inventory_Import {
 		return $label !== '' ? $label : trim( (string) $item['item_type'] );
 	}
 
-	private static function signature( $item_id, $product, $size ) {
-		return hash_hmac( 'sha256', absint( $item_id ) . '|' . self::normalize( $product ) . '|' . self::normalize( $size ), wp_salt( 'auth' ) );
+	private static function build_catalog_index( $items ) {
+		$catalog = array();
+		foreach ( $items as $item ) {
+			$key = self::catalog_key( self::product_label( $item ), $item['size'] );
+			if ( ! isset( $catalog[ $key ] ) ) {
+				$catalog[ $key ] = array();
+			}
+			$catalog[ $key ][] = $item;
+		}
+
+		return $catalog;
+	}
+
+	private static function catalog_key( $product, $size ) {
+		return self::normalize( $product ) . "\x1F" . self::normalize( $size );
 	}
 
 	private static function normalize( $value ) {
@@ -249,36 +262,31 @@ class UMS_Inventory_Import {
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
 	}
 
-	private static function worksheet_xml( $items ) {
+	private static function worksheet_xml() {
 		$rows = array();
-		$headers = array( 'STT', 'Loại sản phẩm', 'Size', 'Số lượng', 'Ghi chú', 'UMS_ITEM_ID', 'UMS_SIGNATURE' );
+		$headers = array( 'STT', 'Loại sản phẩm', 'Size', 'Số lượng', 'Ghi chú' );
 		$cells = array();
 		foreach ( $headers as $index => $header ) {
 			$cells[] = self::string_cell( chr( 65 + $index ) . '1', $header, 1 );
 		}
 		$rows[] = '<row r="1" ht="24" customHeight="1">' . implode( '', $cells ) . '</row>';
 
-		foreach ( array_values( $items ) as $index => $item ) {
+		for ( $index = 0; $index < self::TEMPLATE_ROW_COUNT; $index++ ) {
 			$row_number = $index + 2;
-			$product    = self::product_label( $item );
-			$size       = trim( (string) $item['size'] );
-			$signature  = self::signature( $item['item_id'], $product, $size );
 			$rows[] = '<row r="' . $row_number . '">'
 				. self::number_cell( 'A' . $row_number, $index + 1, 0 )
-				. self::string_cell( 'B' . $row_number, $product, 0 )
-				. self::string_cell( 'C' . $row_number, $size, 0 )
+				. '<c r="B' . $row_number . '" s="3" t="inlineStr"><is><t></t></is></c>'
+				. '<c r="C' . $row_number . '" s="3" t="inlineStr"><is><t></t></is></c>'
 				. '<c r="D' . $row_number . '" s="2"/>'
 				. '<c r="E' . $row_number . '" s="3" t="inlineStr"><is><t></t></is></c>'
-				. self::number_cell( 'F' . $row_number, absint( $item['item_id'] ), 0 )
-				. self::string_cell( 'G' . $row_number, $signature, 0 )
 				. '</row>';
 		}
 
-		$last_row = count( $items ) + 1;
+		$last_row = self::TEMPLATE_ROW_COUNT + 1;
 		return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 			. '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
 			. '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
-			. '<sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="42" customWidth="1"/><col min="3" max="3" width="14" customWidth="1"/><col min="4" max="4" width="16" customWidth="1"/><col min="5" max="5" width="42" customWidth="1"/><col min="6" max="7" hidden="1"/></cols>'
+			. '<sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="42" customWidth="1"/><col min="3" max="3" width="14" customWidth="1"/><col min="4" max="4" width="16" customWidth="1"/><col min="5" max="5" width="42" customWidth="1"/></cols>'
 			. '<sheetData>' . implode( '', $rows ) . '</sheetData>'
 			. '<autoFilter ref="A1:E' . $last_row . '"/>'
 			. '<dataValidations count="1"><dataValidation type="whole" operator="between" allowBlank="1" showErrorMessage="1" errorTitle="Số lượng không hợp lệ" error="Chỉ nhập số nguyên từ 1 đến 1000000." sqref="D2:D' . $last_row . '"><formula1>1</formula1><formula2>1000000</formula2></dataValidation></dataValidations>'
