@@ -83,6 +83,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory-movement.php';
 	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory-import.php';
+	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-uniform-material.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-annual-allowance.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-request.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-user.php';
@@ -101,6 +102,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-xlsx-reader.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-annual-allowance-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-inventory-import.php';
+	require_once UMS_PLUGIN_DIR . 'includes/class-ums-uniform-material-import.php';
     UMS_Sheet_User_Sync::init();
     UMS_Organization_Sync::init();
     UMS_Auto_Sync_Bridge::init();

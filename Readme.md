@@ -21,6 +21,8 @@ Các bảng nghiệp vụ chính:
 - `wp_uniform_product_categories`
 - `wp_uniform_inventory`
 - `wp_uniform_inventory_import_batches`
+- `wp_uniform_sap_import_batches`
+- `wp_uniform_sap_materials`
 - `wp_uniform_annual_allowance_rules`
 - `wp_uniform_inventory_movements`
 - `wp_uniform_requests`
@@ -39,6 +41,7 @@ Các bảng nghiệp vụ chính:
 - Quản lý Luồng duyệt phòng ban
 - Quản lý Danh mục sản phẩm cha/con
 - Quản lý Sản phẩm & Tổng kho
+- Quản lý và import master Mã SAP đồng phục
 - Xuất kho chủ động từ Admin
 - Xem lịch sử nhập/xuất/điều chỉnh kho chi tiết
 - Quản lý Định mức cấp phát hàng năm
@@ -58,6 +61,23 @@ ALTER TABLE `wp_uniform_departments`
     ADD COLUMN `department_group` VARCHAR(150) NOT NULL DEFAULT '' AFTER `department_name`,
     ADD KEY `idx_department_group` (`department_group`);
 ```
+
+## Master Mã SAP Đồng Phục
+
+Admin quản lý tại menu `Mã SAP đồng phục`. Đây là bước dữ liệu đầu vào cho module lập PR; phiên bản hiện tại chỉ import và quản lý master, chưa tính số lượng hoặc xuất file PR.
+
+Nguồn import là workbook GA `GA - Xây dựng phần mềm 100% 11đồng phục.xlsx`. Importer chỉ đọc sheet `Mã đồng phục` (chấp nhận tên sheet có khoảng trắng ở đầu) và bốn cột:
+
+- `Mã đồng phục`: mã SAP dạng số, được lưu dưới dạng chuỗi để không làm thay đổi mã nguồn.
+- `Loại`: tên loại/size chi tiết và là khóa nghiệp vụ ổn định của dòng import.
+- `Loại đồng phục lên PR`: nhóm sản phẩm dùng cho bước tổng hợp PR sau này.
+- `Size`: kích cỡ đồng phục; được phép trống nếu dòng nguồn không có size.
+
+Quy trình gồm `Chọn file` -> `Đọc và xem trước` -> ánh xạ `Loại đồng phục lên PR` với Tên sản phẩm UMS -> kiểm tra lỗi/cảnh báo -> `Xác nhận import master mã SAP`. Khi tên hai bên giống nhau, giao diện tự chọn sản phẩm tương ứng. Trước khi ghi dữ liệu, hệ thống bắt buộc mỗi dòng GA phải khớp đúng một dòng kho theo `Sản phẩm + Size` và lưu khóa `inventory_item_id`; thiếu size hoặc có dữ liệu kho trùng sẽ dừng toàn bộ import.
+
+Dữ liệu được ghi theo batch trong transaction. File đã import thành công được nhận diện bằng SHA-256 để ngăn nhập trùng; dòng còn trong file được upsert, còn dòng không xuất hiện trong lần import mới nhất được chuyển sang trạng thái ngừng sử dụng.
+
+Mã SAP xuất hiện ở nhiều loại/size không bị gộp hoặc tự sửa vì đây có thể là dữ liệu nghiệp vụ có chủ đích. Hệ thống giữ nguyên từng dòng, đánh dấu `duplicate_sap` và hiển thị cảnh báo để Admin kiểm tra. Hai bảng liên quan là `wp_uniform_sap_materials` và `wp_uniform_sap_import_batches`, được khai báo đầy đủ trong `ums.sql`.
 
 ## Định Mức Cấp Phát Hàng Năm
 

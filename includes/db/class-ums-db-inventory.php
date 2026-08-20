@@ -110,6 +110,20 @@ class UMS_DB_Inventory extends UMS_DB_Base {
 		return (int) self::db()->get_var( $sql ) > 0;
 	}
 
+	/**
+	 * Tìm đúng một dòng kho theo sản phẩm logic và size.
+	 */
+	public static function get_by_product_size( $category_id, $item_variant, $size ) {
+		$sql = self::db()->prepare(
+			'SELECT * FROM ' . self::table() . ' WHERE category_id = %d AND item_variant = %s AND size = %s ORDER BY item_id ASC',
+			absint( $category_id ),
+			sanitize_text_field( $item_variant ),
+			sanitize_text_field( $size )
+		);
+
+		return self::db()->get_results( $sql, ARRAY_A );
+	}
+
     /**
      * Lấy chi tiết một dòng tồn kho.
      */

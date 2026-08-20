@@ -376,3 +376,22 @@
     max-width: 100%;
     overflow-x: auto;
 }
+
+.ums-summary-strip {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin: 0 0 16px;
+}
+
+.ums-sap-preview-table {
+    max-height: 460px;
+    margin-top: 12px;
+}
+
+.ums-sap-preview-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--ums-admin-surface-soft, #f6f7f7);
+}

@@ -123,6 +123,51 @@ CREATE TABLE `wp_uniform_inventory` (
     KEY `idx_stock_qty` (`stock_qty`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 8A. MASTER MA SAP DONG PHUC IMPORT TU FILE GA
+CREATE TABLE `wp_uniform_sap_import_batches` (
+    `batch_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+    `file_name` VARCHAR(255) NOT NULL,
+    `file_hash` CHAR(64) NOT NULL,
+    `import_status` VARCHAR(20) NOT NULL DEFAULT 'processing' COMMENT 'processing, completed, failed',
+    `total_rows` INT NOT NULL DEFAULT 0,
+    `inserted_rows` INT NOT NULL DEFAULT 0,
+    `updated_rows` INT NOT NULL DEFAULT 0,
+    `deactivated_rows` INT NOT NULL DEFAULT 0,
+    `warning_count` INT NOT NULL DEFAULT 0,
+    `warnings_log` LONGTEXT DEFAULT NULL,
+    `imported_by` BIGINT(20) UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `completed_at` DATETIME DEFAULT NULL,
+    PRIMARY KEY (`batch_id`),
+    KEY `idx_file_hash` (`file_hash`),
+    KEY `idx_import_status` (`import_status`),
+    KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `wp_uniform_sap_materials` (
+    `material_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+    `source_key` CHAR(64) NOT NULL COMMENT 'Khoa on dinh sinh tu cot Loai trong file GA',
+    `sap_code` VARCHAR(30) NOT NULL,
+    `item_name` VARCHAR(255) NOT NULL COMMENT 'Cot Loai trong sheet Ma dong phuc',
+    `product_name` VARCHAR(150) NOT NULL COMMENT 'Cot Loai dong phuc len PR',
+    `size` VARCHAR(20) NOT NULL DEFAULT '',
+    `inventory_item_id` INT NOT NULL COMMENT 'Dong san pham/size tuong ung trong uniform_inventory',
+    `mapping_status` VARCHAR(30) NOT NULL DEFAULT 'valid' COMMENT 'valid, duplicate_sap',
+    `source_row` INT NOT NULL,
+    `source_batch_id` BIGINT(20) UNSIGNED NOT NULL,
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`material_id`),
+    UNIQUE KEY `idx_source_key` (`source_key`),
+    KEY `idx_sap_code` (`sap_code`),
+    KEY `idx_product_size` (`product_name`, `size`),
+    KEY `idx_inventory_item_id` (`inventory_item_id`),
+    KEY `idx_mapping_status` (`mapping_status`),
+    KEY `idx_source_batch_id` (`source_batch_id`),
+    KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 9. BANG DINH MUC CAP PHAT HANG NAM
 CREATE TABLE `wp_uniform_annual_allowance_rules` (
     `rule_id` INT AUTO_INCREMENT NOT NULL,

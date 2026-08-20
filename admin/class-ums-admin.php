@@ -36,6 +36,8 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_download_inventory_import_template', array( __CLASS__, 'handle_download_inventory_import_template' ) );
 		add_action( 'admin_post_ums_preview_inventory_import', array( __CLASS__, 'handle_preview_inventory_import' ) );
 		add_action( 'admin_post_ums_confirm_inventory_import', array( __CLASS__, 'handle_confirm_inventory_import' ) );
+		add_action( 'admin_post_ums_preview_uniform_material_import', array( __CLASS__, 'handle_preview_uniform_material_import' ) );
+		add_action( 'admin_post_ums_confirm_uniform_material_import', array( __CLASS__, 'handle_confirm_uniform_material_import' ) );
         add_action( 'admin_post_ums_save_annual_allowance', array( __CLASS__, 'handle_save_annual_allowance' ) );
         add_action( 'admin_post_ums_delete_annual_allowance', array( __CLASS__, 'handle_delete_annual_allowance' ) );
         add_action( 'admin_post_ums_preview_annual_allowance_import', array( __CLASS__, 'handle_preview_annual_allowance_import' ) );
@@ -132,6 +134,15 @@ class UMS_Admin {
             array( __CLASS__, 'render_product_category_page' )
         );
 
+		add_submenu_page(
+			'tvn-uniform-management',
+			'Quản lý Mã SAP đồng phục',
+			'Mã SAP đồng phục',
+			'manage_options',
+			'tvn-ums-uniform-materials',
+			array( __CLASS__, 'render_uniform_material_page' )
+		);
+
         add_submenu_page(
             'tvn-uniform-management',
             'Lịch sử nhập xuất kho',
@@ -174,7 +185,7 @@ class UMS_Admin {
      */
     public static function enqueue_admin_assets( $hook ) {
         // Chỉ nạp CSS/JS khi Admin đang đứng đúng trong trang của plugin UMS
-        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-organization' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
+        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-organization' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
             return;
         }
 
@@ -417,6 +428,26 @@ class UMS_Admin {
             echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-inventory-movement-list.php</p></div>';
         }
     }
+
+	public static function render_uniform_material_page() {
+		$table_ready = UMS_DB_Uniform_Material::is_ready();
+		$filters = array(
+			'search' => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
+			'status' => isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '',
+		);
+		$materials     = $table_ready ? UMS_DB_Uniform_Material::get_all( $filters ) : array();
+		$product_groups = UMS_DB_Inventory::get_product_groups();
+		$latest_batch  = $table_ready ? UMS_DB_Uniform_Material::get_latest_batch() : null;
+		$preview_token = isset( $_GET['material_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['material_preview_token'] ) ) : '';
+		$import_preview = $preview_token !== '' ? UMS_Uniform_Material_Import::get_preview( $preview_token ) : null;
+		$notice          = self::get_notice();
+
+		if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-uniform-material-list.php' ) ) {
+			include_once UMS_PLUGIN_DIR . 'admin/partials/view-uniform-material-list.php';
+		} else {
+			echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-uniform-material-list.php</p></div>';
+		}
+	}
 
     public static function render_annual_allowance_page() {
         $filters = array(
@@ -1544,6 +1575,81 @@ class UMS_Admin {
 			array(
 				'notice' => 'inventory_import_completed',
 				'notice_extra' => sprintf( 'Đã nhập %d dòng, cộng tổng %s sản phẩm.', $result['imported'], number_format_i18n( $result['total'] ) ),
+			)
+		);
+	}
+
+	public static function handle_preview_uniform_material_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+
+		check_admin_referer( 'ums_preview_uniform_material_import' );
+		if ( ! UMS_DB_Uniform_Material::is_ready() ) {
+			self::redirect_to_uniform_materials( array( 'notice' => 'uniform_material_schema_missing' ) );
+		}
+
+		$file = isset( $_FILES['ums_uniform_material_file'] ) ? $_FILES['ums_uniform_material_file'] : array();
+		if ( empty( $file['tmp_name'] ) || ! empty( $file['error'] )
+			|| (int) $file['size'] > 20 * MB_IN_BYTES
+			|| strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
+			self::redirect_to_uniform_materials( array( 'notice' => 'uniform_material_invalid_file' ) );
+		}
+
+		try {
+			$preview = UMS_Uniform_Material_Import::analyze( $file['tmp_name'], $file['name'] );
+			$token   = UMS_Uniform_Material_Import::store_preview( $preview );
+			self::redirect_to_uniform_materials(
+				array(
+					'notice' => empty( $preview['errors'] ) ? 'uniform_material_preview_ready' : 'uniform_material_preview_error',
+					'material_preview_token' => $token,
+				)
+			);
+		} catch ( Throwable $error ) {
+			self::redirect_to_uniform_materials(
+				array( 'notice' => 'uniform_material_invalid_file', 'notice_extra' => $error->getMessage() )
+			);
+		}
+	}
+
+	public static function handle_confirm_uniform_material_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+
+		check_admin_referer( 'ums_confirm_uniform_material_import' );
+		$token   = isset( $_POST['material_preview_token'] ) ? sanitize_key( wp_unslash( $_POST['material_preview_token'] ) ) : '';
+		$preview = UMS_Uniform_Material_Import::get_preview( $token );
+		if ( ! is_array( $preview ) ) {
+			self::redirect_to_uniform_materials( array( 'notice' => 'uniform_material_preview_expired' ) );
+		}
+		if ( ! empty( $preview['errors'] ) ) {
+			self::redirect_to_uniform_materials(
+				array( 'notice' => 'uniform_material_preview_error', 'material_preview_token' => $token )
+			);
+		}
+
+		$mappings = isset( $_POST['product_mapping'] ) && is_array( $_POST['product_mapping'] )
+			? wp_unslash( $_POST['product_mapping'] )
+			: array();
+		$result = UMS_Uniform_Material_Import::import( $preview, $mappings, get_current_user_id() );
+		if ( empty( $result['success'] ) ) {
+			self::redirect_to_uniform_materials(
+				array(
+					'notice' => 'uniform_material_import_failed', 'material_preview_token' => $token,
+					'notice_extra' => implode( ' ', array_slice( $result['errors'], 0, 5 ) ),
+				)
+			);
+		}
+
+		UMS_Uniform_Material_Import::delete_preview( $token );
+		self::redirect_to_uniform_materials(
+			array(
+				'notice' => 'uniform_material_import_completed',
+				'notice_extra' => sprintf(
+					'Đã thêm %d, cập nhật %d và ngừng sử dụng %d dòng.',
+					$result['inserted'], $result['updated'], $result['deactivated']
+				),
 			)
 		);
 	}
@@ -2706,6 +2812,13 @@ class UMS_Admin {
 			'inventory_import_preview_expired' => array( 'error', 'Dữ liệu xem trước nhập kho đã hết hạn. Vui lòng tải lại file.' ),
 			'inventory_import_failed' => array( 'error', 'Import nhập kho không thành công.' ),
 			'inventory_import_completed' => array( 'success', 'Import nhập kho hoàn tất.' ),
+			'uniform_material_preview_ready' => array( 'success', 'Đã đọc sheet Mã đồng phục. Hãy kiểm tra dữ liệu trước khi xác nhận.' ),
+			'uniform_material_preview_error' => array( 'error', 'File GA có lỗi dữ liệu và chưa thể import.' ),
+			'uniform_material_invalid_file' => array( 'error', 'File GA không hợp lệ hoặc không đọc được sheet Mã đồng phục.' ),
+			'uniform_material_schema_missing' => array( 'error', 'Database chưa có bảng master mã SAP. Hãy cập nhật ums.sql.' ),
+			'uniform_material_preview_expired' => array( 'error', 'Dữ liệu xem trước mã SAP đã hết hạn. Vui lòng tải lại file GA.' ),
+			'uniform_material_import_failed' => array( 'error', 'Import master mã SAP không thành công.' ),
+			'uniform_material_import_completed' => array( 'success', 'Import master mã SAP hoàn tất.' ),
             'annual_allowance_created' => array( 'success', 'Đã thêm định mức cấp phát hàng năm.' ),
             'annual_allowance_updated' => array( 'success', 'Đã cập nhật định mức cấp phát hàng năm.' ),
             'annual_allowance_deleted' => array( 'success', 'Đã xóa định mức cấp phát hàng năm.' ),
@@ -2904,6 +3017,21 @@ class UMS_Admin {
         wp_safe_redirect( $url );
         exit;
     }
+
+	private static function redirect_to_uniform_materials( $args = array() ) {
+		$url = add_query_arg(
+			array_filter(
+				array_merge( array( 'page' => 'tvn-ums-uniform-materials' ), $args ),
+				function( $value ) {
+					return $value !== null && $value !== '';
+				}
+			),
+			admin_url( 'admin.php' )
+		);
+
+		wp_safe_redirect( $url );
+		exit;
+	}
 
     private static function redirect_to_organization( $args = array() ) {
         $url = add_query_arg(
