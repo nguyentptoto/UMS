@@ -112,7 +112,7 @@ $grid_columns = array(
 							<td><?php echo esc_html( $row['item_name'] ); ?></td>
 							<td><?php echo esc_html( $row['product_name'] ); ?></td>
 							<td><?php echo esc_html( $row['size'] ); ?></td>
-							<td><?php echo esc_html( $row['mapping_status'] === 'duplicate_sap' ? 'Mã SAP trùng' : 'Hợp lệ' ); ?></td>
+							<td><?php echo esc_html( $row['mapping_status'] === 'duplicate_sap' ? 'Mã SAP trùng' : 'Hợp lệ cấu trúc' ); ?></td>
 						</tr>
 					<?php endforeach; ?>
 					</tbody>
@@ -125,7 +125,7 @@ $grid_columns = array(
 					<input type="hidden" name="action" value="ums_confirm_uniform_material_import">
 					<input type="hidden" name="material_preview_token" value="<?php echo esc_attr( $preview_token ); ?>">
 					<h3>Ánh xạ Loại đồng phục lên PR</h3>
-					<p class="description">Mỗi loại trong file GA phải trỏ tới một Tên sản phẩm UMS. Hệ thống tự chọn khi tên khớp; khi xác nhận sẽ kiểm tra tiếp từng size.</p>
+					<p class="description">Mỗi loại trong file GA phải trỏ tới một Tên sản phẩm UMS. Khi xác nhận, size chưa có sẽ được tạo trong kho với tồn 0 và dùng đơn giá chung của sản phẩm.</p>
 					<table class="widefat striped">
 						<thead><tr><th>Loại đồng phục lên PR trong GA</th><th>Tên sản phẩm hiện có trong UMS</th></tr></thead>
 						<tbody>

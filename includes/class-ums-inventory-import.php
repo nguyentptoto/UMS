@@ -111,6 +111,25 @@ class UMS_Inventory_Import {
 
 			$is_new = empty( $matches );
 			$item    = $is_new ? null : reset( $matches );
+			$product_key   = self::normalize( $product );
+			$product_items = isset( $catalog['by_product'][ $product_key ] ) ? $catalog['by_product'][ $product_key ] : array();
+			$price_result  = self::resolve_product_price( $product_items );
+			$current_price = $is_new ? 0.0 : (float) $item['base_price'];
+			if ( $price_result['ambiguous'] ) {
+				$errors[] = sprintf(
+					'Dòng %d: Sản phẩm "%s" đang có nhiều đơn giá theo size, không thể tự xác định giá cho size "%s".',
+					$row_number,
+					$product,
+					$size
+				);
+				continue;
+			}
+			$unit_price = $current_price > 0 ? $current_price : $price_result['price'];
+			if ( $is_new && ! empty( $product_items ) ) {
+				// Dùng tên chuẩn đang có để các size không bị tách thành sản phẩm khác
+				// chỉ vì khác cách viết dấu hoặc chữ hoa/thường.
+				$product = self::product_label( reset( $product_items ) );
+			}
 			if ( ! $is_new ) {
 				$product = self::product_label( $item );
 				$size    = trim( (string) $item['size'] );
@@ -135,7 +154,8 @@ class UMS_Inventory_Import {
 				'note'        => $note,
 				'before_qty'  => $is_new ? 0 : (int) $item['stock_qty'],
 				'after_qty'   => ( $is_new ? 0 : (int) $item['stock_qty'] ) + (int) $quantity,
-				'unit_price'  => $is_new ? 0.0 : (float) $item['base_price'],
+				'unit_price'  => (float) $unit_price,
+				'inherit_price' => $current_price <= 0 && $unit_price > 0 ? 1 : 0,
 			);
 		}
 
@@ -169,6 +189,48 @@ class UMS_Inventory_Import {
 		delete_transient( self::PREVIEW_TRANSIENT_PREFIX . sanitize_key( $token ) );
 	}
 
+	/**
+	 * Bổ sung đơn giá cho các size cũ đang bằng 0 khi cùng sản phẩm chỉ có
+	 * đúng một mức giá dương làm căn cứ.
+	 */
+	public static function repair_missing_prices() {
+		$groups = array();
+		foreach ( UMS_DB_Inventory::get_all() as $item ) {
+			$key = absint( $item['category_id'] ) . '|' . self::normalize( self::product_label( $item ) );
+			$groups[ $key ][] = $item;
+		}
+
+		$updated   = 0;
+		$ambiguous = 0;
+		foreach ( $groups as $items ) {
+			$price_result = self::resolve_product_price( $items );
+			$zero_items   = array_filter(
+				$items,
+				function ( $item ) {
+					return (float) $item['base_price'] <= 0;
+				}
+			);
+			if ( empty( $zero_items ) ) {
+				continue;
+			}
+			if ( $price_result['ambiguous'] ) {
+				$ambiguous += count( $zero_items );
+				continue;
+			}
+			if ( $price_result['price'] <= 0 ) {
+				continue;
+			}
+
+			foreach ( $zero_items as $item ) {
+				if ( false !== UMS_DB_Inventory::update( $item['item_id'], array( 'base_price' => $price_result['price'] ) ) ) {
+					$updated++;
+				}
+			}
+		}
+
+		return array( 'updated' => $updated, 'ambiguous' => $ambiguous );
+	}
+
 	public static function import( $preview, $user_id ) {
 		if ( ! UMS_DB_Inventory_Import::is_ready() ) {
 			return array( 'success' => false, 'errors' => array( 'Database chưa có cấu trúc import kho trong ums.sql.' ) );
@@ -194,9 +256,24 @@ class UMS_Inventory_Import {
 		$errors   = array();
 		$imported = 0;
 		$total    = 0;
+		$live_catalog = self::build_catalog_index( UMS_DB_Inventory::get_all() );
 		$wpdb->query( 'START TRANSACTION' );
 
 		foreach ( $preview['rows'] as $row ) {
+			if ( (float) $row['unit_price'] <= 0 ) {
+				$product_key  = self::normalize( $row['product'] );
+				$price_result = self::resolve_product_price(
+					isset( $live_catalog['by_product'][ $product_key ] ) ? $live_catalog['by_product'][ $product_key ] : array()
+				);
+				if ( $price_result['ambiguous'] ) {
+					$errors[] = sprintf( 'Dòng %d: Sản phẩm "%s" có nhiều đơn giá, không thể tự kế thừa.', $row['source_row'], $row['product'] );
+					break;
+				}
+				if ( $price_result['price'] > 0 ) {
+					$row['unit_price']   = $price_result['price'];
+					$row['inherit_price'] = 1;
+				}
+			}
 			$is_new      = ! empty( $row['is_new'] );
 			$created_now = false;
 			$item        = $is_new ? null : UMS_DB_Inventory::get_by_id_for_update( $row['item_id'] );
@@ -218,7 +295,7 @@ class UMS_Inventory_Import {
 						array(
 							'category_id' => $category_id, 'item_type' => $row['category_name'],
 							'item_variant' => $row['product'], 'size' => $row['size'], 'color_code' => '',
-							'stock_qty' => (int) $row['quantity'], 'base_price' => 0,
+							'stock_qty' => (int) $row['quantity'], 'base_price' => (float) $row['unit_price'],
 						)
 					);
 					if ( false === $inserted ) {
@@ -228,7 +305,7 @@ class UMS_Inventory_Import {
 					$item = array(
 						'item_id' => UMS_DB_Inventory::get_last_insert_id(), 'item_variant' => $row['product'],
 						'item_type' => $row['category_name'], 'size' => $row['size'],
-						'stock_qty' => (int) $row['quantity'], 'base_price' => 0,
+						'stock_qty' => (int) $row['quantity'], 'base_price' => (float) $row['unit_price'],
 					);
 					$created_now = true;
 				}
@@ -245,7 +322,12 @@ class UMS_Inventory_Import {
 
 			$before = $created_now ? 0 : (int) $item['stock_qty'];
 			$after  = $created_now ? (int) $row['quantity'] : $before + (int) $row['quantity'];
-			if ( ! $created_now && false === UMS_DB_Inventory::update( $item['item_id'], array( 'stock_qty' => $after ) ) ) {
+			$inventory_update = array( 'stock_qty' => $after );
+			if ( ! empty( $row['inherit_price'] ) && (float) $item['base_price'] <= 0 && (float) $row['unit_price'] > 0 ) {
+				$inventory_update['base_price'] = (float) $row['unit_price'];
+				$item['base_price']             = (float) $row['unit_price'];
+			}
+			if ( ! $created_now && false === UMS_DB_Inventory::update( $item['item_id'], $inventory_update ) ) {
 				$errors[] = sprintf( 'Dòng %d: Không cập nhật được tồn kho.', $row['source_row'] );
 				break;
 			}
@@ -343,6 +425,21 @@ class UMS_Inventory_Import {
 		}
 
 		return $catalog;
+	}
+
+	private static function resolve_product_price( $items ) {
+		$prices = array();
+		foreach ( $items as $item ) {
+			$price = isset( $item['base_price'] ) ? round( (float) $item['base_price'], 2 ) : 0;
+			if ( $price > 0 ) {
+				$prices[ number_format( $price, 2, '.', '' ) ] = $price;
+			}
+		}
+
+		return array(
+			'price'     => count( $prices ) === 1 ? (float) reset( $prices ) : 0.0,
+			'ambiguous' => count( $prices ) > 1,
+		);
 	}
 
 	private static function catalog_key( $product, $size ) {

@@ -188,11 +188,19 @@ unset( $section );
                 $section_columns[] = array( 'text' => 'Đơn giá', 'datafield' => 'base_price', 'width' => '14%', 'cellsalign' => 'right' );
 
                 foreach ( $section['rows'] as $row ) {
-                    $prices = array_values( array_unique( array_map( 'floatval', $row['prices'] ) ) );
-                    sort( $prices, SORT_NUMERIC );
-                    $price_label = count( $prices ) > 1
-                        ? number_format_i18n( reset( $prices ), 0 ) . ' - ' . number_format_i18n( end( $prices ), 0 )
-                        : number_format_i18n( reset( $prices ), 0 );
+					$positive_prices = array_values(
+						array_unique(
+							array_filter(
+								array_map( 'floatval', $row['prices'] ),
+								function ( $price ) {
+									return $price > 0;
+								}
+							)
+						)
+					);
+					$price_label = count( $positive_prices ) > 1
+						? 'Cần chuẩn hóa'
+						: number_format_i18n( empty( $positive_prices ) ? 0 : reset( $positive_prices ), 0 );
                     $grid_row = array(
                         'product_label' => $row['label'],
                         'total'         => $row['total'],
@@ -233,6 +241,11 @@ unset( $section );
 				<input type="file" name="ums_inventory_import_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
 				<button type="submit" class="button button-primary" <?php disabled( ! $inventory_import_ready ); ?>>Nhập kho</button>
 			</form>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<?php wp_nonce_field( 'ums_repair_inventory_prices' ); ?>
+				<input type="hidden" name="action" value="ums_repair_inventory_prices">
+				<button type="submit" class="button">Chuẩn hóa đơn giá sản phẩm</button>
+			</form>
 		</div>
 
 		<?php if ( ! $inventory_import_ready ) : ?>
@@ -246,7 +259,7 @@ unset( $section );
 			<?php $new_inventory_rows = isset( $inventory_import_preview['new_rows'] ) ? absint( $inventory_import_preview['new_rows'] ) : 0; ?>
 			<p><?php echo esc_html( sprintf( '%d dòng hợp lệ, tổng số lượng %s; trong đó %d dòng sẽ tạo sản phẩm mới.', count( $inventory_import_preview['rows'] ), number_format_i18n( $inventory_import_preview['total_quantity'] ), $new_inventory_rows ) ); ?></p>
 			<?php if ( $new_inventory_rows > 0 ) : ?>
-				<div class="notice notice-warning inline"><p>Sản phẩm mới được tạo với đơn giá 0. Hãy cập nhật đơn giá trong bảng kho trước khi sử dụng cho cấp phát hoặc tính PR.</p></div>
+				<div class="notice notice-warning inline"><p>Size mới sẽ kế thừa đơn giá khi sản phẩm đã có đúng một mức giá. Sản phẩm hoàn toàn mới chưa có giá tham chiếu sẽ được tạo với đơn giá 0 và cần cập nhật trước khi cấp phát hoặc tính PR.</p></div>
 			<?php endif; ?>
 
 			<?php if ( ! empty( $inventory_import_preview['errors'] ) ) : ?>
@@ -254,7 +267,7 @@ unset( $section );
 			<?php else : ?>
 				<div class="ums-table-scroll">
 					<table class="widefat striped">
-						<thead><tr><th>Dòng Excel</th><th>Loại sản phẩm</th><th>Size</th><th>Xử lý</th><th>SL nhập</th><th>Tồn trước</th><th>Tồn sau</th><th>Ghi chú</th></tr></thead>
+						<thead><tr><th>Dòng Excel</th><th>Loại sản phẩm</th><th>Size</th><th>Xử lý</th><th>SL nhập</th><th>Tồn trước</th><th>Tồn sau</th><th>Đơn giá áp dụng</th><th>Ghi chú</th></tr></thead>
 						<tbody>
 						<?php foreach ( $inventory_import_preview['rows'] as $preview_row ) : ?>
 							<tr>
@@ -265,6 +278,7 @@ unset( $section );
 								<td><?php echo esc_html( number_format_i18n( $preview_row['quantity'] ) ); ?></td>
 								<td><?php echo esc_html( number_format_i18n( $preview_row['before_qty'] ) ); ?></td>
 								<td><?php echo esc_html( number_format_i18n( $preview_row['after_qty'] ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( (float) $preview_row['unit_price'], 0 ) ); ?></td>
 								<td><?php echo esc_html( $preview_row['note'] ); ?></td>
 							</tr>
 						<?php endforeach; ?>

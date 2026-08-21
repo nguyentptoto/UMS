@@ -124,6 +124,16 @@ class UMS_DB_Inventory extends UMS_DB_Base {
 		return self::db()->get_results( $sql, ARRAY_A );
 	}
 
+	public static function get_product_rows( $category_id, $item_variant ) {
+		$sql = self::db()->prepare(
+			'SELECT * FROM ' . self::table() . ' WHERE category_id = %d AND item_variant = %s ORDER BY item_id ASC',
+			absint( $category_id ),
+			sanitize_text_field( $item_variant )
+		);
+
+		return self::db()->get_results( $sql, ARRAY_A );
+	}
+
 	public static function get_by_name_and_size( $product, $size ) {
 		$sql = self::db()->prepare(
 			'SELECT * FROM ' . self::table() . "
@@ -201,6 +211,22 @@ class UMS_DB_Inventory extends UMS_DB_Base {
             array( '%d' )
         );
     }
+
+	/**
+	 * Đơn giá thuộc về sản phẩm; mọi size trong cùng sản phẩm phải cùng giá.
+	 */
+	public static function update_product_price( $category_id, $item_variant, $base_price ) {
+		return self::db()->update(
+			self::table(),
+			array( 'base_price' => (float) $base_price ),
+			array(
+				'category_id'  => absint( $category_id ),
+				'item_variant' => sanitize_text_field( $item_variant ),
+			),
+			array( '%f' ),
+			array( '%d', '%s' )
+		);
+	}
 
     /**
      * Xóa sản phẩm/tồn kho.

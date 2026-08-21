@@ -73,7 +73,7 @@ Nguồn import là workbook GA `GA - Xây dựng phần mềm 100% 11đồng ph�
 - `Loại đồng phục lên PR`: nhóm sản phẩm dùng cho bước tổng hợp PR sau này.
 - `Size`: kích cỡ đồng phục; được phép trống nếu dòng nguồn không có size.
 
-Quy trình gồm `Chọn file` -> `Đọc và xem trước` -> ánh xạ `Loại đồng phục lên PR` với Tên sản phẩm UMS -> kiểm tra lỗi/cảnh báo -> `Xác nhận import master mã SAP`. Khi tên hai bên giống nhau, giao diện tự chọn sản phẩm tương ứng. Trước khi ghi dữ liệu, hệ thống bắt buộc mỗi dòng GA phải khớp đúng một dòng kho theo `Sản phẩm + Size` và lưu khóa `inventory_item_id`; thiếu size hoặc có dữ liệu kho trùng sẽ dừng toàn bộ import.
+Quy trình gồm `Chọn file` -> `Đọc và xem trước` -> ánh xạ `Loại đồng phục lên PR` với Tên sản phẩm UMS -> kiểm tra lỗi/cảnh báo -> `Xác nhận import master mã SAP`. Khi tên hai bên giống nhau, giao diện tự chọn sản phẩm tương ứng. Hệ thống liên kết từng dòng GA theo `Sản phẩm + Size` và lưu khóa `inventory_item_id`; `2XL/XXL`, `3XL/XXXL` và size trống/`0` được nhận là tương đương. Size chưa có được tạo trong kho với tồn `0` và đơn giá chung của sản phẩm. Chỉ dữ liệu kho trùng hoặc sản phẩm đang có nhiều đơn giá chưa chuẩn hóa mới dừng import.
 
 Dữ liệu được ghi theo batch trong transaction. File đã import thành công được nhận diện bằng SHA-256 để ngăn nhập trùng; dòng còn trong file được upsert, còn dòng không xuất hiện trong lần import mới nhất được chuyển sang trạng thái ngừng sử dụng.
 
@@ -212,7 +212,7 @@ Trang `Sản phẩm & Tổng kho` có chức năng tải template `.xlsx` trốn
 
 Khi đọc file, UMS tách hậu tố `Size ...` rồi đối chiếu chính xác cặp `Loại sản phẩm + Size` với dữ liệu kho. Nếu tên không có hậu tố size và chưa tồn tại, hệ thống dùng size kỹ thuật `0`; nếu sản phẩm đã có nhiều size, hệ thống yêu cầu bổ sung size vào tên. Dòng khớp với nhiều bản ghi hoặc trùng sản phẩm/size với một dòng khác trong cùng file sẽ bị báo lỗi theo số dòng Excel.
 
-Sản phẩm/size chưa tồn tại được hiển thị là `Tạo mới` trong bước xem trước. Khi xác nhận, UMS tạo danh mục cha từ từ đầu tiên của tên sản phẩm (`Áo`, `Quần`, `Giày`, `Mũ`...), tạo sản phẩm với đơn giá mặc định `0`, cộng tồn và ghi lịch sử trong cùng transaction. Danh mục cha chưa tồn tại cũng được tạo tự động. Admin cần cập nhật đơn giá cho sản phẩm mới trước khi cấp phát hoặc tính PR.
+Sản phẩm/size chưa tồn tại được hiển thị là `Tạo mới` trong bước xem trước. Khi xác nhận, UMS tạo danh mục cha từ từ đầu tiên của tên sản phẩm (`Áo`, `Quần`, `Giày`, `Mũ`...), cộng tồn và ghi lịch sử trong cùng transaction. Đơn giá thuộc về loại sản phẩm và được dùng chung cho mọi size: size mới tự kế thừa giá đang có của sản phẩm; sản phẩm hoàn toàn mới chưa có giá tham chiếu mới dùng giá `0`. Khi Admin sửa giá ở một size, UMS đồng bộ giá đó sang toàn bộ size cùng sản phẩm.
 
 Luồng xử lý gồm `Tải template nhập kho` -> nhập số lượng -> `Đọc và xem trước` -> kiểm tra tồn trước/sau -> `Xác nhận nhập kho`. Việc cộng tồn và ghi lịch sử chạy trong một transaction; nếu một dòng lỗi, toàn bộ file được rollback. Hash file đã nhập thành công được lưu để ngăn import trùng.
 

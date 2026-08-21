@@ -145,16 +145,44 @@ class UMS_Uniform_Material_Import {
 			if ( ! isset( $resolved_products[ $preview_row['product_name'] ] ) ) {
 				continue;
 			}
-			$product = $resolved_products[ $preview_row['product_name'] ];
-			$matches = UMS_DB_Inventory::get_by_product_size( $product['category_id'], $product['item_variant'], $preview_row['size'] );
-			if ( count( $matches ) !== 1 ) {
+			$product      = $resolved_products[ $preview_row['product_name'] ];
+			$product_rows = UMS_DB_Inventory::get_product_rows( $product['category_id'], $product['item_variant'] );
+			$matches      = self::find_size_matches( $product_rows, $preview_row['size'] );
+			if ( count( $matches ) > 1 ) {
 				$mapping_errors[] = sprintf(
-					'Dòng %d: sản phẩm "%s" size "%s" phải khớp đúng một dòng trong kho (hiện có %d).',
+					'Dòng %d: sản phẩm "%s" size "%s" đang trùng %d dòng trong kho.',
 					$preview_row['source_row'], $product['item_variant'], $preview_row['size'], count( $matches )
 				);
 				continue;
 			}
-			$preview_row['inventory_item_id'] = absint( $matches[0]['item_id'] );
+			if ( count( $matches ) === 1 ) {
+				$preview_row['inventory_item_id'] = absint( $matches[0]['item_id'] );
+				continue;
+			}
+
+			$price_result = self::resolve_product_price( $product_rows );
+			if ( $price_result['ambiguous'] ) {
+				$mapping_errors[] = sprintf(
+					'Dòng %d: sản phẩm "%s" đang có nhiều đơn giá. Hãy chuẩn hóa đơn giá trước khi import mã SAP.',
+					$preview_row['source_row'], $product['item_variant']
+				);
+				continue;
+			}
+			$reference = reset( $product_rows );
+			$preview_row['inventory_item_id'] = 0;
+			$preview_row['create_inventory']  = array(
+				'category_id'  => absint( $product['category_id'] ),
+				'item_type'    => isset( $reference['item_type'] ) ? (string) $reference['item_type'] : '',
+				'item_variant' => (string) $product['item_variant'],
+				'size'         => self::canonical_size( $preview_row['size'] ),
+				'color_code'   => '',
+				'stock_qty'    => 0,
+				'base_price'   => $price_result['price'],
+			);
+			$preview['warnings'][] = sprintf(
+				'Dòng %d: size "%s" của "%s" chưa có trong kho và sẽ được tạo với tồn 0.',
+				$preview_row['source_row'], $preview_row['size'], $product['item_variant']
+			);
 		}
 		unset( $preview_row );
 
@@ -185,6 +213,23 @@ class UMS_Uniform_Material_Import {
 		$wpdb->query( 'START TRANSACTION' );
 
 		foreach ( $preview['rows'] as $row ) {
+			if ( empty( $row['inventory_item_id'] ) && ! empty( $row['create_inventory'] ) ) {
+				$create_data  = $row['create_inventory'];
+				$current_rows = UMS_DB_Inventory::get_product_rows( $create_data['category_id'], $create_data['item_variant'] );
+				$current_size = self::find_size_matches( $current_rows, $create_data['size'] );
+				if ( count( $current_size ) > 1 ) {
+					$errors[] = sprintf( 'Dòng %d: size vừa được tạo trùng trong kho.', $row['source_row'] );
+					break;
+				}
+				if ( count( $current_size ) === 1 ) {
+					$row['inventory_item_id'] = absint( $current_size[0]['item_id'] );
+				} elseif ( false === UMS_DB_Inventory::insert( $create_data ) ) {
+					$errors[] = sprintf( 'Dòng %d: không tạo được size mới trong kho: %s', $row['source_row'], UMS_DB_Inventory::get_last_error() );
+					break;
+				} else {
+					$row['inventory_item_id'] = UMS_DB_Inventory::get_last_insert_id();
+				}
+			}
 			$row['source_batch_id'] = $batch_id;
 			$row['updated_at']      = current_time( 'mysql' );
 			if ( ! UMS_DB_Uniform_Material::upsert( $row ) ) {
@@ -244,5 +289,41 @@ class UMS_Uniform_Material_Import {
 		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
 		$value = remove_accents( $value );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+	}
+
+	private static function find_size_matches( $rows, $size ) {
+		$normalized = self::normalize_size( $size );
+		return array_values(
+			array_filter(
+				$rows,
+				function ( $row ) use ( $normalized ) {
+					return self::normalize_size( isset( $row['size'] ) ? $row['size'] : '' ) === $normalized;
+				}
+			)
+		);
+	}
+
+	private static function normalize_size( $size ) {
+		$size = strtoupper( preg_replace( '/\s+/u', '', trim( (string) $size ) ) );
+		$aliases = array( '' => '0', '2XL' => 'XXL', '3XL' => 'XXXL' );
+		return isset( $aliases[ $size ] ) ? $aliases[ $size ] : $size;
+	}
+
+	private static function canonical_size( $size ) {
+		return self::normalize_size( $size );
+	}
+
+	private static function resolve_product_price( $rows ) {
+		$prices = array();
+		foreach ( $rows as $row ) {
+			$price = isset( $row['base_price'] ) ? round( (float) $row['base_price'], 2 ) : 0;
+			if ( $price > 0 ) {
+				$prices[ number_format( $price, 2, '.', '' ) ] = $price;
+			}
+		}
+		return array(
+			'price'     => count( $prices ) === 1 ? (float) reset( $prices ) : 0.0,
+			'ambiguous' => count( $prices ) > 1,
+		);
 	}
 }
