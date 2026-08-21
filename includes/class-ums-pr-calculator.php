@@ -69,11 +69,38 @@ class UMS_PR_Calculator {
 				array_keys( array_filter( $reserve_by_item ) )
 			)
 		);
+		$resolved_materials_by_item = array();
 		foreach ( $relevant_item_ids as $item_id ) {
-			$match_count = isset( $materials_by_item[ absint( $item_id ) ] ) ? count( $materials_by_item[ absint( $item_id ) ] ) : 0;
-			if ( $match_count > 1 ) {
-				$errors[] = sprintf( 'Sản phẩm kho #%d đang liên kết với %d dòng master SAP; không thể phân bổ số lượng chính xác.', $item_id, $match_count );
+			$matches = isset( $materials_by_item[ absint( $item_id ) ] ) ? $materials_by_item[ absint( $item_id ) ] : array();
+			if ( empty( $matches ) ) {
+				continue;
 			}
+
+			$sap_codes = array_values(
+				array_unique(
+					array_filter(
+						array_map(
+							function ( $material ) {
+								return trim( (string) $material['sap_code'] );
+							},
+							$matches
+						)
+					)
+				)
+			);
+
+			if ( count( $sap_codes ) > 1 ) {
+				$errors[] = sprintf(
+					'Sản phẩm kho #%d đang liên kết với nhiều mã SAP (%s); không thể phân bổ số lượng chính xác.',
+					$item_id,
+					implode( ', ', $sap_codes )
+				);
+				continue;
+			}
+
+			// Nhiều tên nguồn có thể cùng quy về một sản phẩm kho. Nếu mã SAP giống nhau,
+			// chúng là một đầu ra PR và chỉ được tính đúng một lần.
+			$resolved_materials_by_item[ absint( $item_id ) ] = reset( $matches );
 		}
 
 		if ( ! empty( $errors ) ) {
@@ -90,8 +117,10 @@ class UMS_PR_Calculator {
 		$warnings = array();
 
 		foreach ( $included_item_ids as $item_id ) {
-			$matches = isset( $materials_by_item[ absint( $item_id ) ] ) ? $materials_by_item[ absint( $item_id ) ] : array();
-			foreach ( $matches as $material ) {
+			$material = isset( $resolved_materials_by_item[ absint( $item_id ) ] )
+				? $resolved_materials_by_item[ absint( $item_id ) ]
+				: null;
+			if ( $material ) {
 				$periodic_qty = isset( $periodic_by_item[ $item_id ] ) ? max( 0, (int) $periodic_by_item[ $item_id ] ) : 0;
 				$reserve_qty  = isset( $reserve_by_item[ $item_id ] ) ? max( 0, (int) $reserve_by_item[ $item_id ] ) : 0;
 				$stock_qty    = max( 0, (int) $material['inventory_stock_qty'] );
@@ -106,7 +135,7 @@ class UMS_PR_Calculator {
 					'material_id'     => absint( $material['material_id'] ),
 					'inventory_item_id' => absint( $item_id ),
 					'sap_code'        => (string) $material['sap_code'],
-					'item_name'       => (string) $material['item_name'],
+					'item_name'       => (string) ( $material['product_name'] !== '' ? $material['product_name'] : $material['item_name'] ),
 					'product_name'    => (string) $material['product_name'],
 					'size'            => (string) $material['size'],
 					'periodic_qty'    => $periodic_qty,

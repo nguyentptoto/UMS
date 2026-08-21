@@ -186,6 +186,35 @@ class UMS_Uniform_Material_Import {
 		}
 		unset( $preview_row );
 
+		$target_sap_codes = array();
+		$target_labels    = array();
+		foreach ( $preview['rows'] as $row ) {
+			if ( ! empty( $row['inventory_item_id'] ) ) {
+				$target_key   = 'item:' . absint( $row['inventory_item_id'] );
+				$target_label = 'sản phẩm kho #' . absint( $row['inventory_item_id'] );
+			} elseif ( ! empty( $row['create_inventory'] ) ) {
+				$create       = $row['create_inventory'];
+				$target_key   = 'new:' . absint( $create['category_id'] ) . '|' . self::normalize( $create['item_variant'] ) . '|' . self::normalize_size( $create['size'] );
+				$target_label = sprintf( 'sản phẩm "%s" size "%s"', $create['item_variant'], $create['size'] );
+			} else {
+				continue;
+			}
+
+			$target_sap_codes[ $target_key ][ trim( (string) $row['sap_code'] ) ] = true;
+			$target_labels[ $target_key ] = $target_label;
+		}
+
+		foreach ( $target_sap_codes as $target_key => $sap_codes ) {
+			$codes = array_keys( $sap_codes );
+			if ( count( $codes ) > 1 ) {
+				$mapping_errors[] = sprintf(
+					'%s đang được ánh xạ tới nhiều mã SAP (%s). Mỗi sản phẩm/size chỉ được có một mã SAP đầu ra.',
+					$target_labels[ $target_key ],
+					implode( ', ', $codes )
+				);
+			}
+		}
+
 		if ( ! empty( $mapping_errors ) ) {
 			return array( 'success' => false, 'errors' => array_values( array_unique( $mapping_errors ) ) );
 		}
