@@ -231,7 +231,7 @@ unset( $section );
 				<?php wp_nonce_field( 'ums_preview_inventory_import' ); ?>
 				<input type="hidden" name="action" value="ums_preview_inventory_import">
 				<input type="file" name="ums_inventory_import_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-				<button type="submit" class="button button-primary" <?php disabled( ! $inventory_import_ready ); ?>>Đọc và xem trước</button>
+				<button type="submit" class="button button-primary" <?php disabled( ! $inventory_import_ready ); ?>>Nhập kho</button>
 			</form>
 		</div>
 
