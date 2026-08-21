@@ -53,31 +53,32 @@ class UMS_Inventory_Import {
 			throw new RuntimeException( 'Không tìm thấy sheet Template.' );
 		}
 
-		$sheet  = $reader->read_sheet( self::SHEET_NAME );
-		$errors = array();
-		$rows   = array();
+		$sheet   = $reader->read_sheet( self::SHEET_NAME );
+		$errors  = array();
+		$rows    = array();
 		$headers = isset( $sheet[1] ) ? $sheet[1] : array();
-		$expected_headers = array(
-			'A' => 'STT', 'B' => 'Loại sản phẩm', 'C' => 'Size', 'D' => 'Số lượng', 'E' => 'Ghi chú',
-		);
-
-		foreach ( $expected_headers as $column => $header ) {
-			if ( self::normalize( isset( $headers[ $column ] ) ? $headers[ $column ] : '' ) !== self::normalize( $header ) ) {
-				$errors[] = sprintf( 'Cột %s không đúng cấu trúc template UMS.', $column );
-			}
+		$layout  = self::detect_layout( $headers );
+		if ( false === $layout ) {
+			$errors[] = 'Template phải có dạng STT, Loại sản phẩm, Số lượng, Ghi chú; hoặc dạng cũ có thêm cột Size riêng.';
 		}
 
-		$catalog = self::build_catalog_index( UMS_DB_Inventory::get_all() );
+		$catalog       = self::build_catalog_index( UMS_DB_Inventory::get_all() );
+		$seen_item_ids = array();
 		foreach ( $sheet as $row_number => $row ) {
-			if ( $row_number < 2 ) {
+			if ( $row_number < 2 || false === $layout ) {
 				continue;
 			}
-			$product      = sanitize_text_field( isset( $row['B'] ) ? $row['B'] : '' );
-			$size         = sanitize_text_field( isset( $row['C'] ) ? $row['C'] : '' );
-			$quantity_raw = trim( (string) ( isset( $row['D'] ) ? $row['D'] : '' ) );
-			$note         = sanitize_textarea_field( isset( $row['E'] ) ? $row['E'] : '' );
+			$product      = sanitize_text_field( isset( $row[ $layout['product'] ] ) ? $row[ $layout['product'] ] : '' );
+			$size         = $layout['size'] !== '' ? sanitize_text_field( isset( $row[ $layout['size'] ] ) ? $row[ $layout['size'] ] : '' ) : '';
+			$quantity_raw = trim( (string) ( isset( $row[ $layout['quantity'] ] ) ? $row[ $layout['quantity'] ] : '' ) );
+			$note         = sanitize_textarea_field( isset( $row[ $layout['note'] ] ) ? $row[ $layout['note'] ] : '' );
 			if ( $product === '' && $size === '' && $quantity_raw === '' && $note === '' ) {
 				continue;
+			}
+			if ( $layout['size'] === '' ) {
+				$parsed  = self::parse_product_and_size( $product );
+				$product = $parsed['product'];
+				$size    = $parsed['size'];
 			}
 
 			$quantity  = filter_var( $quantity_raw, FILTER_VALIDATE_INT );
@@ -86,30 +87,44 @@ class UMS_Inventory_Import {
 				$errors[] = sprintf( 'Dòng %d: Chưa nhập Loại sản phẩm.', $row_number );
 				continue;
 			}
-			if ( $size === '' ) {
-				$errors[] = sprintf( 'Dòng %d: Chưa nhập Size.', $row_number );
-				continue;
-			}
 			if ( false === $quantity || $quantity <= 0 || $quantity > 1000000 ) {
 				$errors[] = sprintf( 'Dòng %d: Số lượng phải là số nguyên từ 1 đến 1.000.000.', $row_number );
 				continue;
 			}
 
-			$catalog_key = self::catalog_key( $product, $size );
-			$matches     = isset( $catalog[ $catalog_key ] ) ? $catalog[ $catalog_key ] : array();
+			if ( $size !== '' ) {
+				$catalog_key = self::catalog_key( $product, $size );
+				$matches     = isset( $catalog['by_product_size'][ $catalog_key ] ) ? $catalog['by_product_size'][ $catalog_key ] : array();
+			} else {
+				$product_key = self::normalize( $product );
+				$matches     = isset( $catalog['by_product'][ $product_key ] ) ? $catalog['by_product'][ $product_key ] : array();
+			}
 			if ( empty( $matches ) ) {
-				$errors[] = sprintf( 'Dòng %d: Loại sản phẩm "%s" với size "%s" không tồn tại trong hệ thống.', $row_number, $product, $size );
+				$errors[] = $size === ''
+					? sprintf( 'Dòng %d: Loại sản phẩm "%s" không tồn tại trong hệ thống.', $row_number, $product )
+					: sprintf( 'Dòng %d: Loại sản phẩm "%s" với size "%s" không tồn tại trong hệ thống.', $row_number, $product, $size );
 				continue;
 			}
 			if ( count( $matches ) > 1 ) {
-				$errors[] = sprintf( 'Dòng %d: Loại sản phẩm "%s" với size "%s" đang bị trùng trong kho UMS.', $row_number, $product, $size );
+				$errors[] = $size === ''
+					? sprintf( 'Dòng %d: Loại sản phẩm "%s" có nhiều size. Hãy thêm hậu tố "Size ..." vào tên.', $row_number, $product )
+					: sprintf( 'Dòng %d: Loại sản phẩm "%s" với size "%s" đang bị trùng trong kho UMS.', $row_number, $product, $size );
 				continue;
 			}
 
 			$item = reset( $matches );
+			$item_id = (int) $item['item_id'];
+			if ( isset( $seen_item_ids[ $item_id ] ) ) {
+				$errors[] = sprintf(
+					'Dòng %d: Sản phẩm "%s" size "%s" đã được nhập tại dòng %d.',
+					$row_number, self::product_label( $item ), $item['size'], $seen_item_ids[ $item_id ]
+				);
+				continue;
+			}
+			$seen_item_ids[ $item_id ] = (int) $row_number;
 			$rows[] = array(
 				'source_row'  => (int) $row_number,
-				'item_id'     => (int) $item['item_id'],
+				'item_id'     => $item_id,
 				'product'     => self::product_label( $item ),
 				'size'        => trim( (string) $item['size'] ),
 				'quantity'    => (int) $quantity,
@@ -241,13 +256,20 @@ class UMS_Inventory_Import {
 	}
 
 	private static function build_catalog_index( $items ) {
-		$catalog = array();
+		$catalog = array( 'by_product_size' => array(), 'by_product' => array() );
 		foreach ( $items as $item ) {
-			$key = self::catalog_key( self::product_label( $item ), $item['size'] );
-			if ( ! isset( $catalog[ $key ] ) ) {
-				$catalog[ $key ] = array();
+			$product = self::product_label( $item );
+			$key     = self::catalog_key( $product, $item['size'] );
+			if ( ! isset( $catalog['by_product_size'][ $key ] ) ) {
+				$catalog['by_product_size'][ $key ] = array();
 			}
-			$catalog[ $key ][] = $item;
+			$catalog['by_product_size'][ $key ][] = $item;
+
+			$product_key = self::normalize( $product );
+			if ( ! isset( $catalog['by_product'][ $product_key ] ) ) {
+				$catalog['by_product'][ $product_key ] = array();
+			}
+			$catalog['by_product'][ $product_key ][] = $item;
 		}
 
 		return $catalog;
@@ -257,6 +279,33 @@ class UMS_Inventory_Import {
 		return self::normalize( $product ) . "\x1F" . self::normalize( $size );
 	}
 
+	private static function detect_layout( $headers ) {
+		$header = function( $column ) use ( $headers ) {
+			return self::normalize( isset( $headers[ $column ] ) ? $headers[ $column ] : '' );
+		};
+		$product_headers = array( self::normalize( 'Loại sản phẩm' ), self::normalize( 'Loại' ) );
+		if ( $header( 'A' ) !== self::normalize( 'STT' ) || ! in_array( $header( 'B' ), $product_headers, true ) ) {
+			return false;
+		}
+		if ( $header( 'C' ) === self::normalize( 'Số lượng' ) && $header( 'D' ) === self::normalize( 'Ghi chú' ) ) {
+			return array( 'product' => 'B', 'size' => '', 'quantity' => 'C', 'note' => 'D' );
+		}
+		if ( $header( 'C' ) === self::normalize( 'Size' ) && $header( 'D' ) === self::normalize( 'Số lượng' ) && $header( 'E' ) === self::normalize( 'Ghi chú' ) ) {
+			return array( 'product' => 'B', 'size' => 'C', 'quantity' => 'D', 'note' => 'E' );
+		}
+
+		return false;
+	}
+
+	private static function parse_product_and_size( $value ) {
+		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
+		if ( preg_match( '/^(.*?)\s+size\s*[:\-]?\s*([^\s]+)\s*$/iu', $value, $matches ) ) {
+			return array( 'product' => trim( $matches[1] ), 'size' => trim( $matches[2] ) );
+		}
+
+		return array( 'product' => $value, 'size' => '' );
+	}
+
 	private static function normalize( $value ) {
 		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
@@ -264,7 +313,7 @@ class UMS_Inventory_Import {
 
 	private static function worksheet_xml() {
 		$rows = array();
-		$headers = array( 'STT', 'Loại sản phẩm', 'Size', 'Số lượng', 'Ghi chú' );
+		$headers = array( 'STT', 'Loại sản phẩm', 'Số lượng', 'Ghi chú' );
 		$cells = array();
 		foreach ( $headers as $index => $header ) {
 			$cells[] = self::string_cell( chr( 65 + $index ) . '1', $header, 1 );
@@ -276,9 +325,8 @@ class UMS_Inventory_Import {
 			$rows[] = '<row r="' . $row_number . '">'
 				. self::number_cell( 'A' . $row_number, $index + 1, 0 )
 				. '<c r="B' . $row_number . '" s="3" t="inlineStr"><is><t></t></is></c>'
-				. '<c r="C' . $row_number . '" s="3" t="inlineStr"><is><t></t></is></c>'
-				. '<c r="D' . $row_number . '" s="2"/>'
-				. '<c r="E' . $row_number . '" s="3" t="inlineStr"><is><t></t></is></c>'
+				. '<c r="C' . $row_number . '" s="2"/>'
+				. '<c r="D' . $row_number . '" s="3" t="inlineStr"><is><t></t></is></c>'
 				. '</row>';
 		}
 
@@ -286,10 +334,10 @@ class UMS_Inventory_Import {
 		return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 			. '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
 			. '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
-			. '<sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="42" customWidth="1"/><col min="3" max="3" width="14" customWidth="1"/><col min="4" max="4" width="16" customWidth="1"/><col min="5" max="5" width="42" customWidth="1"/></cols>'
+			. '<sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="52" customWidth="1"/><col min="3" max="3" width="16" customWidth="1"/><col min="4" max="4" width="42" customWidth="1"/></cols>'
 			. '<sheetData>' . implode( '', $rows ) . '</sheetData>'
-			. '<autoFilter ref="A1:E' . $last_row . '"/>'
-			. '<dataValidations count="1"><dataValidation type="whole" operator="between" allowBlank="1" showErrorMessage="1" errorTitle="Số lượng không hợp lệ" error="Chỉ nhập số nguyên từ 1 đến 1000000." sqref="D2:D' . $last_row . '"><formula1>1</formula1><formula2>1000000</formula2></dataValidation></dataValidations>'
+			. '<autoFilter ref="A1:D' . $last_row . '"/>'
+			. '<dataValidations count="1"><dataValidation type="whole" operator="between" allowBlank="1" showErrorMessage="1" errorTitle="Số lượng không hợp lệ" error="Chỉ nhập số nguyên từ 1 đến 1000000." sqref="C2:C' . $last_row . '"><formula1>1</formula1><formula2>1000000</formula2></dataValidation></dataValidations>'
 			. '</worksheet>';
 	}
 

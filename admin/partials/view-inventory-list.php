@@ -221,7 +221,7 @@ unset( $section );
 
 	<div class="ums-panel" id="ums-inventory-import">
 		<h2>Import nhập kho</h2>
-		<p>Nhập <strong>Loại sản phẩm</strong>, <strong>Size</strong>, <strong>Số lượng</strong> và <strong>Ghi chú</strong> nếu có. UMS sẽ đối chiếu Loại sản phẩm + Size với dữ liệu kho trước khi cho phép xác nhận.</p>
+		<p>Nhập <strong>Loại sản phẩm</strong> kèm size ở cuối tên, ví dụ <code>Quần CN Size L</code>, sau đó nhập <strong>Số lượng</strong> và <strong>Ghi chú</strong> nếu có. Sản phẩm không có size chỉ được nhận khi tên khớp duy nhất một dòng kho.</p>
 
 		<div class="ums-inline-actions">
 			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ums_download_inventory_import_template' ), 'ums_download_inventory_import_template' ) ); ?>">

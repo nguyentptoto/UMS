@@ -208,9 +208,9 @@ Nguồn dữ liệu nằm ở `wp_uniform_inventory_movements`:
 
 ### Import nhập kho bằng template UMS
 
-Trang `Sản phẩm & Tổng kho` có chức năng tải template `.xlsx` trống gồm STT, Loại sản phẩm, Size, Số lượng và Ghi chú. Admin tự nhập các dòng hàng cần nhập kho; template không sinh trước danh sách sản phẩm.
+Trang `Sản phẩm & Tổng kho` có chức năng tải template `.xlsx` trống gồm `STT`, `Loại sản phẩm`, `Số lượng` và `Ghi chú`. Admin tự nhập các dòng hàng cần nhập kho; template không sinh trước danh sách sản phẩm. Size được đặt ở cuối tên, ví dụ `Quần CN Size L` hoặc `Giầy KPR O-010 Size 35`. Importer vẫn đọc được template 5 cột cũ có cột `Size` riêng.
 
-Khi đọc file, UMS đối chiếu chính xác cặp `Loại sản phẩm + Size` với dữ liệu kho. Dòng không tồn tại hoặc khớp với nhiều bản ghi trùng trong UMS sẽ bị báo lỗi theo số dòng Excel và chưa được phép xác nhận nhập kho.
+Khi đọc file, UMS tách hậu tố `Size ...` rồi đối chiếu chính xác cặp `Loại sản phẩm + Size` với dữ liệu kho. Nếu tên không có hậu tố size, sản phẩm chỉ hợp lệ khi khớp duy nhất một dòng kho; nếu sản phẩm có nhiều size, hệ thống yêu cầu bổ sung size vào tên. Dòng không tồn tại, khớp với nhiều bản ghi hoặc trùng sản phẩm/size với một dòng khác trong cùng file sẽ bị báo lỗi theo số dòng Excel và chưa được phép xác nhận nhập kho.
 
 Luồng xử lý gồm `Tải template nhập kho` -> nhập số lượng -> `Đọc và xem trước` -> kiểm tra tồn trước/sau -> `Xác nhận nhập kho`. Việc cộng tồn và ghi lịch sử chạy trong một transaction; nếu một dòng lỗi, toàn bộ file được rollback. Hash file đã nhập thành công được lưu để ngăn import trùng.
 
