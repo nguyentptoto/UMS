@@ -165,6 +165,35 @@ class UMS_DB_Request extends UMS_DB_Base {
 		);
 	}
 
+	/**
+	 * Tổng hợp số lượng trên các phiếu đã hoàn tất theo từng dòng kho trong năm.
+	 *
+	 * Filter cho phép thay nguồn đăng ký định kỳ khi hệ thống có bảng tổng hợp riêng.
+	 */
+	public static function get_completed_demand_by_item( $year ) {
+		$year       = absint( $year );
+		$start_date = sprintf( '%04d-01-01 00:00:00', $year );
+		$end_date   = sprintf( '%04d-01-01 00:00:00', $year + 1 );
+		$sql        = self::db()->prepare(
+			'SELECT details.item_id, SUM(details.quantity) AS total_quantity
+			FROM ' . self::table() . ' requests
+			INNER JOIN ' . self::detail_table() . ' details ON details.request_id = requests.request_id
+			WHERE requests.current_status = %s AND requests.created_at >= %s AND requests.created_at < %s
+			GROUP BY details.item_id',
+			'completed',
+			$start_date,
+			$end_date
+		);
+		$rows       = self::db()->get_results( $sql, ARRAY_A );
+		$demand     = array();
+
+		foreach ( $rows as $row ) {
+			$demand[ absint( $row['item_id'] ) ] = max( 0, (int) $row['total_quantity'] );
+		}
+
+		return apply_filters( 'ums_pr_periodic_demand_by_item', $demand, $year );
+	}
+
 	public static function insert_with_details( $request, $details ) {
 		$wpdb = self::db();
 		$wpdb->query( 'START TRANSACTION' );

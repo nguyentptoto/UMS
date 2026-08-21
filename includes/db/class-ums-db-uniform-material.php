@@ -45,7 +45,8 @@ class UMS_DB_Uniform_Material extends UMS_DB_Base {
 		}
 
 		$limit    = max( 1, min( 10000, absint( $args['limit'] ) ) );
-		$sql      = 'SELECT materials.*, inventory.item_variant AS inventory_product_name, inventory.size AS inventory_size
+		$sql      = 'SELECT materials.*, inventory.item_variant AS inventory_product_name, inventory.size AS inventory_size,
+			inventory.stock_qty AS inventory_stock_qty, inventory.base_price AS inventory_base_price
 			FROM ' . self::table() . ' materials
 			LEFT JOIN ' . UMS_DB_Inventory::table() . ' inventory ON inventory.item_id = materials.inventory_item_id
 			WHERE ' . implode( ' AND ', $where )

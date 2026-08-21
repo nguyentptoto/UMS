@@ -44,8 +44,10 @@ class UMS_Admin {
         add_action( 'admin_post_ums_confirm_annual_allowance_import', array( __CLASS__, 'handle_confirm_annual_allowance_import' ) );
         add_action( 'admin_post_ums_sync_organization', array( __CLASS__, 'handle_sync_organization' ) );
         add_action( 'admin_post_ums_save_sheet_sync_settings', array( __CLASS__, 'handle_save_sheet_sync_settings' ) );
+		add_action( 'admin_post_ums_export_pr', array( __CLASS__, 'handle_export_pr' ) );
         add_action( 'wp_ajax_ums_sync_user_password', array( __CLASS__, 'handle_sync_user_password' ) );
         add_action( 'wp_ajax_ums_get_organization_employees', array( __CLASS__, 'handle_get_organization_employees' ) );
+		add_action( 'wp_ajax_ums_calculate_pr', array( __CLASS__, 'handle_calculate_pr' ) );
     }
 
     /**
@@ -143,6 +145,15 @@ class UMS_Admin {
 			array( __CLASS__, 'render_uniform_material_page' )
 		);
 
+		add_submenu_page(
+			'tvn-uniform-management',
+			'Tính số lượng PR',
+			'Tính số lượng PR',
+			'manage_options',
+			'tvn-ums-pr-calculation',
+			array( __CLASS__, 'render_pr_calculation_page' )
+		);
+
         add_submenu_page(
             'tvn-uniform-management',
             'Lịch sử nhập xuất kho',
@@ -185,7 +196,7 @@ class UMS_Admin {
      */
     public static function enqueue_admin_assets( $hook ) {
         // Chỉ nạp CSS/JS khi Admin đang đứng đúng trong trang của plugin UMS
-        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-organization' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
+        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-organization' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
             return;
         }
 
@@ -447,6 +458,18 @@ class UMS_Admin {
 		} else {
 			echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-uniform-material-list.php</p></div>';
 		}
+	}
+
+	public static function render_pr_calculation_page() {
+		$table_ready  = UMS_DB_Uniform_Material::is_ready();
+		$default_year = (int) current_time( 'Y' );
+
+		if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-pr-calculation.php' ) ) {
+			include UMS_PLUGIN_DIR . 'admin/partials/view-pr-calculation.php';
+			return;
+		}
+
+		echo '<div class="notice notice-error"><p>Không tìm thấy giao diện tính số lượng PR.</p></div>';
 	}
 
     public static function render_annual_allowance_page() {
@@ -2855,6 +2878,94 @@ class UMS_Admin {
             'message' => trim( $messages[ $code ][1] . ' ' . $extra ),
         );
     }
+
+	public static function handle_calculate_pr() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'Bạn không có quyền tính số lượng PR.' ), 403 );
+		}
+		check_ajax_referer( 'ums_pr_calculation', 'security' );
+
+		try {
+			$file = self::validate_pr_upload();
+			$result = UMS_PR_Calculator::calculate(
+				$file['tmp_name'],
+				isset( $_POST['pr_year'] ) ? absint( $_POST['pr_year'] ) : 0,
+				isset( $_POST['period_month'] ) ? absint( $_POST['period_month'] ) : 0
+			);
+
+			if ( empty( $result['success'] ) ) {
+				wp_send_json_error(
+					array(
+						'message' => 'Dữ liệu tính PR chưa hợp lệ.',
+						'errors'  => $result['errors'],
+					),
+					400
+				);
+			}
+
+			wp_send_json_success( $result );
+		} catch ( Throwable $exception ) {
+			wp_send_json_error( array( 'message' => $exception->getMessage() ), 400 );
+		}
+	}
+
+	public static function handle_export_pr() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền xuất PR.', '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'ums_export_pr' );
+
+		try {
+			$file          = self::validate_pr_upload();
+			$delivery_date = isset( $_POST['delivery_date'] ) ? sanitize_text_field( wp_unslash( $_POST['delivery_date'] ) ) : '';
+			$date_parts    = array_map( 'intval', explode( '-', $delivery_date ) );
+			if ( count( $date_parts ) !== 3 || ! checkdate( $date_parts[1], $date_parts[2], $date_parts[0] ) ) {
+				throw new InvalidArgumentException( 'Ngày giao hàng không hợp lệ.' );
+			}
+
+			$result = UMS_PR_Calculator::calculate(
+				$file['tmp_name'],
+				isset( $_POST['pr_year'] ) ? absint( $_POST['pr_year'] ) : 0,
+				isset( $_POST['period_month'] ) ? absint( $_POST['period_month'] ) : 0
+			);
+			if ( empty( $result['success'] ) ) {
+				throw new RuntimeException( implode( ' ', $result['errors'] ) );
+			}
+
+			UMS_PR_Export::stream(
+				$result,
+				array(
+					'delivery_date'      => $delivery_date,
+					'requesting_section' => isset( $_POST['requesting_section'] ) ? sanitize_text_field( wp_unslash( $_POST['requesting_section'] ) ) : '',
+					'using_cost_center'  => isset( $_POST['using_cost_center'] ) ? sanitize_text_field( wp_unslash( $_POST['using_cost_center'] ) ) : '',
+				)
+			);
+		} catch ( Throwable $exception ) {
+			wp_die( esc_html( $exception->getMessage() ), 'Không thể xuất PR', array( 'response' => 400, 'back_link' => true ) );
+		}
+	}
+
+	private static function validate_pr_upload() {
+		if ( empty( $_FILES['reserve_file'] ) || ! is_array( $_FILES['reserve_file'] ) ) {
+			throw new InvalidArgumentException( 'Hãy chọn file số lượng đặt dự phòng.' );
+		}
+
+		$file = $_FILES['reserve_file'];
+		if ( ! isset( $file['error'] ) || UPLOAD_ERR_OK !== (int) $file['error'] ) {
+			throw new InvalidArgumentException( 'Không tải được file số lượng đặt dự phòng.' );
+		}
+		if ( empty( $file['tmp_name'] ) || ! is_uploaded_file( $file['tmp_name'] ) ) {
+			throw new InvalidArgumentException( 'File tải lên không hợp lệ.' );
+		}
+		if ( (int) $file['size'] <= 0 || (int) $file['size'] > 10 * MB_IN_BYTES ) {
+			throw new InvalidArgumentException( 'File dự phòng phải có dung lượng từ 1 byte đến 10 MB.' );
+		}
+		if ( strtolower( pathinfo( sanitize_file_name( $file['name'] ), PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
+			throw new InvalidArgumentException( 'Chỉ chấp nhận file .xlsx.' );
+		}
+
+		return $file;
+	}
 
     private static function redirect_to_profiles( $args = array() ) {
         $url = add_query_arg(

@@ -103,6 +103,8 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-annual-allowance-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-inventory-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-uniform-material-import.php';
+	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-calculator.php';
+	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-export.php';
     UMS_Sheet_User_Sync::init();
     UMS_Organization_Sync::init();
     UMS_Auto_Sync_Bridge::init();

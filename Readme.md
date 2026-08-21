@@ -64,7 +64,7 @@ ALTER TABLE `wp_uniform_departments`
 
 ## Master Mã SAP Đồng Phục
 
-Admin quản lý tại menu `Mã SAP đồng phục`. Đây là bước dữ liệu đầu vào cho module lập PR; phiên bản hiện tại chỉ import và quản lý master, chưa tính số lượng hoặc xuất file PR.
+Admin quản lý tại menu `Mã SAP đồng phục`. Đây là dữ liệu đầu vào cho module `Tính số lượng PR`, dùng để liên kết mã SAP với từng sản phẩm và size trong kho.
 
 Nguồn import là workbook GA `GA - Xây dựng phần mềm 100% 11đồng phục.xlsx`. Importer chỉ đọc sheet `Mã đồng phục` (chấp nhận tên sheet có khoảng trắng ở đầu) và bốn cột:
 
@@ -354,3 +354,19 @@ UMS/
 |-- ums.sql
 `-- Readme.md
 ```
+
+## Tính Số Lượng Và Xuất PR
+
+Admin sử dụng menu `Tính số lượng PR`. File đầu vào là workbook `6. Template số lượng đặt dự phòng.xlsx`, sheet `Sheet1`, gồm hai cột `Loại đồng phục dự phòng` và `Số lượng`.
+
+Dữ liệu dự phòng chỉ tồn tại trong file upload và request hiện tại; hệ thống không ghi file, không dùng transient và không tạo thêm bảng database. Khi Admin thay đổi file hoặc điều kiện, kết quả cũ bị vô hiệu hóa và phải tính lại trước khi xuất.
+
+Công thức áp dụng theo từng dòng master mã SAP và size:
+
+```text
+SL PR = max(0, SL trên phiếu đã hoàn thành trong năm + SL dự phòng - Tồn kho hiện tại)
+```
+
+Tên loại trong file dự phòng phải khớp duy nhất với cột `item_name` của master mã SAP. Master tiếp tục dùng `inventory_item_id` để lấy size, tồn kho và đơn giá từ UMS. Dòng cần lên PR nhưng chưa có đơn giá được cảnh báo trên màn hình và không được xuất file.
+
+Kết quả được hiển thị bằng jqxGrid. Nút `Xuất file PR` tính lại trực tiếp từ file đang chọn rồi ghi vào workbook mẫu tại `assets/templates/ums-pr-template.xlsx`; sheet mapping của mẫu được giữ nguyên. Nguồn nhu cầu định kỳ mặc định là chi tiết các phiếu có trạng thái `completed` trong năm được chọn. Có thể thay nguồn tổng hợp này bằng filter `ums_pr_periodic_demand_by_item` khi UMS có bảng đăng ký định kỳ chuyên biệt.

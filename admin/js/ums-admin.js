@@ -350,6 +350,156 @@
             });
         });
 
+        var $prForm = $('#ums-pr-calculation-form');
+        if ($prForm.length) {
+            var $calculatePr = $('#ums-calculate-pr');
+            var $exportPr = $('#ums-export-pr');
+            var $prStatus = $('#ums-pr-status');
+            var $prPanel = $('#ums-pr-result-panel');
+            var $prMessages = $('#ums-pr-messages');
+            var $prSummary = $('#ums-pr-summary');
+            var $prGrid = $('#ums-pr-result-grid');
+            var numberFormat = new Intl.NumberFormat('vi-VN');
+
+            function markPrResultStale() {
+                $exportPr.prop('disabled', true);
+                if ($prPanel.is(':visible')) {
+                    $prStatus.text('Dữ liệu đầu vào đã thay đổi. Hãy tính lại trước khi xuất.');
+                }
+            }
+
+            function renderPrMessages(errors, warnings) {
+                $prMessages.empty();
+                if (errors && errors.length) {
+                    $('<div class="notice notice-error inline"><p></p></div>')
+                        .find('p').text(errors.join(' ')).end()
+                        .appendTo($prMessages);
+                }
+                if (warnings && warnings.length) {
+                    $('<div class="notice notice-warning inline"><p></p></div>')
+                        .find('p').text(warnings.join(' ')).end()
+                        .appendTo($prMessages);
+                }
+            }
+
+            function renderPrGrid(rows) {
+                var source = {
+                    datatype: 'array',
+                    localdata: rows,
+                    datafields: [
+                        {name: 'sap_code', type: 'string'},
+                        {name: 'item_name', type: 'string'},
+                        {name: 'size', type: 'string'},
+                        {name: 'periodic_qty', type: 'number'},
+                        {name: 'reserve_qty', type: 'number'},
+                        {name: 'stock_qty', type: 'number'},
+                        {name: 'final_pr_qty', type: 'number'},
+                        {name: 'base_price', type: 'number'},
+                        {name: 'estimated_amount', type: 'number'}
+                    ]
+                };
+                var adapter = new $.jqx.dataAdapter(source);
+                var options = {
+                    width: '100%',
+                    autoheight: true,
+                    source: adapter,
+                    theme: 'energyblue',
+                    pageable: true,
+                    pagesize: 20,
+                    pagesizeoptions: ['10', '20', '50', '100'],
+                    sortable: true,
+                    filterable: true,
+                    showfilterrow: true,
+                    columnsresize: true,
+                    altrows: true,
+                    columns: [
+                        {text: 'Mã SAP', datafield: 'sap_code', width: 115},
+                        {text: 'Loại đồng phục', datafield: 'item_name', minwidth: 260},
+                        {text: 'Size', datafield: 'size', width: 70, cellsalign: 'center'},
+                        {text: 'SL định kỳ', datafield: 'periodic_qty', width: 100, cellsalign: 'right'},
+                        {text: 'SL dự phòng', datafield: 'reserve_qty', width: 105, cellsalign: 'right'},
+                        {text: 'Tồn kho', datafield: 'stock_qty', width: 90, cellsalign: 'right'},
+                        {text: 'SL PR', datafield: 'final_pr_qty', width: 90, cellsalign: 'right'},
+                        {text: 'Đơn giá', datafield: 'base_price', width: 120, cellsalign: 'right', cellsformat: 'n0'},
+                        {text: 'Thành tiền dự kiến', datafield: 'estimated_amount', width: 155, cellsalign: 'right', cellsformat: 'n0'}
+                    ],
+                    localization: {
+                        emptydatastring: 'Không có sản phẩm cần tính',
+                        loadtext: 'Đang tải...',
+                        pagergotopagestring: 'Trang:',
+                        pagershowrowsstring: 'Số dòng:',
+                        pagerrangestring: ' / '
+                    }
+                };
+
+                if ($prGrid.hasClass('jqx-widget')) {
+                    $prGrid.jqxGrid(options);
+                    $prGrid.jqxGrid('updatebounddata');
+                } else {
+                    $prGrid.jqxGrid(options);
+                }
+            }
+
+            $prForm.on('change input', 'input, select', markPrResultStale);
+
+            $calculatePr.on('click', function () {
+                var form = $prForm.get(0);
+                if (!form.reportValidity()) {
+                    return;
+                }
+
+                var payload = new FormData(form);
+                payload.set('action', 'ums_calculate_pr');
+                payload.set('security', $prForm.find('[name="pr_security"]').val());
+                $calculatePr.prop('disabled', true).text('Đang tính...');
+                $exportPr.prop('disabled', true);
+                $prStatus.text('Đang đọc file và tổng hợp dữ liệu...');
+                $prMessages.empty();
+
+                $.ajax({
+                    url: window.umsAdmin.ajaxUrl,
+                    method: 'POST',
+                    data: payload,
+                    processData: false,
+                    contentType: false
+                }).done(function (response) {
+                    if (!response || !response.success) {
+                        throw new Error('Không nhận được kết quả tính PR hợp lệ.');
+                    }
+
+                    var data = response.data;
+                    var summary = data.summary || {};
+                    renderPrGrid(data.rows || []);
+                    renderPrMessages([], data.warnings || []);
+                    $prSummary.text(
+                        'Định kỳ: ' + numberFormat.format(summary.periodic_qty || 0) +
+                        ' | Dự phòng: ' + numberFormat.format(summary.reserve_qty || 0) +
+                        ' | Tồn kho: ' + numberFormat.format(summary.stock_qty || 0) +
+                        ' | Số lượng PR: ' + numberFormat.format(summary.final_pr_qty || 0) +
+                        ' | Giá trị dự kiến: ' + numberFormat.format(summary.estimated_amount || 0) + ' VND'
+                    );
+                    $prPanel.prop('hidden', false).show();
+                    $exportPr.prop('disabled', !data.can_export);
+                    $prStatus.text('Đã tính xong ' + numberFormat.format(summary.row_count || 0) + ' dòng.');
+                }).fail(function (xhr) {
+                    var response = xhr.responseJSON || {};
+                    var data = response.data || {};
+                    var errors = data.errors || [];
+                    if (!errors.length && data.message) {
+                        errors.push(data.message);
+                    }
+                    if (!errors.length) {
+                        errors.push('Không thể tính số lượng PR.');
+                    }
+                    renderPrMessages(errors, []);
+                    $prPanel.prop('hidden', false).show();
+                    $prStatus.text('Tính PR thất bại.');
+                }).always(function () {
+                    $calculatePr.prop('disabled', false).text('Tính số lượng PR');
+                });
+            });
+        }
+
         $('.ums-jqx-grid').each(function () {
             var $grid = $(this);
             var rows = $grid.data('rows') || [];

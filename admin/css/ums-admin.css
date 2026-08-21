@@ -395,3 +395,43 @@
     z-index: 1;
     background: var(--ums-admin-surface-soft, #f6f7f7);
 }
+.ums-pr-form-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 16px;
+}
+
+.ums-pr-form-grid label {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.ums-pr-form-grid input,
+.ums-pr-form-grid select {
+	width: 100%;
+	max-width: none;
+}
+
+.ums-pr-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 18px;
+}
+
+#ums-pr-status {
+	color: #50575e;
+}
+
+.ums-pr-summary {
+	margin-bottom: 14px;
+	font-weight: 600;
+	line-height: 1.7;
+}
+
+#ums-pr-result-grid {
+	width: 100%;
+}
