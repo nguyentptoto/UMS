@@ -237,12 +237,15 @@ class UMS_Admin {
             'after'
         );
 
+        $admin_js_path = UMS_PLUGIN_DIR . 'admin/js/ums-admin.js';
+        $admin_js_version = file_exists( $admin_js_path ) ? (string) filemtime( $admin_js_path ) : '1.3.1';
+
         // Nạp file Javascript
         wp_enqueue_script( 
             'ums-admin-js', 
             UMS_PLUGIN_URL . 'admin/js/ums-admin.js', 
             array( 'jquery', 'ums-jqx-all' ),
-            '1.3.0',
+            $admin_js_version,
             true 
         );
 
@@ -254,6 +257,19 @@ class UMS_Admin {
                 'passwordSyncNonce' => wp_create_nonce( 'ums_sync_user_password' ),
             )
         );
+
+        if ( strpos( $hook, 'tvn-ums-pr-calculation' ) !== false ) {
+            $pr_js_path = UMS_PLUGIN_DIR . 'admin/js/ums-pr-calculation.js';
+            $pr_js_version = file_exists( $pr_js_path ) ? (string) filemtime( $pr_js_path ) : '1.0.0';
+
+            wp_enqueue_script(
+                'ums-pr-calculation-js',
+                UMS_PLUGIN_URL . 'admin/js/ums-pr-calculation.js',
+                array( 'ums-admin-js' ),
+                $pr_js_version,
+                true
+            );
+        }
     }
 
     /**
