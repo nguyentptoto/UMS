@@ -243,20 +243,25 @@ unset( $section );
 	<?php if ( is_array( $inventory_import_preview ) ) : ?>
 		<div class="ums-panel ums-inventory-import-preview">
 			<h2>Xem trước nhập kho: <?php echo esc_html( $inventory_import_preview['file_name'] ); ?></h2>
-			<p><?php echo esc_html( sprintf( '%d dòng hợp lệ, tổng số lượng %s.', count( $inventory_import_preview['rows'] ), number_format_i18n( $inventory_import_preview['total_quantity'] ) ) ); ?></p>
+			<?php $new_inventory_rows = isset( $inventory_import_preview['new_rows'] ) ? absint( $inventory_import_preview['new_rows'] ) : 0; ?>
+			<p><?php echo esc_html( sprintf( '%d dòng hợp lệ, tổng số lượng %s; trong đó %d dòng sẽ tạo sản phẩm mới.', count( $inventory_import_preview['rows'] ), number_format_i18n( $inventory_import_preview['total_quantity'] ), $new_inventory_rows ) ); ?></p>
+			<?php if ( $new_inventory_rows > 0 ) : ?>
+				<div class="notice notice-warning inline"><p>Sản phẩm mới được tạo với đơn giá 0. Hãy cập nhật đơn giá trong bảng kho trước khi sử dụng cho cấp phát hoặc tính PR.</p></div>
+			<?php endif; ?>
 
 			<?php if ( ! empty( $inventory_import_preview['errors'] ) ) : ?>
 				<div class="notice notice-error inline"><p><?php echo esc_html( implode( ' ', array_slice( $inventory_import_preview['errors'], 0, 10 ) ) ); ?></p></div>
 			<?php else : ?>
 				<div class="ums-table-scroll">
 					<table class="widefat striped">
-						<thead><tr><th>Dòng Excel</th><th>Loại sản phẩm</th><th>Size</th><th>SL nhập</th><th>Tồn trước</th><th>Tồn sau</th><th>Ghi chú</th></tr></thead>
+						<thead><tr><th>Dòng Excel</th><th>Loại sản phẩm</th><th>Size</th><th>Xử lý</th><th>SL nhập</th><th>Tồn trước</th><th>Tồn sau</th><th>Ghi chú</th></tr></thead>
 						<tbody>
 						<?php foreach ( $inventory_import_preview['rows'] as $preview_row ) : ?>
 							<tr>
 								<td><?php echo esc_html( $preview_row['source_row'] ); ?></td>
 								<td><?php echo esc_html( $preview_row['product'] ); ?></td>
 								<td><?php echo esc_html( $preview_row['size'] ); ?></td>
+								<td><?php echo ! empty( $preview_row['is_new'] ) ? esc_html( 'Tạo mới / ' . $preview_row['category_name'] ) : 'Cộng tồn'; ?></td>
 								<td><?php echo esc_html( number_format_i18n( $preview_row['quantity'] ) ); ?></td>
 								<td><?php echo esc_html( number_format_i18n( $preview_row['before_qty'] ) ); ?></td>
 								<td><?php echo esc_html( number_format_i18n( $preview_row['after_qty'] ) ); ?></td>

@@ -124,6 +124,18 @@ class UMS_DB_Inventory extends UMS_DB_Base {
 		return self::db()->get_results( $sql, ARRAY_A );
 	}
 
+	public static function get_by_name_and_size( $product, $size ) {
+		$sql = self::db()->prepare(
+			'SELECT * FROM ' . self::table() . "
+			WHERE COALESCE(NULLIF(item_variant, ''), item_type) = %s AND size = %s
+			ORDER BY item_id ASC",
+			sanitize_text_field( $product ),
+			sanitize_text_field( $size )
+		);
+
+		return self::db()->get_results( $sql, ARRAY_A );
+	}
+
     /**
      * Lấy chi tiết một dòng tồn kho.
      */

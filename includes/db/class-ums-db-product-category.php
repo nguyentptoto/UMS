@@ -112,6 +112,15 @@ class UMS_DB_Product_Category extends UMS_DB_Base {
         return self::db()->get_row( $sql, ARRAY_A );
     }
 
+    public static function get_parent_by_name( $category_name ) {
+        $sql = self::db()->prepare(
+            'SELECT * FROM ' . self::table() . ' WHERE parent_id = 0 AND category_name = %s ORDER BY category_id ASC LIMIT 1',
+            sanitize_text_field( $category_name )
+        );
+
+        return self::db()->get_row( $sql, ARRAY_A );
+    }
+
     public static function has_children( $category_id ) {
         $table = self::table();
         $sql   = self::db()->prepare( "SELECT COUNT(*) FROM $table WHERE parent_id = %d", absint( $category_id ) );
@@ -120,6 +129,10 @@ class UMS_DB_Product_Category extends UMS_DB_Base {
 
     public static function insert( $data ) {
         return self::db()->insert( self::table(), $data, self::formats_for( $data ) );
+    }
+
+    public static function get_last_insert_id() {
+        return (int) self::db()->insert_id;
     }
 
     public static function update( $category_id, $data ) {
