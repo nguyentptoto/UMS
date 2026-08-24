@@ -44,6 +44,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 				'apply_type'  => '',
 				'target_type' => '',
 				'status'      => '',
+				'exclude_matrix' => false,
 				'limit'       => 1000,
 			)
 		);
@@ -59,6 +60,9 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		if ( $args['target_type'] !== '' ) {
 			$where[]  = 'rules.target_type = %s';
 			$params[] = sanitize_key( $args['target_type'] );
+		}
+		if ( ! empty( $args['exclude_matrix'] ) ) {
+			$where[] = "rules.apply_type <> 'matrix'";
 		}
 
 		if ( $args['status'] === 'active' ) {
@@ -100,7 +104,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			WHERE " . implode( ' AND ', $where ) . '
 			ORDER BY rules.is_active DESC, rules.apply_type ASC, apply_parent.category_name ASC, apply_category.category_name ASC, item_parent.category_name ASC, item_child.category_name ASC, inventory.item_variant ASC, inventory.size ASC
 			LIMIT %d';
-		$params[] = max( 1, min( 5000, absint( $args['limit'] ) ) );
+		$params[] = max( 1, min( 10000, absint( $args['limit'] ) ) );
 
 		if ( ! empty( $params ) ) {
 			$sql = self::db()->prepare( $sql, $params );
@@ -197,11 +201,25 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
 			WHERE rules.is_active = 1
 				AND (
-					(rules.apply_type = 'item' AND rules.item_id = inventory.item_id)
+					(rules.apply_type = 'matrix')
+					OR (rules.apply_type = 'item' AND rules.item_id = inventory.item_id)
 					OR (rules.apply_type = 'category' AND rules.category_id IN (inventory.category_id, child.parent_id))
 					OR (rules.apply_type = 'product' AND rules.category_id = inventory.category_id AND rules.item_variant = inventory.item_variant)
+				)
+				AND (
+					rules.target_type <> 'organization'
+					OR (
+						(rules.department = '' OR rules.department = %s)
+						AND (rules.team = '' OR rules.team = %s)
+						AND (rules.cost_center = '' OR rules.cost_center = %s)
+						AND (rules.position_code = '' OR rules.position_code = %s)
+					)
 				)",
-			absint( $item_id )
+			absint( $item_id ),
+			$department,
+			$team,
+			$cost_center,
+			$position
 		);
 		$candidates = self::db()->get_results( $sql, ARRAY_A );
 		$matched    = array();
@@ -311,7 +329,8 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		if ( $scope === 'annual' ) {
 			return true;
 		}
-		if ( ! in_array( $scope, array( 'newcomer', 'newcomer_september' ), true ) || $month_day === '' || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_joined ) ) {
+		$newcomer_scopes = array( 'newcomer', 'newcomer_september', 'newcomer_september_override' );
+		if ( ! in_array( $scope, $newcomer_scopes, true ) || $month_day === '' || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_joined ) ) {
 			return false;
 		}
 
@@ -326,7 +345,10 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$joined_year      = (int) date( 'Y', $joined_timestamp );
 		$joined_month     = (int) date( 'n', $joined_timestamp );
 
-		if ( $scope === 'newcomer_september' && ( $evaluation_month !== 9 || $joined_year !== $evaluation_year ) ) {
+		if ( in_array( $scope, array( 'newcomer_september', 'newcomer_september_override' ), true ) && ( $evaluation_month !== 9 || $joined_year !== $evaluation_year ) ) {
+			return false;
+		}
+		if ( in_array( $scope, array( 'newcomer_september', 'newcomer_september_override' ), true ) && $joined_month >= 9 ) {
 			return false;
 		}
 		if ( $scope === 'newcomer' ) {
@@ -356,7 +378,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$score += ! empty( $rule['position_code'] ) ? 8 : 0;
 		$score += ( $rule['apply_type'] ?? '' ) === 'item' ? 4 : 0;
 		$score += ( $rule['apply_type'] ?? '' ) === 'product' ? 2 : 0;
-		$score += in_array( $rule['rule_scope'] ?? '', array( 'newcomer', 'newcomer_september' ), true ) ? 128 : 0;
+		$score += in_array( $rule['rule_scope'] ?? '', array( 'newcomer', 'newcomer_september', 'newcomer_september_override' ), true ) ? 128 : 0;
 		return $score;
 	}
 
@@ -375,7 +397,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	 */
 	public static function requires_exact_quantity( $rule ) {
 		$scope = isset( $rule['rule_scope'] ) ? sanitize_key( $rule['rule_scope'] ) : '';
-		return in_array( $scope, array( 'newcomer', 'newcomer_september' ), true );
+		return in_array( $scope, array( 'newcomer', 'newcomer_september', 'newcomer_september_override' ), true );
 	}
 
 	/**
@@ -532,13 +554,18 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		return self::db()->update( self::import_table(), $data, array( 'batch_id' => absint( $batch_id ) ), $formats, array( '%d' ) );
 	}
 
-	public static function deactivate_other_import_rules( $batch_id ) {
-		return self::db()->query(
-			self::db()->prepare(
-				'UPDATE ' . self::table() . ' SET is_active = 0 WHERE source_batch_id IS NOT NULL AND source_batch_id <> %d',
-				absint( $batch_id )
-			)
-		);
+	public static function deactivate_other_import_rules( $batch_id, $scopes = array() ) {
+		$scopes = array_values( array_unique( array_filter( array_map( 'sanitize_key', (array) $scopes ) ) ) );
+		if ( empty( $scopes ) ) {
+			return true;
+		}
+
+		$placeholders = implode( ',', array_fill( 0, count( $scopes ), '%s' ) );
+		$params       = array_merge( array( absint( $batch_id ) ), $scopes );
+		$sql          = 'UPDATE ' . self::table()
+			. " SET is_active = 0 WHERE source_batch_id IS NOT NULL AND source_batch_id <> %d AND rule_scope IN ($placeholders)";
+
+		return self::db()->query( self::db()->prepare( $sql, $params ) );
 	}
 
 	public static function insert( $data ) {

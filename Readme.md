@@ -124,12 +124,20 @@ Danh sách định mức được trình bày bằng hai jqxGrid độc lập ch
 
 Chức năng xuất kho chủ động lấy người nhận trực tiếp từ Sơ đồ tổ chức TVN bằng mã nhân viên. Lịch sử kho lưu thêm `target_employee_no`, do đó Admin có thể xuất cho CNV không có tài khoản WordPress mà vẫn kiểm tra định mức, ngày vào và truy vết đúng người nhận.
 
-Importer chỉ đọc hai sheet định mức chính và giữ cố định 25 cột sản phẩm từ `E` đến `AC`:
+Importer đọc hai sheet định mức thường và các ma trận dành cho CNV mới. Hai sheet định mức thường vẫn giữ cố định 25 cột sản phẩm từ `E` đến `AC`:
 
 - `Phát T4`: định mức định kỳ tháng 4.
 - `Phát T9`: định mức định kỳ tháng 9.
 
-Điều kiện áp dụng được lấy từ Sơ đồ tổ chức TVN theo `Mã nhân viên`: phòng, nhóm, cost center, vị trí và ngày vào công ty. Đối với rule `newcomer` và `newcomer_september`, hệ thống dùng cột `date_joined` của Sơ đồ tổ chức để xác định CNV có thuộc khoảng ngày nhận việc hay không; ngày trong usermeta/hồ sơ cũ chỉ được dùng dự phòng khi dữ liệu tổ chức chưa có. Tên sản phẩm trong Excel được ánh xạ với sản phẩm UMS trước khi xác nhận import; một mapping áp dụng cho toàn bộ size của sản phẩm đó.
+Các sheet CNV mới được đọc theo tiêu đề sản phẩm thực tế của từng sheet:
+
+- `New commer`: bộ cấp ban đầu theo ngày nhận việc.
+- `Phát T9 - CNV mới`: ma trận bổ sung tháng 9 tổng quát.
+- Bốn sheet `ĐM ... T9 CNVM`: ma trận chi tiết theo cost center cho các khoảng `01/01-31/03`, `01/04-31/07`, `01/08-31/08` và `01/09-31/12`.
+
+Tên sản phẩm trong Excel được giữ độc lập. Ví dụ `Áo phông xám`, `Áo phông cộc tay`, `Quần xám` và `Quần CN` là bốn sản phẩm khác nhau, không tự động gộp tên. Admin ánh xạ từng tên nguồn với đúng sản phẩm UMS tại bước xem trước.
+
+Điều kiện áp dụng được lấy từ Sơ đồ tổ chức TVN theo `Mã nhân viên`: phòng, nhóm, cost center, vị trí và ngày vào công ty. Đối với rule `newcomer`, `newcomer_september` và `newcomer_september_override`, hệ thống dùng cột `date_joined` của Sơ đồ tổ chức để xác định CNV có thuộc khoảng ngày nhận việc hay không; ngày trong usermeta/hồ sơ cũ chỉ được dùng dự phòng khi dữ liệu tổ chức chưa có. Tên sản phẩm trong Excel được ánh xạ với sản phẩm UMS trước khi xác nhận import; một mapping áp dụng cho toàn bộ size của sản phẩm đó.
 
 Quy trình import gồm hai bước:
 
@@ -140,14 +148,19 @@ Import chạy theo batch trong transaction. Lần import mới cập nhật rule
 
 Thứ tự ưu tiên khi kiểm tra cấp phát:
 
-1. `newcomer_september`: cấp bù tháng 9 cho CNV vào trong năm.
-2. `newcomer`: cấp ban đầu cho CNV mới.
-3. `annual`: định mức định kỳ tháng 4/tháng 9.
-4. Rule thủ công cũ khi nhân viên không thuộc ma trận Excel.
+1. `newcomer_september_override`: cấp bù tháng 9 theo cost center chi tiết.
+2. `newcomer_september`: cấp bù tháng 9 tổng quát cho CNV vào trong năm.
+3. `newcomer`: cấp ban đầu cho CNV mới.
+4. `annual`: định mức định kỳ tháng 4/tháng 9.
+5. Rule thủ công cũ khi nhân viên không thuộc ma trận Excel.
 
-Với rule `newcomer` và `newcomer_september`, số lượng trên phiếu hoặc lần xuất kho chủ động phải đúng tuyệt đối với định mức. Ví dụ định mức mũ là `2` thì nhập `1` hoặc `3` đều bị từ chối; hệ thống vẫn cộng lịch sử đã cấp để ngăn cấp lặp.
+Với rule `newcomer`, `newcomer_september` và `newcomer_september_override`, số lượng trên phiếu hoặc lần xuất kho chủ động phải đúng tuyệt đối với định mức. Ví dụ định mức mũ là `2` thì nhập `1` hoặc `3` đều bị từ chối; hệ thống vẫn cộng lịch sử đã cấp để ngăn cấp lặp.
 
-Một ô số lượng `0` trong ma trận có nghĩa là không được cấp sản phẩm ở kỳ tương ứng. Hệ thống không tự rơi xuống rule tổng quát khi nhân viên đã thuộc một ma trận import.
+Một ô số lượng `0` trong ma trận có nghĩa là không được cấp sản phẩm ở kỳ tương ứng. Mỗi dòng điều kiện được lưu thêm một marker ma trận, kể cả khi toàn bộ sản phẩm đều bằng `0`. Riêng CNV vào `01/09-31/12`, scope cấp bù T9 không được kích hoạt để nhân viên vẫn nhận đúng bộ cấp ban đầu `New commer`; rule cấp ban đầu đồng thời ngăn hệ thống rơi xuống định mức thường của tháng 9.
+
+Chu kỳ năm được xác định theo ngày vào từ Sơ đồ tổ chức TVN. CNV vào từ tháng 9 đến tháng 12 năm A nhận bộ ban đầu theo khoảng `01/09-31/03`, không nhận bù kỳ tháng 9 năm A. Từ tháng 4 và tháng 9 năm B, nhân viên được xét theo định mức thường của năm B; rule CNV mới tháng 9 chỉ nhận người có năm vào công ty trùng với năm đang xét.
+
+Import chỉ vô hiệu hóa dữ liệu cũ thuộc các scope có mặt trong file vừa import. Vì vậy import riêng workbook CNV mới không làm mất định mức thường `Phát T4/Phát T9` đã có.
 
 ## User Portal
 

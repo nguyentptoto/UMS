@@ -1,17 +1,47 @@
 <?php
 /**
- * Phân tích và import template định mức cấp phát từ Excel.
+ * Phân tích và import ma trận định mức cấp phát từ Excel.
  */
 class UMS_Annual_Allowance_Import {
 	const PREVIEW_TRANSIENT_PREFIX = 'ums_allowance_preview_';
-	const PREVIEW_TTL = 3600;
+	const PREVIEW_TTL              = 3600;
 
-	private static $sheet_configs = array(
+	private static $annual_sheet_configs = array(
 		'Phát T4' => array(
 			'scope' => 'annual', 'header' => 1, 'start' => 2, 'month' => 4,
 		),
 		'Phát T9' => array(
 			'scope' => 'annual', 'header' => 1, 'start' => 2, 'month' => 9,
+		),
+	);
+
+	/**
+	 * Các sheet CNV mới sử dụng tiêu đề sản phẩm động theo từng ma trận.
+	 */
+	private static $newcomer_sheet_configs = array(
+		'New commer' => array(
+			'scope' => 'newcomer', 'header' => 2, 'start' => 3, 'months' => 'all',
+			'period_field' => 'employment_period', 'priority' => 200,
+		),
+		'Phát T9 - CNV mới' => array(
+			'scope' => 'newcomer_september', 'header' => 2, 'start' => 3, 'month' => 9,
+			'period_field' => 'employment_period', 'priority' => 300,
+		),
+		'ĐM T9 CNVM vào 1.1-31.3' => array(
+			'scope' => 'newcomer_september_override', 'header' => 1, 'start' => 2, 'month' => 9,
+			'period' => array( '01-01', '03-31' ), 'priority' => 400,
+		),
+		'ĐM Quần Áo Mũ T9 CNVM 1.4-31.7' => array(
+			'scope' => 'newcomer_september_override', 'header' => 1, 'start' => 2, 'month' => 9,
+			'period' => array( '04-01', '07-31' ), 'priority' => 400,
+		),
+		'ĐM Quần Áo Mũ T9 CNVM 1.8-31.8' => array(
+			'scope' => 'newcomer_september_override', 'header' => 1, 'start' => 2, 'month' => 9,
+			'period' => array( '08-01', '08-31' ), 'priority' => 400,
+		),
+		'ĐM Quần Áo Mũ T9 CNVM 1.9-31.12' => array(
+			'scope' => 'newcomer_september_override', 'header' => 1, 'start' => 2, 'month' => 9,
+			'period' => array( '09-01', '12-31' ), 'priority' => 400,
 		),
 	);
 
@@ -49,51 +79,113 @@ class UMS_Annual_Allowance_Import {
 	}
 
 	public static function analyze( $file_path, $file_name ) {
-		$reader = new UMS_XLSX_Reader( $file_path );
-		$rules  = array();
-		$errors = array();
+		$reader           = new UMS_XLSX_Reader( $file_path );
+		$rules            = array();
+		$errors           = array();
+		$processed_sheets = array();
+		$managed_scopes   = array();
 
-		foreach ( self::$sheet_configs as $sheet_name => $config ) {
+		$annual_present = array();
+		foreach ( self::$annual_sheet_configs as $sheet_name => $config ) {
+			if ( $reader->has_sheet( $sheet_name ) ) {
+				$annual_present[] = $sheet_name;
+			}
+		}
+		if ( ! empty( $annual_present ) && count( $annual_present ) !== count( self::$annual_sheet_configs ) ) {
+			$errors[] = 'File định mức thường phải có đủ hai sheet Phát T4 và Phát T9.';
+		}
+
+		foreach ( self::$annual_sheet_configs as $sheet_name => $config ) {
 			if ( ! $reader->has_sheet( $sheet_name ) ) {
-				$errors[] = 'Không tìm thấy sheet bắt buộc: ' . $sheet_name;
 				continue;
 			}
-
+			$config['products'] = self::get_product_columns();
 			self::collect_sheet_rules( $reader->read_sheet( $sheet_name ), $sheet_name, $config, $rules, $errors );
+			$processed_sheets[] = $sheet_name;
+			$managed_scopes[]   = $config['scope'];
+		}
+
+		$override_present = array();
+		foreach ( self::$newcomer_sheet_configs as $sheet_name => $config ) {
+			if ( ! $reader->has_sheet( $sheet_name ) ) {
+				continue;
+			}
+			if ( $config['scope'] === 'newcomer_september_override' ) {
+				$override_present[] = $sheet_name;
+			}
+			self::collect_sheet_rules( $reader->read_sheet( $sheet_name ), $sheet_name, $config, $rules, $errors );
+			$processed_sheets[] = $sheet_name;
+			$managed_scopes[]   = $config['scope'];
+		}
+
+		if ( ! empty( $override_present ) && count( $override_present ) !== 4 ) {
+			$errors[] = 'Bộ định mức T9 chi tiết cho CNV mới phải có đủ bốn khoảng ngày vào công ty.';
+		}
+		if ( empty( $processed_sheets ) ) {
+			$errors[] = 'Không tìm thấy sheet định mức UMS được hỗ trợ trong file Excel.';
 		}
 
 		foreach ( $rules as &$rule ) {
-			if ( $rule['rule_scope'] === 'annual' ) {
-				$rule['frequency_count'] = count( array_filter( $rule['monthly_quantities'] ) );
+			if ( $rule['rule_scope'] === 'annual' && $rule['apply_type'] !== 'matrix' ) {
+				$rule['frequency_count'] = max( 1, count( array_filter( $rule['monthly_quantities'] ) ) );
 			}
 			$rule['monthly_quantities'] = wp_json_encode( $rule['monthly_quantities'] );
 		}
 		unset( $rule );
 
-		$product_names = array_values( self::get_product_columns() );
-		$used_product_names = array_values( array_unique( array_column( $rules, 'source_product_name' ) ) );
+		$used_product_names = array();
+		foreach ( $rules as $rule ) {
+			if ( $rule['apply_type'] === 'product' && $rule['source_product_name'] !== '' ) {
+				$used_product_names[] = $rule['source_product_name'];
+			}
+		}
+		$used_product_names = array_values( array_unique( $used_product_names ) );
 
 		return array(
-			'file_name'     => sanitize_file_name( $file_name ),
-			'file_hash'     => hash_file( 'sha256', $file_path ),
-			'rules'         => array_values( $rules ),
-			'product_names' => $product_names,
+			'file_name'          => sanitize_file_name( $file_name ),
+			'file_hash'          => hash_file( 'sha256', $file_path ),
+			'rules'              => array_values( $rules ),
+			'product_names'      => $used_product_names,
 			'used_product_names' => $used_product_names,
-			'errors'        => array_values( array_unique( $errors ) ),
-			'summary'       => self::build_summary( $rules ),
+			'processed_sheets'   => array_values( array_unique( $processed_sheets ) ),
+			'managed_scopes'     => array_values( array_unique( $managed_scopes ) ),
+			'errors'             => array_values( array_unique( $errors ) ),
+			'summary'            => self::build_summary( $rules ),
 		);
 	}
 
 	public static function store_preview( $preview ) {
 		$token = wp_generate_password( 24, false, false );
-		if ( ! set_transient( self::PREVIEW_TRANSIENT_PREFIX . $token, $preview, self::PREVIEW_TTL ) ) {
+		$payload = $preview;
+		if ( function_exists( 'gzcompress' ) ) {
+			$compressed = gzcompress( serialize( $preview ), 6 );
+			if ( false !== $compressed ) {
+				$payload = array(
+					'format' => 'ums_allowance_gzip_v1',
+					'data'   => base64_encode( $compressed ),
+				);
+			}
+		}
+		if ( ! set_transient( self::PREVIEW_TRANSIENT_PREFIX . $token, $payload, self::PREVIEW_TTL ) ) {
 			throw new RuntimeException( 'Không lưu được dữ liệu xem trước. Hãy kiểm tra dung lượng database hoặc object cache.' );
 		}
 		return $token;
 	}
 
 	public static function get_preview( $token ) {
-		return get_transient( self::PREVIEW_TRANSIENT_PREFIX . sanitize_key( $token ) );
+		$payload = get_transient( self::PREVIEW_TRANSIENT_PREFIX . sanitize_key( $token ) );
+		if ( ! is_array( $payload ) || ( $payload['format'] ?? '' ) !== 'ums_allowance_gzip_v1' ) {
+			return $payload;
+		}
+
+		$compressed = base64_decode( (string) ( $payload['data'] ?? '' ), true );
+		$serialized = false !== $compressed && function_exists( 'gzuncompress' ) ? gzuncompress( $compressed ) : false;
+		if ( false === $serialized ) {
+			return false;
+		}
+
+		$preview = unserialize( $serialized, array( 'allowed_classes' => false ) );
+		return is_array( $preview ) ? $preview : false;
 	}
 
 	public static function delete_preview( $token ) {
@@ -104,14 +196,11 @@ class UMS_Annual_Allowance_Import {
 		$errors = array();
 		$mapped = array();
 
-		$required_products = isset( $preview['used_product_names'] ) && is_array( $preview['used_product_names'] )
-			? $preview['used_product_names']
-			: $preview['product_names'];
-		foreach ( $required_products as $product_name ) {
-			$map_key     = hash( 'sha256', $product_name );
-			$mapping_raw = isset( $mappings[ $map_key ] ) ? sanitize_text_field( $mappings[ $map_key ] ) : '';
-			$parts       = explode( '|', $mapping_raw, 2 );
-			$category_id = isset( $parts[0] ) ? absint( $parts[0] ) : 0;
+		foreach ( $preview['used_product_names'] as $product_name ) {
+			$map_key      = hash( 'sha256', $product_name );
+			$mapping_raw  = isset( $mappings[ $map_key ] ) ? sanitize_text_field( $mappings[ $map_key ] ) : '';
+			$parts        = explode( '|', $mapping_raw, 2 );
+			$category_id  = isset( $parts[0] ) ? absint( $parts[0] ) : 0;
 			$item_variant = isset( $parts[1] ) ? sanitize_text_field( $parts[1] ) : '';
 
 			if ( $category_id <= 0 || $item_variant === '' || ! UMS_DB_Inventory::product_group_exists( $category_id, $item_variant ) ) {
@@ -138,15 +227,17 @@ class UMS_Annual_Allowance_Import {
 			return array( 'success' => false, 'errors' => array( 'Không tạo được phiên import. Hãy kiểm tra bảng import trong ums.sql.' ) );
 		}
 
-		$inserted = 0;
-		$updated  = 0;
+		$inserted       = 0;
+		$updated        = 0;
 		$prepared_rules = array();
 		global $wpdb;
 		$wpdb->query( 'START TRANSACTION' );
 		foreach ( $preview['rules'] as $rule ) {
-			$product = $mapped[ $rule['source_product_name'] ];
-			$rule['category_id']    = $product['category_id'];
-			$rule['item_variant']    = $product['item_variant'];
+			if ( $rule['apply_type'] === 'product' ) {
+				$product             = $mapped[ $rule['source_product_name'] ];
+				$rule['category_id'] = $product['category_id'];
+				$rule['item_variant'] = $product['item_variant'];
+			}
 			$rule['source_batch_id'] = $batch_id;
 			$rule['rule_key']        = UMS_DB_Annual_Allowance::build_rule_key( $rule );
 			unset( $rule['source_sheet'], $rule['source_row'] );
@@ -163,8 +254,9 @@ class UMS_Annual_Allowance_Import {
 			$updated  += $result['updated'];
 		}
 
-		if ( empty( $errors ) && false === UMS_DB_Annual_Allowance::deactivate_other_import_rules( $batch_id ) ) {
-			$errors[] = 'Không vô hiệu hóa được các rule thuộc lần import cũ.';
+		$managed_scopes = isset( $preview['managed_scopes'] ) && is_array( $preview['managed_scopes'] ) ? $preview['managed_scopes'] : array();
+		if ( empty( $errors ) && false === UMS_DB_Annual_Allowance::deactivate_other_import_rules( $batch_id, $managed_scopes ) ) {
+			$errors[] = 'Không vô hiệu hóa được các rule cũ trong phạm vi vừa import.';
 		}
 
 		if ( empty( $errors ) ) {
@@ -198,20 +290,27 @@ class UMS_Annual_Allowance_Import {
 		}
 
 		$layout = self::discover_sheet_layout( $rows[ $config['header'] ] );
-		if ( empty( $layout['department'] ) || empty( $layout['position'] ) || empty( $layout['products'] ) ) {
-			$errors[] = 'Sheet ' . $sheet_name . ' thiếu cột Bộ phận, Vị trí hoặc các cột sản phẩm.';
+		if ( empty( $layout['department'] ) || empty( $layout['position'] ) ) {
+			$errors[] = 'Sheet ' . $sheet_name . ' thiếu cột Bộ phận hoặc Vị trí.';
 			return;
 		}
-		$products = self::get_product_columns();
-		foreach ( $products as $column => $product_name ) {
-			$actual_header = self::normalize_space( $rows[ $config['header'] ][ $column ] ?? '' );
-			if ( self::normalize_header( $actual_header ) !== self::normalize_header( $product_name ) ) {
-				$errors[] = sprintf( 'Sheet %s cột %s phải là "%s".', $sheet_name, $column, $product_name );
+
+		$products = isset( $config['products'] ) ? $config['products'] : $layout['products'];
+		if ( empty( $products ) ) {
+			$errors[] = 'Sheet ' . $sheet_name . ' không có cột sản phẩm.';
+			return;
+		}
+		if ( isset( $config['products'] ) ) {
+			foreach ( $products as $column => $product_name ) {
+				$actual_header = self::normalize_space( $rows[ $config['header'] ][ $column ] ?? '' );
+				if ( self::normalize_header( $actual_header ) !== self::normalize_header( $product_name ) ) {
+					$errors[] = sprintf( 'Sheet %s cột %s phải là "%s".', $sheet_name, $column, $product_name );
+				}
 			}
 		}
 
 		foreach ( $rows as $row_number => $row ) {
-			if ( $row_number < $config['start'] || empty( $row[ $layout['department'] ] ) ) {
+			if ( $row_number < $config['start'] || self::normalize_space( $row[ $layout['department'] ] ?? '' ) === '' ) {
 				continue;
 			}
 
@@ -221,62 +320,100 @@ class UMS_Annual_Allowance_Import {
 				'cost_center' => $layout['cost_center'] !== '' ? self::normalize_space( $row[ $layout['cost_center'] ] ?? '' ) : '',
 				'position_code' => UMS_DB_Annual_Allowance::normalize_position_code( $row[ $layout['position'] ] ?? '' ),
 			);
-			$period = array( '', '' );
+			$period = isset( $config['period'] ) ? $config['period'] : array( '', '' );
+			if ( isset( $config['period_field'] ) ) {
+				$period_column = $layout[ $config['period_field'] ] ?? '';
+				$period_value  = $period_column !== '' ? self::normalize_space( $row[ $period_column ] ?? '' ) : '';
+				$period        = self::parse_period( $period_value );
+				if ( empty( $period ) ) {
+					$errors[] = sprintf( 'Sheet %s dòng %d có khoảng ngày nhận việc không hợp lệ.', $sheet_name, $row_number );
+					continue;
+				}
+			}
+
 			$position_codes = array_filter( array_map( 'trim', explode( ',', $condition['position_code'] ) ) );
 			if ( empty( $position_codes ) ) {
-				$position_codes = array( '' );
+				$errors[] = sprintf( 'Sheet %s dòng %d chưa có Vị trí.', $sheet_name, $row_number );
+				continue;
 			}
 
 			foreach ( $position_codes as $position_code ) {
+				$rule_condition                  = $condition;
+				$rule_condition['position_code'] = $position_code;
+				$note = $layout['note'] !== '' ? self::normalize_space( $row[ $layout['note'] ] ?? '' ) : '';
+
+				$marker_key = self::rule_collection_key( $config['scope'], $rule_condition, $period, '__matrix__' );
+				if ( ! isset( $rules[ $marker_key ] ) ) {
+					$rules[ $marker_key ] = self::new_rule( $rule_condition, $config, $period, '', 'matrix', $note, $sheet_name, $row_number );
+				}
+
 				foreach ( $products as $column => $product_name ) {
-					$quantity = isset( $row[ $column ] ) && is_numeric( $row[ $column ] ) ? max( 0, (int) $row[ $column ] ) : 0;
+					$product_name = self::normalize_space( $product_name );
+					$raw_quantity = $row[ $column ] ?? '';
+					if ( $raw_quantity !== '' && ! is_numeric( $raw_quantity ) ) {
+						$errors[] = sprintf( 'Sheet %s dòng %d, sản phẩm "%s" phải là số.', $sheet_name, $row_number, $product_name );
+						continue;
+					}
+					$quantity = is_numeric( $raw_quantity ) ? max( 0, (int) $raw_quantity ) : 0;
 					if ( $quantity <= 0 ) {
 						continue;
 					}
 
-					$key = implode( '|', array( $config['scope'], $condition['department'], $condition['team'], $condition['cost_center'], $position_code, $period[0], $period[1], $product_name ) );
+					$key = self::rule_collection_key( $config['scope'], $rule_condition, $period, $product_name );
 					if ( ! isset( $rules[ $key ] ) ) {
-						$rule_condition                  = $condition;
-						$rule_condition['position_code'] = $position_code;
-						$rules[ $key ] = array_merge(
-							$rule_condition,
-							array(
-								'rule_scope' => $config['scope'], 'apply_type' => 'product', 'category_id' => 0,
-								'item_id' => 0, 'item_variant' => '', 'source_product_name' => $product_name,
-								'target_type' => 'organization', 'position_id' => 0,
-								'employment_start_md' => $period[0], 'employment_end_md' => $period[1],
-								'eligibility_note' => $layout['note'] !== '' ? self::normalize_space( $row[ $layout['note'] ] ?? '' ) : '',
-								'frequency_count' => 1, 'frequency_years' => 1,
-								'monthly_quantities' => array_fill( 1, 12, 0 ), 'priority' => self::scope_priority( $config['scope'] ),
-								'is_active' => 1, 'source_sheet' => $sheet_name, 'source_row' => $row_number,
-							)
-						);
+						$rules[ $key ] = self::new_rule( $rule_condition, $config, $period, $product_name, 'product', $note, $sheet_name, $row_number );
 					}
 
-					$rules[ $key ]['monthly_quantities'][ $config['month'] ] = $quantity;
+					if ( isset( $config['months'] ) && $config['months'] === 'all' ) {
+						for ( $month = 1; $month <= 12; $month++ ) {
+							$rules[ $key ]['monthly_quantities'][ $month ] = $quantity;
+						}
+					} else {
+						$rules[ $key ]['monthly_quantities'][ (int) $config['month'] ] = $quantity;
+					}
 				}
 			}
 		}
 	}
 
-	/**
-	 * Tự nhận diện cột nghiệp vụ; mọi cột tiêu đề còn lại là sản phẩm.
-	 */
+	private static function new_rule( $condition, $config, $period, $product_name, $apply_type, $note, $sheet_name, $row_number ) {
+		return array_merge(
+			$condition,
+			array(
+				'rule_scope' => $config['scope'], 'apply_type' => $apply_type, 'category_id' => 0,
+				'item_id' => 0, 'item_variant' => '', 'source_product_name' => $product_name,
+				'target_type' => 'organization', 'position_id' => 0,
+				'employment_start_md' => $period[0], 'employment_end_md' => $period[1],
+				'eligibility_note' => $note, 'frequency_count' => 1, 'frequency_years' => 1,
+				'monthly_quantities' => array_fill( 1, 12, 0 ),
+				'priority' => isset( $config['priority'] ) ? (int) $config['priority'] : self::scope_priority( $config['scope'] ),
+				'is_active' => 1, 'source_sheet' => $sheet_name, 'source_row' => $row_number,
+			)
+		);
+	}
+
+	private static function rule_collection_key( $scope, $condition, $period, $product_name ) {
+		return implode(
+			'|',
+			array(
+				$scope, $condition['department'], $condition['team'], $condition['cost_center'],
+				$condition['position_code'], $period[0], $period[1], $product_name,
+			)
+		);
+	}
+
 	private static function discover_sheet_layout( $header ) {
 		$layout = array(
-			'department' => '',
-			'team'        => '',
-			'cost_center' => '',
-			'position'    => '',
-			'note'        => '',
-			'products'    => array(),
+			'department' => '', 'team' => '', 'cost_center' => '', 'position' => '',
+			'note' => '', 'employment_period' => '', 'products' => array(),
 		);
 		$field_aliases = array(
 			'department' => array( 'bo phan', 'phong' ),
-			'team'        => array( 'nhom' ),
+			'team' => array( 'nhom', 'team' ),
 			'cost_center' => array( 'code center', 'cost center', 'ma cost center' ),
-			'position'    => array( 'vi tri', 'chuc vu', 'chuc danh' ),
-			'note'        => array( 'luu y', 'ghi chu' ),
+			'position' => array( 'vi tri', 'chuc vu', 'chuc danh' ),
+			'note' => array( 'luu y', 'ghi chu', 'ky phat dong phuc thang 04 nam do' ),
+			'employment_period' => array( 'thoi gian nhan viec', 'thoi diem nhan viec', 'khoang ngay nhan viec' ),
 		);
 
 		foreach ( $header as $column => $label ) {
@@ -285,7 +422,7 @@ class UMS_Annual_Allowance_Import {
 				continue;
 			}
 			$normalized = self::normalize_header( $label );
-			$matched = false;
+			$matched    = false;
 			foreach ( $field_aliases as $field => $aliases ) {
 				if ( in_array( $normalized, $aliases, true ) ) {
 					$layout[ $field ] = $column;
@@ -301,6 +438,20 @@ class UMS_Annual_Allowance_Import {
 		return $layout;
 	}
 
+	private static function parse_period( $value ) {
+		if ( ! preg_match( '/^(\d{1,2})\/(\d{1,2})\s*-\s*(\d{1,2})\/(\d{1,2})$/', trim( (string) $value ), $matches ) ) {
+			return array();
+		}
+		$start_day   = (int) $matches[1];
+		$start_month = (int) $matches[2];
+		$end_day     = (int) $matches[3];
+		$end_month   = (int) $matches[4];
+		if ( ! checkdate( $start_month, $start_day, 2000 ) || ! checkdate( $end_month, $end_day, 2000 ) ) {
+			return array();
+		}
+		return array( sprintf( '%02d-%02d', $start_month, $start_day ), sprintf( '%02d-%02d', $end_month, $end_day ) );
+	}
+
 	private static function normalize_header( $value ) {
 		$value = function_exists( 'remove_accents' ) ? remove_accents( $value ) : $value;
 		$value = strtolower( self::normalize_space( $value ) );
@@ -308,8 +459,15 @@ class UMS_Annual_Allowance_Import {
 	}
 
 	private static function build_summary( $rules ) {
-		$summary = array( 'annual' => 0, 'newcomer' => 0, 'newcomer_september' => 0, 'total' => count( $rules ) );
+		$summary = array(
+			'annual' => 0, 'newcomer' => 0, 'newcomer_september' => 0,
+			'newcomer_september_override' => 0, 'matrix' => 0, 'total' => count( $rules ),
+		);
 		foreach ( $rules as $rule ) {
+			if ( $rule['apply_type'] === 'matrix' ) {
+				$summary['matrix']++;
+				continue;
+			}
 			if ( isset( $summary[ $rule['rule_scope'] ] ) ) {
 				$summary[ $rule['rule_scope'] ]++;
 			}
@@ -318,11 +476,14 @@ class UMS_Annual_Allowance_Import {
 	}
 
 	private static function scope_priority( $scope ) {
-		return $scope === 'newcomer_september' ? 300 : ( $scope === 'newcomer' ? 200 : 100 );
+		$priorities = array(
+			'annual' => 100, 'newcomer' => 200, 'newcomer_september' => 300,
+			'newcomer_september_override' => 400,
+		);
+		return isset( $priorities[ $scope ] ) ? $priorities[ $scope ] : 0;
 	}
 
 	private static function normalize_space( $value ) {
 		return trim( preg_replace( '/\s+/u', ' ', (string) $value ) );
 	}
-
 }

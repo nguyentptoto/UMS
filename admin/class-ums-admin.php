@@ -497,7 +497,7 @@ class UMS_Admin {
 
         $edit_rule_id  = isset( $_GET['edit_rule_id'] ) ? absint( $_GET['edit_rule_id'] ) : 0;
         $editing_rule  = $edit_rule_id ? UMS_DB_Annual_Allowance::get_by_id( $edit_rule_id ) : null;
-        $rules         = UMS_DB_Annual_Allowance::get_all( array_merge( $filters, array( 'limit' => 5000 ) ) );
+        $rules         = UMS_DB_Annual_Allowance::get_all( array_merge( $filters, array( 'exclude_matrix' => true, 'limit' => 10000 ) ) );
         $notice        = self::get_notice();
         $form_values   = self::get_default_annual_allowance_values( $editing_rule );
         $preview_token = isset( $_GET['preview_token'] ) ? sanitize_key( wp_unslash( $_GET['preview_token'] ) ) : '';

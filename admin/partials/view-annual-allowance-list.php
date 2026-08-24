@@ -13,9 +13,17 @@ $is_editing = ! empty( $editing_rule );
 $page_url   = admin_url( 'admin.php?page=tvn-ums-annual-allowances' );
 $grid_rows_april     = array();
 $grid_rows_september = array();
+$grid_rows_newcomer  = array();
+$grid_rows_newcomer_september = array();
 $matrix_rows         = array();
 $normalize_product = function( $value ) {
 	return strtolower( remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) ) );
+};
+$format_month_day = function( $value ) {
+	if ( ! preg_match( '/^(\d{2})-(\d{2})$/', (string) $value, $matches ) ) {
+		return '';
+	}
+	return $matches[2] . '/' . $matches[1];
 };
 $product_fields = array();
 foreach ( $allowance_product_columns as $column => $product_name ) {
@@ -25,6 +33,37 @@ foreach ( $allowance_product_columns as $column => $product_name ) {
 foreach ( $rules as $rule ) {
 	$monthly_quantities = json_decode( (string) $rule['monthly_quantities'], true );
 	$monthly_quantities = is_array( $monthly_quantities ) ? $monthly_quantities : array();
+	$rule_scope = isset( $rule['rule_scope'] ) ? (string) $rule['rule_scope'] : 'annual';
+	if ( $rule_scope !== 'annual' ) {
+		$period_start = (string) ( $rule['employment_start_md'] ?? '' );
+		$period_end   = (string) ( $rule['employment_end_md'] ?? '' );
+		$quantity = $rule_scope === 'newcomer'
+			? ( empty( $monthly_quantities ) ? 0 : max( array_map( 'absint', $monthly_quantities ) ) )
+			: absint( $monthly_quantities[9] ?? 0 );
+		$scope_labels = array(
+			'newcomer' => 'Cấp ban đầu',
+			'newcomer_september' => 'T9 tổng quát',
+			'newcomer_september_override' => 'T9 theo cost center',
+		);
+		$newcomer_row = array(
+			'rule_type' => $scope_labels[ $rule_scope ] ?? $rule_scope,
+			'employment_period' => $format_month_day( $period_start ) . ' - ' . $format_month_day( $period_end ),
+			'department' => (string) ( $rule['department'] ?? '' ),
+			'team' => (string) ( $rule['team'] ?? '' ),
+			'cost_center' => (string) ( $rule['cost_center'] ?? '' ),
+			'position_code' => (string) ( $rule['position_code'] ?? '' ),
+			'source_product_name' => (string) ( $rule['source_product_name'] ?: $rule['item_variant'] ),
+			'ums_product_name' => (string) $rule['item_variant'],
+			'quantity' => $quantity,
+			'status' => (int) $rule['is_active'] === 1 ? 'Đang áp dụng' : 'Ngừng áp dụng',
+		);
+		if ( $rule_scope === 'newcomer' ) {
+			$grid_rows_newcomer[] = $newcomer_row;
+		} else {
+			$grid_rows_newcomer_september[] = $newcomer_row;
+		}
+		continue;
+	}
 	$row_key = hash( 'sha256', implode( '|', array( $rule['department'] ?? '', $rule['team'] ?? '', $rule['cost_center'] ?? '', $rule['position_code'] ?? '', $rule['is_active'] ?? 1 ) ) );
 	if ( ! isset( $matrix_rows[ $row_key ] ) ) {
 		$matrix_rows[ $row_key ] = array(
@@ -73,6 +112,18 @@ foreach ( $allowance_product_columns as $column => $product_name ) {
 }
 $grid_columns[] = array( 'text' => 'Lưu ý', 'datafield' => 'note', 'width' => 220 );
 $grid_columns[] = array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => 110 );
+$newcomer_grid_columns = array(
+	array( 'text' => 'Loại định mức', 'datafield' => 'rule_type', 'width' => 150, 'pinned' => true ),
+	array( 'text' => 'Ngày vào công ty', 'datafield' => 'employment_period', 'width' => 145, 'pinned' => true ),
+	array( 'text' => 'Bộ phận', 'datafield' => 'department', 'width' => 230 ),
+	array( 'text' => 'Nhóm', 'datafield' => 'team', 'width' => 190 ),
+	array( 'text' => 'Code center', 'datafield' => 'cost_center', 'width' => 125 ),
+	array( 'text' => 'Vị trí', 'datafield' => 'position_code', 'width' => 80 ),
+	array( 'text' => 'Sản phẩm Excel', 'datafield' => 'source_product_name', 'width' => 210 ),
+	array( 'text' => 'Sản phẩm UMS', 'datafield' => 'ums_product_name', 'width' => 210 ),
+	array( 'text' => 'Số lượng', 'datafield' => 'quantity', 'width' => 90, 'cellsalign' => 'center' ),
+	array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => 115 ),
+);
 ?>
 
 <div class="wrap ums-admin-wrap">
@@ -96,15 +147,22 @@ $grid_columns[] = array( 'text' => 'Trạng thái', 'datafield' => 'status', 'wi
 			<input type="file" name="ums_allowance_import_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
 			<button type="submit" class="button button-primary" <?php disabled( ! $allowance_import_ready ); ?>>Đọc và xem trước</button>
 		</form>
-		<p class="description">Chỉ đọc các sheet Phát T4 và Phát T9. Danh sách 25 sản phẩm cố định nằm từ cột E đến AC; dữ liệu chỉ được ghi sau bước xác nhận.</p>
+		<p class="description">Hỗ trợ định mức thường Phát T4/Phát T9, cấp ban đầu cho CNV mới và cấp bổ sung tháng 9 theo khoảng ngày vào công ty. Dữ liệu chỉ được ghi sau bước xác nhận.</p>
 	</div>
 
 	<?php if ( is_array( $import_preview ) ) : ?>
 		<div class="ums-panel ums-allowance-import-preview">
 			<h2>Xem trước: <?php echo esc_html( $import_preview['file_name'] ); ?></h2>
 			<p>
-				Tổng <?php echo esc_html( number_format_i18n( $import_preview['summary']['total'] ) ); ?> rule định kỳ từ sheet Phát T4 và Phát T9.
+				Tổng <?php echo esc_html( number_format_i18n( $import_preview['summary']['total'] ) ); ?> bản ghi:
+				<?php echo esc_html( number_format_i18n( $import_preview['summary']['annual'] ?? 0 ) ); ?> định mức thường,
+				<?php echo esc_html( number_format_i18n( $import_preview['summary']['newcomer'] ?? 0 ) ); ?> cấp ban đầu,
+				<?php echo esc_html( number_format_i18n( ( $import_preview['summary']['newcomer_september'] ?? 0 ) + ( $import_preview['summary']['newcomer_september_override'] ?? 0 ) ) ); ?> cấp bổ sung T9 và
+				<?php echo esc_html( number_format_i18n( $import_preview['summary']['matrix'] ?? 0 ) ); ?> điều kiện ma trận.
 			</p>
+			<?php if ( ! empty( $import_preview['processed_sheets'] ) ) : ?>
+				<p class="description">Sheet đã đọc: <?php echo esc_html( implode( ', ', $import_preview['processed_sheets'] ) ); ?>.</p>
+			<?php endif; ?>
 
 			<?php if ( ! empty( $import_preview['errors'] ) ) : ?>
 				<div class="notice notice-error inline"><p><?php echo esc_html( implode( ' ', $import_preview['errors'] ) ); ?></p></div>
@@ -191,6 +249,22 @@ $grid_columns[] = array( 'text' => 'Trạng thái', 'datafield' => 'status', 'wi
 			class="ums-jqx-grid"
 			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_september ) ); ?>"
 			data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
+		></div>
+
+		<h2 style="margin-top:28px;">3. Định mức cấp ban đầu cho CNV mới</h2>
+		<div
+			id="ums-annual-allowance-grid-newcomer"
+			class="ums-jqx-grid"
+			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_newcomer ) ); ?>"
+			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
+		></div>
+
+		<h2 style="margin-top:28px;">4. Định mức bổ sung Tháng 9 cho CNV mới</h2>
+		<div
+			id="ums-annual-allowance-grid-newcomer-september"
+			class="ums-jqx-grid"
+			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_newcomer_september ) ); ?>"
+			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
 		></div>
 	</div>
 
