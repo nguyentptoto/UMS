@@ -190,8 +190,7 @@ class UMS_Inventory_Import {
 	}
 
 	/**
-	 * Bổ sung đơn giá cho các size cũ đang bằng 0 khi cùng sản phẩm chỉ có
-	 * đúng một mức giá dương làm căn cứ.
+	 * Chuẩn hóa giá dùng chung trên toàn bộ size của từng sản phẩm.
 	 */
 	public static function repair_missing_prices() {
 		$groups = array();
@@ -204,27 +203,27 @@ class UMS_Inventory_Import {
 		$ambiguous = 0;
 		foreach ( $groups as $items ) {
 			$price_result = self::resolve_product_price( $items );
-			$zero_items   = array_filter(
-				$items,
-				function ( $item ) {
-					return (float) $item['base_price'] <= 0;
-				}
-			);
-			if ( empty( $zero_items ) ) {
-				continue;
-			}
 			if ( $price_result['ambiguous'] ) {
-				$ambiguous += count( $zero_items );
+				$ambiguous += count( $items );
 				continue;
 			}
 			if ( $price_result['price'] <= 0 ) {
 				continue;
 			}
 
-			foreach ( $zero_items as $item ) {
-				if ( false !== UMS_DB_Inventory::update( $item['item_id'], array( 'base_price' => $price_result['price'] ) ) ) {
-					$updated++;
+			$items_to_update = array_filter(
+				$items,
+				function ( $item ) use ( $price_result ) {
+					return round( (float) $item['base_price'], 2 ) !== round( (float) $price_result['price'], 2 );
 				}
+			);
+			if ( empty( $items_to_update ) ) {
+				continue;
+			}
+
+			$reference = reset( $items );
+			if ( false !== UMS_DB_Inventory::update_product_price( $reference['category_id'], self::product_label( $reference ), $price_result['price'] ) ) {
+				$updated += count( $items_to_update );
 			}
 		}
 

@@ -196,21 +196,87 @@ class UMS_DB_Inventory extends UMS_DB_Base {
      * Thêm sản phẩm/tồn kho.
      */
     public static function insert( $data ) {
-        return self::db()->insert( self::table(), $data, self::formats_for( $data ) );
+		$should_sync_price = array_key_exists( 'base_price', $data )
+			&& ! empty( $data['category_id'] )
+			&& ! empty( $data['item_variant'] );
+		$price_info = $should_sync_price
+			? self::get_product_price_info( $data['category_id'], $data['item_variant'] )
+			: array( 'price' => 0.0, 'ambiguous' => false, 'row_count' => 0 );
+
+		// Khi thêm size mới, kế thừa giá đang dùng của sản phẩm thay vì tạo giá riêng cho size.
+		if ( $should_sync_price && (float) $data['base_price'] <= 0 && ! $price_info['ambiguous'] && $price_info['price'] > 0 ) {
+			$data['base_price'] = $price_info['price'];
+		}
+
+		$result = self::db()->insert( self::table(), $data, self::formats_for( $data ) );
+		if ( false === $result || ! $should_sync_price ) {
+			return $result;
+		}
+
+		// Một giá nhập dương là giá mới của toàn sản phẩm, không phải riêng size vừa thêm.
+		if ( (float) $data['base_price'] > 0 || ! $price_info['ambiguous'] ) {
+			if ( false === self::update_product_price( $data['category_id'], $data['item_variant'], $data['base_price'] ) ) {
+				return false;
+			}
+		}
+
+		return $result;
     }
 
     /**
      * Cập nhật sản phẩm/tồn kho.
      */
     public static function update( $item_id, $data ) {
-        return self::db()->update(
+		$old_item = self::db()->get_row(
+			self::db()->prepare( 'SELECT * FROM ' . self::table() . ' WHERE item_id = %d', absint( $item_id ) ),
+			ARRAY_A
+		);
+		$result = self::db()->update(
             self::table(),
             $data,
             array( 'item_id' => absint( $item_id ) ),
             self::formats_for( $data ),
             array( '%d' )
         );
+
+		if ( false === $result || ! array_key_exists( 'base_price', $data ) || ! $old_item ) {
+			return $result;
+		}
+
+		$category_id = isset( $data['category_id'] ) ? absint( $data['category_id'] ) : absint( $old_item['category_id'] );
+		$item_variant = isset( $data['item_variant'] ) ? sanitize_text_field( $data['item_variant'] ) : (string) $old_item['item_variant'];
+		if ( false === self::update_product_price( $category_id, $item_variant, $data['base_price'] ) ) {
+			return false;
+		}
+
+		return $result;
     }
+
+	/**
+	 * Đọc giá dùng chung của một sản phẩm qua toàn bộ các dòng size.
+	 */
+	public static function get_product_price_info( $category_id, $item_variant ) {
+		$prices = self::db()->get_col(
+			self::db()->prepare(
+				'SELECT base_price FROM ' . self::table() . ' WHERE category_id = %d AND item_variant = %s ORDER BY item_id ASC',
+				absint( $category_id ),
+				sanitize_text_field( $item_variant )
+			)
+		);
+		$positive_prices = array();
+		foreach ( $prices as $price ) {
+			$price = round( (float) $price, 2 );
+			if ( $price > 0 ) {
+				$positive_prices[ number_format( $price, 2, '.', '' ) ] = $price;
+			}
+		}
+
+		return array(
+			'price'     => count( $positive_prices ) === 1 ? (float) reset( $positive_prices ) : 0.0,
+			'ambiguous' => count( $positive_prices ) > 1,
+			'row_count' => count( $prices ),
+		);
+	}
 
 	/**
 	 * Đơn giá thuộc về sản phẩm; mọi size trong cùng sản phẩm phải cùng giá.

@@ -1368,14 +1368,9 @@ class UMS_Admin {
 
 		$saved_item_id = $is_edit ? $item_id : UMS_DB_Inventory::get_last_insert_id();
 
-		if ( false === UMS_DB_Inventory::update_product_price( $data['category_id'], $data['item_variant'], $data['base_price'] ) ) {
-			self::redirect_to_inventory( array(
-				'notice'       => 'db_error',
-				'notice_extra' => 'Không đồng bộ được đơn giá cho toàn bộ size của sản phẩm.',
-				'edit_item_id' => $is_edit ? $item_id : null,
-			) );
-		}
-        self::record_inventory_admin_movement( $saved_item_id, $old_stock, (int) $data['stock_qty'], (float) $data['base_price'], $is_edit );
+		$saved_item  = UMS_DB_Inventory::get_by_id( $saved_item_id );
+		$saved_price = $saved_item ? (float) $saved_item['base_price'] : (float) $data['base_price'];
+		self::record_inventory_admin_movement( $saved_item_id, $old_stock, (int) $data['stock_qty'], $saved_price, $is_edit );
 
         self::redirect_to_inventory( array( 'notice' => $is_edit ? 'inventory_updated' : 'inventory_created' ) );
     }
@@ -1638,7 +1633,7 @@ class UMS_Admin {
 			array(
 				'notice'       => 'inventory_prices_repaired',
 				'notice_extra' => sprintf(
-					'Đã cập nhật %d size; bỏ qua %d size thuộc sản phẩm có nhiều mức giá.',
+					'Đã chuẩn hóa %d size; bỏ qua %d size thuộc sản phẩm đang có nhiều mức giá dương cần kiểm tra thủ công.',
 					$result['updated'],
 					$result['ambiguous']
 				),
@@ -2877,7 +2872,7 @@ class UMS_Admin {
 			'inventory_import_invalid_file' => array( 'error', 'File nhập kho không hợp lệ hoặc không đọc được.' ),
 			'inventory_import_schema_missing' => array( 'error', 'Database chưa có cấu trúc import kho. Hãy cập nhật các bảng trong ums.sql.' ),
 			'inventory_import_preview_expired' => array( 'error', 'Dữ liệu xem trước nhập kho đã hết hạn. Vui lòng tải lại file.' ),
-			'inventory_prices_repaired' => array( 'success', 'Đã đồng bộ đơn giá cho các size còn thiếu.' ),
+			'inventory_prices_repaired' => array( 'success', 'Đã chuẩn hóa đơn giá dùng chung theo sản phẩm.' ),
 			'inventory_import_failed' => array( 'error', 'Import nhập kho không thành công.' ),
 			'inventory_import_completed' => array( 'success', 'Import nhập kho hoàn tất.' ),
 			'uniform_material_preview_ready' => array( 'success', 'Đã đọc sheet Mã đồng phục. Hãy kiểm tra dữ liệu trước khi xác nhận.' ),

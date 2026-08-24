@@ -244,7 +244,7 @@ unset( $section );
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<?php wp_nonce_field( 'ums_repair_inventory_prices' ); ?>
 				<input type="hidden" name="action" value="ums_repair_inventory_prices">
-				<button type="submit" class="button">Chuẩn hóa đơn giá sản phẩm</button>
+				<button type="submit" class="button">Đồng bộ giá cho mọi size</button>
 			</form>
 		</div>
 
@@ -409,8 +409,9 @@ unset( $section );
                 </label>
 
                 <label>
-                    <span>Đơn giá gốc <b>*</b></span>
+                    <span>Đơn giá sản phẩm <b>*</b></span>
                     <input type="text" name="ums_inventory[base_price]" value="<?php echo esc_attr( $form_values['base_price'] ); ?>" inputmode="decimal" required>
+					<small>Giá này được áp dụng đồng nhất cho tất cả size của cùng sản phẩm.</small>
                 </label>
             </div>
 

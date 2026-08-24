@@ -116,9 +116,10 @@ CREATE TABLE `wp_uniform_inventory` (
     `size` VARCHAR(20) NOT NULL,
     `color_code` VARCHAR(50) NOT NULL,
     `stock_qty` INT NOT NULL DEFAULT 0,
-    `base_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    `base_price` DECIMAL(15,2) NOT NULL DEFAULT 0.00 COMMENT 'Don gia dung chung cua san pham, dong bo tren moi size',
     PRIMARY KEY (`item_id`),
     KEY `idx_category_id` (`category_id`),
+	KEY `idx_product` (`category_id`, `item_variant`),
     KEY `idx_item_type` (`item_type`),
     KEY `idx_stock_qty` (`stock_qty`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
