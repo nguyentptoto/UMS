@@ -5,6 +5,7 @@
 class UMS_PR_Export {
 	const TEMPLATE_PATH = 'assets/templates/ums-pr-template.xlsx';
 	const SHEET_ENTRY   = 'xl/worksheets/sheet1.xml';
+	const WORKBOOK_ENTRY = 'xl/workbook.xml';
 	const XML_NS        = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 
 	public static function stream( $calculation, $options = array() ) {
@@ -91,22 +92,27 @@ class UMS_PR_Export {
 
 		$xpath = new DOMXPath( $document );
 		$xpath->registerNamespace( 'x', self::XML_NS );
+		$header_row   = $xpath->query( '//x:sheetData/x:row[@r="2"]' )->item( 0 );
 		$template_row = $xpath->query( '//x:sheetData/x:row[@r="3"]' )->item( 0 );
 		$sheet_data   = $xpath->query( '//x:sheetData' )->item( 0 );
-		if ( ! $template_row || ! $sheet_data ) {
+		if ( ! $header_row || ! $template_row || ! $sheet_data ) {
 			$zip->close();
-			throw new RuntimeException( 'Workbook mẫu không có dòng dữ liệu định dạng tại dòng 3.' );
+			throw new RuntimeException( 'Workbook mẫu không có dòng tiêu đề hoặc dòng dữ liệu định dạng.' );
 		}
 
-		foreach ( iterator_to_array( $xpath->query( '//x:sheetData/x:row[number(@r) >= 3]' ) ) as $old_row ) {
+		$header_row   = $header_row->cloneNode( true );
+		$template_row = $template_row->cloneNode( true );
+		foreach ( iterator_to_array( $xpath->query( '//x:sheetData/x:row' ) ) as $old_row ) {
 			$sheet_data->removeChild( $old_row );
 		}
+		self::renumber_row( $xpath, $header_row, 1 );
+		$sheet_data->appendChild( $header_row );
 
 		$delivery_date = preg_replace( '/[^0-9]/', '', str_replace( '-', '', $options['delivery_date'] ) );
 		foreach ( $rows as $index => $source ) {
-			$row_number = $index + 3;
+			$row_number = $index + 2;
 			$row_node   = $template_row->cloneNode( true );
-			$row_node->setAttribute( 'r', (string) $row_number );
+			self::renumber_row( $xpath, $row_node, $row_number );
 			$values = array(
 				'A' => 'A', 'B' => 'Y206', 'C' => $index === 0 ? 'GL: 6356018' : '', 'D' => 'K', 'E' => '',
 				'F' => $source['sap_code'], 'G' => $source['item_name'], 'H' => (int) $source['final_pr_qty'],
@@ -123,10 +129,32 @@ class UMS_PR_Export {
 
 		$dimension = $xpath->query( '//x:dimension' )->item( 0 );
 		if ( $dimension ) {
-			$dimension->setAttribute( 'ref', 'A1:S' . ( count( $rows ) + 2 ) );
+			$dimension->setAttribute( 'ref', 'A1:S' . ( count( $rows ) + 1 ) );
+		}
+
+		$merge_cells = $xpath->query( '//x:mergeCells' )->item( 0 );
+		if ( $merge_cells && $merge_cells->parentNode ) {
+			$merge_cells->parentNode->removeChild( $merge_cells );
+		}
+
+		$pane = $xpath->query( '//x:sheetViews/x:sheetView/x:pane' )->item( 0 );
+		if ( $pane ) {
+			$pane->setAttribute( 'ySplit', '1' );
+			$pane->setAttribute( 'topLeftCell', 'A2' );
+		}
+		$selection = $xpath->query( '//x:sheetViews/x:sheetView/x:selection' )->item( 0 );
+		if ( $selection ) {
+			$selection->setAttribute( 'activeCell', 'A2' );
+			$selection->setAttribute( 'sqref', 'A2' );
+		}
+		$filter_ref  = 'A1:S' . ( count( $rows ) + 1 );
+		$auto_filter = $xpath->query( '//x:autoFilter' )->item( 0 );
+		if ( $auto_filter ) {
+			$auto_filter->setAttribute( 'ref', $filter_ref );
 		}
 
 		$updated_xml = $document->saveXML();
+		$updated_workbook_xml = self::update_workbook_filter_reference( $zip, $filter_ref );
 		$rebuilt_path = $file_path . '.rebuilt-' . wp_generate_password( 8, false, false );
 		$rebuilt      = new ZipArchive();
 		if ( true !== $rebuilt->open( $rebuilt_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
@@ -136,7 +164,13 @@ class UMS_PR_Export {
 
 		for ( $index = 0; $index < $zip->numFiles; $index++ ) {
 			$name    = $zip->getNameIndex( $index );
-			$content = $name === self::SHEET_ENTRY ? $updated_xml : $zip->getFromIndex( $index );
+			if ( $name === self::SHEET_ENTRY ) {
+				$content = $updated_xml;
+			} elseif ( $name === self::WORKBOOK_ENTRY ) {
+				$content = $updated_workbook_xml;
+			} else {
+				$content = $zip->getFromIndex( $index );
+			}
 			if ( false === $content || ! $rebuilt->addFromString( $name, $content ) ) {
 				$rebuilt->close();
 				$zip->close();
@@ -154,6 +188,39 @@ class UMS_PR_Export {
 			@unlink( $rebuilt_path );
 			throw new RuntimeException( 'Không thay được workbook PR sau khi ghi dữ liệu.' );
 		}
+	}
+
+	private static function renumber_row( $xpath, $row, $row_number ) {
+		$row->setAttribute( 'r', (string) $row_number );
+		foreach ( $xpath->query( './/x:c', $row ) as $cell ) {
+			$reference = $cell->getAttribute( 'r' );
+			if ( preg_match( '/^([A-Z]+)/', $reference, $matches ) ) {
+				$cell->setAttribute( 'r', $matches[1] . $row_number );
+			}
+		}
+	}
+
+	private static function update_workbook_filter_reference( $zip, $filter_ref ) {
+		$source = $zip->getFromName( self::WORKBOOK_ENTRY );
+		if ( false === $source ) {
+			throw new RuntimeException( 'Workbook mẫu thiếu cấu trúc workbook.xml.' );
+		}
+
+		$document = new DOMDocument( '1.0', 'UTF-8' );
+		$document->preserveWhiteSpace = false;
+		$document->formatOutput       = false;
+		if ( ! $document->loadXML( $source ) ) {
+			throw new RuntimeException( 'Không đọc được cấu trúc workbook PR.' );
+		}
+
+		$xpath = new DOMXPath( $document );
+		$xpath->registerNamespace( 'x', self::XML_NS );
+		$defined_name = $xpath->query( '//x:definedName[@name="_xlnm._FilterDatabase" and @localSheetId="0"]' )->item( 0 );
+		if ( $defined_name ) {
+			$defined_name->nodeValue = "'PR Total'!\$A\$1:\$S\$" . (int) substr( strrchr( $filter_ref, 'S' ), 1 );
+		}
+
+		return $document->saveXML();
 	}
 
 	private static function set_cell( $document, $xpath, $row, $column, $row_number, $value, $numeric ) {
