@@ -2,7 +2,7 @@
 /**
  * Bộ lọc xuất thẳng định mức theo từng CNV.
  */
-$allowed_cost_center_prefixes = array_keys( UMS_Employee_Allowance_Report::get_cost_center_prefixes() );
+$allowed_cost_center_prefixes = UMS_Employee_Allowance_Report::get_cost_center_prefix_keys();
 $report_cost_centers = array_values(
 	array_filter(
 		$organization_cost_centers,

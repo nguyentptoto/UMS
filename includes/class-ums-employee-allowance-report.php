@@ -12,7 +12,7 @@ class UMS_Employee_Allowance_Report {
 		$month = in_array( $month, array( 4, 9 ), true ) ? $month : 4;
 		$quantity_mode = $raw['report_quantity_mode'] ?? ( $raw['quantity_mode'] ?? 'remaining' );
 		$include_zero_raw = $raw['report_include_zero'] ?? ( $raw['include_zero'] ?? true );
-		$allowed_prefixes = array_keys( self::get_cost_center_prefixes() );
+		$allowed_prefixes = self::get_cost_center_prefix_keys();
 		$cost_center_prefix = sanitize_text_field( $raw['report_cost_center_prefix'] ?? ( $raw['cost_center_prefix'] ?? '' ) );
 		if ( $cost_center_prefix !== '' && ! in_array( $cost_center_prefix, $allowed_prefixes, true ) ) {
 			$cost_center_prefix = '';
@@ -50,6 +50,13 @@ class UMS_Employee_Allowance_Report {
 			: array( '1300' => '1300', '4400' => '4400', '4900' => '4900' );
 	}
 
+	/**
+	 * PHP tự đổi key chỉ gồm chữ số thành integer; chuẩn hóa lại để so sánh POST chính xác.
+	 */
+	public static function get_cost_center_prefix_keys() {
+		return array_map( 'strval', array_keys( self::get_cost_center_prefixes() ) );
+	}
+
 	public static function build( $filters ) {
 		$filters = self::sanitize_filters( $filters );
 		if ( ! UMS_DB_Organization::table_exists() ) {
@@ -64,7 +71,7 @@ class UMS_Employee_Allowance_Report {
 				'cost_center' => $filters['cost_center'],
 				'cost_center_prefixes' => $filters['cost_center_prefix'] !== ''
 					? array( $filters['cost_center_prefix'] )
-					: array_keys( self::get_cost_center_prefixes() ),
+					: self::get_cost_center_prefix_keys(),
 				'position'    => $filters['position'],
 			)
 		);
@@ -515,7 +522,10 @@ class UMS_Employee_Allowance_Report {
 		$zip->close();
 
 		$filters = $report['filters'];
-		$filename = sprintf( 'UMS-dinh-muc-CNV-T%d-%d-%s.xlsx', $filters['report_month'], $filters['report_year'], gmdate( 'Ymd-His' ) );
+		$scope = $filters['cost_center_prefix'] !== ''
+			? 'CC' . $filters['cost_center_prefix']
+			: 'CC1300-4400-4900';
+		$filename = sprintf( 'UMS-dinh-muc-CNV-%s-T%d-%d-%s.xlsx', $scope, $filters['report_month'], $filters['report_year'], gmdate( 'Ymd-His' ) );
 		while ( ob_get_level() ) {
 			ob_end_clean();
 		}
