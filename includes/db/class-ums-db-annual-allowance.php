@@ -334,7 +334,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		return $best_scope;
 	}
 
-	private static function organization_condition_matches( $rule, $department, $team, $cost_center, $position, $position_id ) {
+	public static function organization_condition_matches( $rule, $department, $team, $cost_center, $position, $position_id ) {
 		if ( ! empty( $rule['department'] ) && self::normalize_text( $rule['department'] ) !== self::normalize_text( $department ) ) {
 			return false;
 		}
@@ -353,7 +353,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		return true;
 	}
 
-	private static function scope_matches( $rule, $month_day, $date_joined, $evaluation_date ) {
+	public static function scope_matches( $rule, $month_day, $date_joined, $evaluation_date ) {
 		$scope = isset( $rule['rule_scope'] ) ? sanitize_key( $rule['rule_scope'] ) : 'annual';
 		if ( $scope === 'annual' ) {
 			return true;
@@ -414,7 +414,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			: $month_day >= $start || $month_day <= $end;
 	}
 
-	private static function calculate_match_score( $rule ) {
+	public static function calculate_match_score( $rule ) {
 		$score = (int) ( $rule['priority'] ?? 0 );
 		$score += ! empty( $rule['department'] ) ? 16 : 0;
 		$score += ! empty( $rule['team'] ) ? 32 : 0;
@@ -430,7 +430,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		return $score;
 	}
 
-	private static function normalize_text( $value ) {
+	public static function normalize_text( $value ) {
 		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
 	}

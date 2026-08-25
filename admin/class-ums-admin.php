@@ -43,6 +43,7 @@ class UMS_Admin {
         add_action( 'admin_post_ums_delete_annual_allowance', array( __CLASS__, 'handle_delete_annual_allowance' ) );
         add_action( 'admin_post_ums_preview_annual_allowance_import', array( __CLASS__, 'handle_preview_annual_allowance_import' ) );
         add_action( 'admin_post_ums_confirm_annual_allowance_import', array( __CLASS__, 'handle_confirm_annual_allowance_import' ) );
+		add_action( 'admin_post_ums_export_employee_allowances', array( __CLASS__, 'handle_export_employee_allowances' ) );
         add_action( 'admin_post_ums_sync_organization', array( __CLASS__, 'handle_sync_organization' ) );
         add_action( 'admin_post_ums_save_sheet_sync_settings', array( __CLASS__, 'handle_save_sheet_sync_settings' ) );
 		add_action( 'admin_post_ums_export_pr', array( __CLASS__, 'handle_export_pr' ) );
@@ -213,7 +214,7 @@ class UMS_Admin {
             'ums-admin-css', 
             UMS_PLUGIN_URL . 'admin/css/ums-admin.css', 
             array( 'ums-jqx-energyblue-css' ), 
-            '1.1.0'
+            '1.2.0'
         );
 
         wp_enqueue_style(
@@ -510,6 +511,16 @@ class UMS_Admin {
         $organization_cost_centers = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'cost_center' ) : array();
         $organization_positions = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'position' ) : array();
         $allowance_import_ready = UMS_DB_Annual_Allowance::is_import_ready();
+		$allowance_report_filters = UMS_Employee_Allowance_Report::sanitize_filters( $_GET );
+		$allowance_report = null;
+		$allowance_report_error = '';
+		if ( isset( $_GET['allowance_report_preview'] ) && (string) $_GET['allowance_report_preview'] === '1' ) {
+			try {
+				$allowance_report = UMS_Employee_Allowance_Report::build( $allowance_report_filters );
+			} catch ( Throwable $error ) {
+				$allowance_report_error = $error->getMessage();
+			}
+		}
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php';
@@ -2520,6 +2531,28 @@ class UMS_Admin {
         );
     }
 
+	/**
+	 * Tính lại dữ liệu từ bộ lọc đã xem trước và trả workbook định mức CNV.
+	 */
+	public static function handle_export_employee_allowances() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền xuất định mức CNV.' );
+		}
+		check_admin_referer( 'ums_export_employee_allowances' );
+
+		try {
+			$report = UMS_Employee_Allowance_Report::build( wp_unslash( $_POST ) );
+			UMS_Employee_Allowance_Report::stream( $report );
+		} catch ( Throwable $error ) {
+			self::redirect_to_annual_allowances(
+				array(
+					'notice'       => 'allowance_employee_export_failed',
+					'notice_extra' => $error->getMessage(),
+				)
+			);
+		}
+	}
+
     private static function text_length( $value ) {
         return function_exists( 'mb_strlen' ) ? mb_strlen( (string) $value, 'UTF-8' ) : strlen( (string) $value );
     }
@@ -2892,6 +2925,7 @@ class UMS_Admin {
             'allowance_import_preview_expired' => array( 'error', 'Dữ liệu xem trước đã hết hạn. Vui lòng tải lại file Excel.' ),
             'allowance_import_failed' => array( 'error', 'Import định mức không thành công.' ),
             'allowance_import_completed' => array( 'success', 'Import định mức hoàn tất.' ),
+			'allowance_employee_export_failed' => array( 'error', 'Không thể xuất định mức CNV.' ),
             'organization_synced' => array( 'success', 'Đồng bộ sơ đồ tổ chức thành công.' ),
             'organization_sync_failed' => array( 'error', 'Không thể đồng bộ sơ đồ tổ chức.' ),
             'invalid_user'     => array( 'error', 'Không tìm thấy nhân sự cần xử lý.' ),

@@ -219,6 +219,8 @@ $newcomer_grid_columns = array(
 		</div>
 	<?php endif; ?>
 
+	<?php include UMS_PLUGIN_DIR . 'admin/partials/view-employee-allowance-report.php'; ?>
+
 	<div class="ums-panel">
 		<h2>Danh sách định mức cấp phát</h2>
 		<p class="description">Dữ liệu Tháng 4 và Tháng 9 được tách thành hai bảng để dễ theo dõi.</p>

@@ -101,6 +101,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-department-import.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-xlsx-reader.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-annual-allowance-import.php';
+	require_once UMS_PLUGIN_DIR . 'includes/class-ums-employee-allowance-report.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-inventory-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-uniform-material-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-calculator.php';

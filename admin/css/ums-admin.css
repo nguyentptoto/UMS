@@ -70,6 +70,22 @@
     min-height: 32px;
 }
 
+#ums-employee-allowance-report .ums-filter-bar label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+#ums-employee-allowance-report .ums-filter-bar .ums-inline-checkbox {
+    align-items: center;
+    flex-direction: row;
+    min-height: 32px;
+}
+
+#ums-employee-allowance-report .ums-inline-checkbox input[type="checkbox"] {
+    min-height: 0;
+}
+
 .ums-user-table th,
 .ums-user-table td {
     vertical-align: middle;

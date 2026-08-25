@@ -109,6 +109,51 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		);
 	}
 
+	/**
+	 * Lấy nhân sự phục vụ báo cáo định mức, không áp dụng phân trang giao diện.
+	 */
+	public static function get_for_allowance_export( $args = array() ) {
+		if ( ! self::table_exists() ) {
+			return array();
+		}
+
+		$args = wp_parse_args(
+			$args,
+			array(
+				'search'      => '',
+				'department'  => '',
+				'team'        => '',
+				'cost_center' => '',
+				'position'    => '',
+			)
+		);
+		$where  = array( "employee_no <> ''" );
+		$params = array();
+
+		if ( $args['search'] !== '' ) {
+			$like = '%' . self::db()->esc_like( sanitize_text_field( $args['search'] ) ) . '%';
+			$where[] = '(employee_no LIKE %s OR full_name LIKE %s OR email LIKE %s)';
+			$params  = array_merge( $params, array( $like, $like, $like ) );
+		}
+
+		foreach ( array( 'department', 'team', 'cost_center', 'position' ) as $field ) {
+			if ( $args[ $field ] !== '' ) {
+				$where[]  = "$field = %s";
+				$params[] = sanitize_text_field( $args[ $field ] );
+			}
+		}
+
+		$sql = 'SELECT employee_no, full_name, department, team, position, cost_center, date_joined, email, factory
+			FROM ' . self::table() . '
+			WHERE ' . implode( ' AND ', $where ) . '
+			ORDER BY employee_no ASC';
+		if ( ! empty( $params ) ) {
+			$sql = self::db()->prepare( $sql, $params );
+		}
+
+		return self::db()->get_results( $sql, ARRAY_A );
+	}
+
 	public static function get_last_synced_at() {
 		return self::db()->get_var( 'SELECT MAX(synced_at) FROM ' . self::table() );
 	}

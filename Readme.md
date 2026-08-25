@@ -114,6 +114,19 @@ Khi user tạo hoặc sửa phiếu, hệ thống kiểm tra định mức trư�
 - Phiếu bị `rejected` không tính vào định mức đã dùng.
 - Khi sửa phiếu, hệ thống loại trừ chính phiếu đang sửa để tránh tính trùng.
 
+### Xuất định mức theo từng CNV
+
+Trang `Định mức năm` có khu vực `Xuất định mức theo từng CNV`. Admin chọn năm, kỳ Tháng 4/Tháng 9 và có thể lọc theo mã nhân viên, phòng, nhóm, cost center hoặc vị trí. Danh sách nhân sự được đọc trực tiếp từ Sơ đồ tổ chức TVN; hệ thống không dùng công thức `VLOOKUP` hoặc liên kết tới workbook nhân sự bên ngoài.
+
+Hai chế độ số lượng gồm:
+
+- `Còn được nhận`: lấy định mức của kỳ rồi trừ phiếu chưa bị từ chối và lịch sử xuất kho chủ động trong chu kỳ.
+- `Định mức gốc`: xuất nguyên số lượng của rule, không trừ lịch sử.
+
+Rule được so khớp theo đúng thứ tự ưu tiên đang dùng khi tạo phiếu và xuất kho: phòng, nhóm, cost center, vị trí, ngày vào Công ty và scope CNV mới. Một rule sản phẩm chỉ được tính một lần dù sản phẩm có nhiều size. Kết quả được xem trước bằng jqxGrid và xuất thành sheet `Total` với các cột `Mã nhân viên`, `Họ và tên`, `Phòng`, `Cost center`, `Mũ & Giày định mức`, `SL quần`, `SL áo phông`, `SL áo khoác` và `SL áo phao`.
+
+File `.xlsx` được tạo mới hoàn toàn với dữ liệu tĩnh, bộ lọc và dòng tiêu đề cố định. Bảng xem trước giới hạn 500 dòng để giữ giao diện nhẹ; file tải xuống vẫn chứa đầy đủ nhân sự thỏa điều kiện.
+
 ### Import định mức từ Excel
 
 Trang `Định mức năm` hỗ trợ import trực tiếp file `.xlsx` theo template quản lý đồng phục. Khi cài mới, import toàn bộ file `ums.sql`; bảng định mức linh hoạt và bảng `wp_uniform_allowance_import_batches` đã có sẵn trong cấu trúc hoàn chỉnh.
