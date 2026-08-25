@@ -119,6 +119,24 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		return self::db()->get_row( $sql, ARRAY_A );
 	}
 
+	public static function get_by_rule_keys( $rule_keys ) {
+		$rule_keys = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', (array) $rule_keys ) ) ) );
+		if ( empty( $rule_keys ) ) {
+			return array();
+		}
+
+		$rules = array();
+		foreach ( array_chunk( $rule_keys, 500 ) as $key_batch ) {
+			$placeholders = implode( ', ', array_fill( 0, count( $key_batch ), '%s' ) );
+			$sql = 'SELECT * FROM ' . self::table() . " WHERE rule_key IN ($placeholders)";
+			$rows = self::db()->get_results( self::db()->prepare( $sql, $key_batch ), ARRAY_A );
+			foreach ( $rows as $row ) {
+				$rules[ $row['rule_key'] ] = $row;
+			}
+		}
+		return $rules;
+	}
+
 	public static function get_active_rule_for_item( $item_id, $position_id = 0, $context = array() ) {
 		if ( self::supports_flexible_rules() ) {
 			return self::get_flexible_rule_for_item( $item_id, $position_id, $context );

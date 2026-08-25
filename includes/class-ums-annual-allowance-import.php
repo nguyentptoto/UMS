@@ -99,6 +99,7 @@ class UMS_Annual_Allowance_Import {
 		$errors           = array();
 		$processed_sheets = array();
 		$managed_scopes   = array();
+		$replace_scopes   = array();
 
 		$annual_present = array();
 		foreach ( self::$annual_sheet_configs as $sheet_name => $config ) {
@@ -106,10 +107,6 @@ class UMS_Annual_Allowance_Import {
 				$annual_present[] = $sheet_name;
 			}
 		}
-		if ( ! empty( $annual_present ) && count( $annual_present ) !== count( self::$annual_sheet_configs ) ) {
-			$errors[] = 'File định mức thường phải có đủ hai sheet Phát T4 và Phát T9.';
-		}
-
 		foreach ( self::$annual_sheet_configs as $sheet_name => $config ) {
 			if ( ! $reader->has_sheet( $sheet_name ) ) {
 				continue;
@@ -119,6 +116,9 @@ class UMS_Annual_Allowance_Import {
 			$processed_sheets[] = $sheet_name;
 			$managed_scopes[]   = $config['scope'];
 		}
+		if ( count( $annual_present ) === count( self::$annual_sheet_configs ) ) {
+			$replace_scopes[] = 'annual';
+		}
 
 		$override_present = array();
 		foreach ( self::$newcomer_sheet_configs as $sheet_name => $config ) {
@@ -127,28 +127,26 @@ class UMS_Annual_Allowance_Import {
 			}
 			if ( $config['scope'] === 'newcomer_september_override' ) {
 				$override_present[] = $sheet_name;
+			} else {
+				$replace_scopes[] = $config['scope'];
 			}
 			self::collect_sheet_rules( $reader->read_sheet( $sheet_name ), $sheet_name, $config, $rules, $errors );
 			$processed_sheets[] = $sheet_name;
 			$managed_scopes[]   = $config['scope'];
 		}
 
-		if ( ! empty( $override_present ) && count( $override_present ) !== 4 ) {
-			$errors[] = 'Bộ định mức T9 chi tiết cho CNV mới phải có đủ bốn khoảng ngày vào công ty.';
+		if ( count( $override_present ) === 4 ) {
+			$replace_scopes[] = 'newcomer_september_override';
 		}
 
-		$shoe_present = array();
 		foreach ( self::$newcomer_shoe_sheet_configs as $sheet_name => $config ) {
 			if ( ! $reader->has_sheet( $sheet_name ) ) {
 				continue;
 			}
-			$shoe_present[]    = $sheet_name;
 			$processed_sheets[] = $sheet_name;
 			$managed_scopes[]   = $config['scope'];
+			$replace_scopes[]   = $config['scope'];
 			self::collect_sheet_rules( $reader->read_sheet( $sheet_name ), $sheet_name, $config, $rules, $errors );
-		}
-		if ( ! empty( $shoe_present ) && count( $shoe_present ) !== count( self::$newcomer_shoe_sheet_configs ) ) {
-			$errors[] = 'Bộ định mức giày CNV mới phải có đủ hai sheet T4 N+1 và T9 N+1.';
 		}
 		if ( empty( $processed_sheets ) ) {
 			$errors[] = 'Không tìm thấy sheet định mức UMS được hỗ trợ trong file Excel.';
@@ -178,6 +176,7 @@ class UMS_Annual_Allowance_Import {
 			'used_product_names' => $used_product_names,
 			'processed_sheets'   => array_values( array_unique( $processed_sheets ) ),
 			'managed_scopes'     => array_values( array_unique( $managed_scopes ) ),
+			'replace_scopes'     => array_values( array_unique( $replace_scopes ) ),
 			'errors'             => array_values( array_unique( $errors ) ),
 			'summary'            => self::build_summary( $rules ),
 		);
@@ -259,6 +258,7 @@ class UMS_Annual_Allowance_Import {
 		$inserted       = 0;
 		$updated        = 0;
 		$prepared_rules = array();
+		$staged_rules   = array();
 		global $wpdb;
 		$wpdb->query( 'START TRANSACTION' );
 		foreach ( $preview['rules'] as $rule ) {
@@ -267,9 +267,33 @@ class UMS_Annual_Allowance_Import {
 				$rule['category_id'] = $product['category_id'];
 				$rule['item_variant'] = $product['item_variant'];
 			}
+			$rule['rule_key'] = UMS_DB_Annual_Allowance::build_rule_key( $rule );
+			$staged_rules[]   = $rule;
+		}
+
+		$existing_rules = UMS_DB_Annual_Allowance::get_by_rule_keys( array_column( $staged_rules, 'rule_key' ) );
+		foreach ( $staged_rules as $rule ) {
+			$existing_rule  = $existing_rules[ $rule['rule_key'] ] ?? null;
+			$managed_months = array_map( 'absint', (array) ( $rule['managed_months'] ?? array() ) );
+			if ( $existing_rule && ! empty( $managed_months ) ) {
+				$current_quantities = json_decode( (string) $rule['monthly_quantities'], true );
+				$stored_quantities  = json_decode( (string) $existing_rule['monthly_quantities'], true );
+				$current_quantities = is_array( $current_quantities ) ? $current_quantities : array();
+				$stored_quantities  = is_array( $stored_quantities ) ? $stored_quantities : array();
+				for ( $month = 1; $month <= 12; $month++ ) {
+					if ( ! in_array( $month, $managed_months, true ) ) {
+						$current_quantities[ $month ] = absint( $stored_quantities[ $month ] ?? 0 );
+					}
+				}
+				$rule['monthly_quantities'] = wp_json_encode( $current_quantities );
+			}
+			if ( $rule['rule_scope'] === 'annual' && $rule['apply_type'] !== 'matrix' ) {
+				$final_quantities = json_decode( (string) $rule['monthly_quantities'], true );
+				$final_quantities = is_array( $final_quantities ) ? $final_quantities : array();
+				$rule['frequency_count'] = max( 1, count( array_filter( array_map( 'absint', $final_quantities ) ) ) );
+			}
 			$rule['source_batch_id'] = $batch_id;
-			$rule['rule_key']        = UMS_DB_Annual_Allowance::build_rule_key( $rule );
-			unset( $rule['source_sheet'], $rule['source_row'] );
+			unset( $rule['source_sheet'], $rule['source_row'], $rule['managed_months'] );
 			$prepared_rules[] = $rule;
 		}
 
@@ -283,8 +307,8 @@ class UMS_Annual_Allowance_Import {
 			$updated  += $result['updated'];
 		}
 
-		$managed_scopes = isset( $preview['managed_scopes'] ) && is_array( $preview['managed_scopes'] ) ? $preview['managed_scopes'] : array();
-		if ( empty( $errors ) && false === UMS_DB_Annual_Allowance::deactivate_other_import_rules( $batch_id, $managed_scopes ) ) {
+		$replace_scopes = isset( $preview['replace_scopes'] ) && is_array( $preview['replace_scopes'] ) ? $preview['replace_scopes'] : array();
+		if ( empty( $errors ) && false === UMS_DB_Annual_Allowance::deactivate_other_import_rules( $batch_id, $replace_scopes ) ) {
 			$errors[] = 'Không vô hiệu hóa được các rule cũ trong phạm vi vừa import.';
 		}
 
@@ -376,6 +400,7 @@ class UMS_Annual_Allowance_Import {
 					if ( ! isset( $rules[ $marker_key ] ) ) {
 						$rules[ $marker_key ] = self::new_rule( $rule_condition, $config, $period, '', 'matrix', $note, $sheet_name, $row_number );
 					}
+					self::merge_managed_months( $rules[ $marker_key ], $config );
 				}
 
 				foreach ( $products as $column => $product_name ) {
@@ -385,6 +410,7 @@ class UMS_Annual_Allowance_Import {
 						if ( ! isset( $rules[ $marker_key ] ) ) {
 							$rules[ $marker_key ] = self::new_rule( $rule_condition, $config, $period, $product_name, 'matrix', $note, $sheet_name, $row_number );
 						}
+						self::merge_managed_months( $rules[ $marker_key ], $config );
 					}
 					$raw_quantity = $row[ $column ] ?? '';
 					if ( $raw_quantity !== '' && ! is_numeric( $raw_quantity ) ) {
@@ -400,6 +426,7 @@ class UMS_Annual_Allowance_Import {
 					if ( ! isset( $rules[ $key ] ) ) {
 						$rules[ $key ] = self::new_rule( $rule_condition, $config, $period, $product_name, 'product', $note, $sheet_name, $row_number );
 					}
+					self::merge_managed_months( $rules[ $key ], $config );
 
 					if ( isset( $config['months'] ) && $config['months'] === 'all' ) {
 						for ( $month = 1; $month <= 12; $month++ ) {
@@ -425,8 +452,21 @@ class UMS_Annual_Allowance_Import {
 				'monthly_quantities' => array_fill( 1, 12, 0 ),
 				'priority' => isset( $config['priority'] ) ? (int) $config['priority'] : self::scope_priority( $config['scope'] ),
 				'is_active' => 1, 'source_sheet' => $sheet_name, 'source_row' => $row_number,
+				'managed_months' => self::get_managed_months( $config ),
 			)
 		);
+	}
+
+	private static function merge_managed_months( &$rule, $config ) {
+		$months = array_merge( (array) ( $rule['managed_months'] ?? array() ), self::get_managed_months( $config ) );
+		$rule['managed_months'] = array_values( array_unique( array_map( 'absint', $months ) ) );
+	}
+
+	private static function get_managed_months( $config ) {
+		if ( isset( $config['months'] ) && $config['months'] === 'all' ) {
+			return range( 1, 12 );
+		}
+		return isset( $config['month'] ) ? array( absint( $config['month'] ) ) : array();
 	}
 
 	private static function rule_collection_key( $scope, $condition, $period, $product_name ) {

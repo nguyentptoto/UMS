@@ -159,7 +159,7 @@ $newcomer_grid_columns = array(
 			<input type="file" name="ums_allowance_import_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
 			<button type="submit" class="button button-primary" <?php disabled( ! $allowance_import_ready ); ?>>Đọc và xem trước</button>
 		</form>
-		<p class="description">Hỗ trợ định mức thường Phát T4/Phát T9, cấp ban đầu, cấp bổ sung tháng 9 và định mức giày T4/T9 N+1 cho CNV mới. Dữ liệu chỉ được ghi sau bước xác nhận.</p>
+		<p class="description">Có thể tải một hoặc nhiều sheet trong mỗi lần import. Hệ thống chỉ cập nhật sheet có trong file và giữ nguyên các kỳ chưa tải lên.</p>
 	</div>
 
 	<?php if ( is_array( $import_preview ) ) : ?>

@@ -146,7 +146,9 @@ Quy trình import gồm hai bước:
 1. Chọn Excel và bấm `Đọc và xem trước`.
 2. Kiểm tra thống kê, ánh xạ toàn bộ sản phẩm rồi bấm `Xác nhận import`.
 
-Import chạy theo batch trong transaction. Lần import mới cập nhật rule trùng khóa và vô hiệu hóa các rule thuộc lần import cũ nhưng không còn trong file mới. Các rule nhập thủ công không bị xóa.
+Có thể import một sheet hoặc nhiều sheet trong mỗi lần tải file. Khi chỉ import `Phát T4`, hệ thống chỉ cập nhật tháng 4 và giữ nguyên dữ liệu tháng 9; quy tắc tương tự áp dụng cho các sheet dùng chung scope. Các sheet có scope độc lập như `New commer`, `Phát T9 - CNV mới`, giày T4 N+1 và giày T9 N+1 được thay thế riêng, không yêu cầu các sheet còn lại phải có mặt trong cùng file.
+
+Import chạy theo batch trong transaction và cập nhật các rule trùng khóa. Scope độc lập hoặc bộ sheet đầy đủ sẽ vô hiệu hóa rule import cũ không còn trong dữ liệu mới; khi chỉ tải một sheet thuộc scope dùng chung, hệ thống giữ các rule còn lại để tránh làm mất dữ liệu của sheet chưa tải. Các rule nhập thủ công không bị xóa.
 
 Thứ tự ưu tiên khi kiểm tra cấp phát:
 
