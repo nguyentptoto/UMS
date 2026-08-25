@@ -12,6 +12,11 @@ class UMS_Employee_Allowance_Report {
 		$month = in_array( $month, array( 4, 9 ), true ) ? $month : 4;
 		$quantity_mode = $raw['report_quantity_mode'] ?? ( $raw['quantity_mode'] ?? 'remaining' );
 		$include_zero_raw = $raw['report_include_zero'] ?? ( $raw['include_zero'] ?? true );
+		$allowed_prefixes = array_keys( self::get_cost_center_prefixes() );
+		$cost_center_prefix = sanitize_text_field( $raw['report_cost_center_prefix'] ?? ( $raw['cost_center_prefix'] ?? '' ) );
+		if ( $cost_center_prefix !== '' && ! in_array( $cost_center_prefix, $allowed_prefixes, true ) ) {
+			$cost_center_prefix = '';
+		}
 
 		return array(
 			'report_year'   => $year,
@@ -21,10 +26,28 @@ class UMS_Employee_Allowance_Report {
 			'department'    => sanitize_text_field( $raw['report_department'] ?? ( $raw['department'] ?? '' ) ),
 			'team'          => sanitize_text_field( $raw['report_team'] ?? ( $raw['team'] ?? '' ) ),
 			'cost_center'   => sanitize_text_field( $raw['report_cost_center'] ?? ( $raw['cost_center'] ?? '' ) ),
+			'cost_center_prefix' => $cost_center_prefix,
 			'position'      => sanitize_text_field( $raw['report_position'] ?? ( $raw['position'] ?? '' ) ),
 			'quantity_mode' => $quantity_mode === 'quota' ? 'quota' : 'remaining',
 			'include_zero'  => filter_var( $include_zero_raw, FILTER_VALIDATE_BOOLEAN ),
 		);
+	}
+
+	/**
+	 * Phạm vi nhà máy được phép đưa vào báo cáo. Filter cho phép mở rộng sau này.
+	 */
+	public static function get_cost_center_prefixes() {
+		$prefixes = apply_filters(
+			'ums_employee_allowance_cost_center_prefixes',
+			array(
+				'1300' => '1300',
+				'4400' => '4400',
+				'4900' => '4900',
+			)
+		);
+		return is_array( $prefixes ) && ! empty( $prefixes )
+			? $prefixes
+			: array( '1300' => '1300', '4400' => '4400', '4900' => '4900' );
 	}
 
 	public static function build( $filters ) {
@@ -39,6 +62,9 @@ class UMS_Employee_Allowance_Report {
 				'department'  => $filters['department'],
 				'team'        => $filters['team'],
 				'cost_center' => $filters['cost_center'],
+				'cost_center_prefixes' => $filters['cost_center_prefix'] !== ''
+					? array( $filters['cost_center_prefix'] )
+					: array_keys( self::get_cost_center_prefixes() ),
 				'position'    => $filters['position'],
 			)
 		);

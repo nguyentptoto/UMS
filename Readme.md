@@ -116,7 +116,7 @@ Khi user tạo hoặc sửa phiếu, hệ thống kiểm tra định mức trư�
 
 ### Xuất định mức theo từng CNV
 
-Trang `Định mức năm` có khu vực `Xuất định mức theo từng CNV`. Admin chọn năm, kỳ Tháng 4/Tháng 9 và có thể lọc theo mã nhân viên, phòng, nhóm, cost center hoặc vị trí. Danh sách nhân sự được đọc trực tiếp từ Sơ đồ tổ chức TVN; hệ thống không dùng công thức `VLOOKUP` hoặc liên kết tới workbook nhân sự bên ngoài.
+Trang `Định mức năm` có khu vực `Xuất định mức theo từng CNV`. Phạm vi báo cáo chỉ lấy nhân sự có Cost center bắt đầu bằng `1300`, `4400` hoặc `4900`, không quét toàn bộ nhân sự trong Sơ đồ tổ chức. Admin chọn năm, kỳ Tháng 4/Tháng 9, một đầu Cost center cụ thể hoặc cả ba, sau đó có thể lọc tiếp theo mã nhân viên, phòng, nhóm, cost center chi tiết hoặc vị trí. Danh sách nhân sự được đọc trực tiếp từ Sơ đồ tổ chức TVN; hệ thống không dùng công thức `VLOOKUP` hoặc liên kết tới workbook nhân sự bên ngoài.
 
 Hai chế độ số lượng gồm:
 

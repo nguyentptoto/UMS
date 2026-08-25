@@ -16,6 +16,20 @@ $report_columns = array(
 	array( 'text' => 'SL áo khoác định mức', 'datafield' => 'jacket_qty', 'width' => 155, 'cellsalign' => 'center' ),
 	array( 'text' => 'SL áo phao định mức', 'datafield' => 'coat_qty', 'width' => 150, 'cellsalign' => 'center' ),
 );
+$allowed_cost_center_prefixes = array_keys( UMS_Employee_Allowance_Report::get_cost_center_prefixes() );
+$report_cost_centers = array_values(
+	array_filter(
+		$organization_cost_centers,
+		function ( $cost_center ) use ( $allowed_cost_center_prefixes ) {
+			foreach ( $allowed_cost_center_prefixes as $prefix ) {
+				if ( strpos( (string) $cost_center, (string) $prefix ) === 0 ) {
+					return true;
+				}
+			}
+			return false;
+		}
+	)
+);
 ?>
 
 <div class="ums-panel" id="ums-employee-allowance-report">
@@ -67,10 +81,19 @@ $report_columns = array(
 			</select>
 		</label>
 		<label>
+			<span>Đầu Cost center</span>
+			<select name="report_cost_center_prefix">
+				<option value="">1300, 4400 và 4900</option>
+				<?php foreach ( UMS_Employee_Allowance_Report::get_cost_center_prefixes() as $prefix => $prefix_label ) : ?>
+					<option value="<?php echo esc_attr( $prefix ); ?>" <?php selected( $allowance_report_filters['cost_center_prefix'], $prefix ); ?>><?php echo esc_html( $prefix_label ); ?></option>
+				<?php endforeach; ?>
+			</select>
+		</label>
+		<label>
 			<span>Cost center</span>
 			<select name="report_cost_center">
 				<option value="">Tất cả cost center</option>
-				<?php foreach ( $organization_cost_centers as $cost_center ) : ?>
+				<?php foreach ( $report_cost_centers as $cost_center ) : ?>
 					<option value="<?php echo esc_attr( $cost_center ); ?>" <?php selected( $allowance_report_filters['cost_center'], $cost_center ); ?>><?php echo esc_html( $cost_center ); ?></option>
 				<?php endforeach; ?>
 			</select>
@@ -124,7 +147,7 @@ $report_columns = array(
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:16px;">
 			<?php wp_nonce_field( 'ums_export_employee_allowances' ); ?>
 			<input type="hidden" name="action" value="ums_export_employee_allowances">
-			<?php foreach ( array( 'report_year', 'report_month', 'search', 'department', 'team', 'cost_center', 'position', 'quantity_mode', 'include_zero' ) as $field ) : ?>
+			<?php foreach ( array( 'report_year', 'report_month', 'search', 'department', 'team', 'cost_center_prefix', 'cost_center', 'position', 'quantity_mode', 'include_zero' ) as $field ) : ?>
 				<input type="hidden" name="<?php echo esc_attr( strpos( $field, 'report_' ) === 0 ? $field : 'report_' . $field ); ?>" value="<?php echo esc_attr( is_bool( $allowance_report_filters[ $field ] ) ? ( $allowance_report_filters[ $field ] ? '1' : '0' ) : $allowance_report_filters[ $field ] ); ?>">
 			<?php endforeach; ?>
 			<button type="submit" class="button button-primary">Xuất file Excel</button>

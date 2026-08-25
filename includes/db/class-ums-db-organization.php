@@ -124,6 +124,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 				'department'  => '',
 				'team'        => '',
 				'cost_center' => '',
+				'cost_center_prefixes' => array(),
 				'position'    => '',
 			)
 		);
@@ -141,6 +142,25 @@ class UMS_DB_Organization extends UMS_DB_Base {
 				$where[]  = "$field = %s";
 				$params[] = sanitize_text_field( $args[ $field ] );
 			}
+		}
+
+		$prefixes = array_values(
+			array_filter(
+				array_map(
+					function ( $prefix ) {
+						return preg_replace( '/[^0-9A-Za-z_-]/', '', (string) $prefix );
+					},
+					(array) $args['cost_center_prefixes']
+				)
+			)
+		);
+		if ( ! empty( $prefixes ) ) {
+			$prefix_conditions = array();
+			foreach ( $prefixes as $prefix ) {
+				$prefix_conditions[] = 'cost_center LIKE %s';
+				$params[] = self::db()->esc_like( $prefix ) . '%';
+			}
+			$where[] = '(' . implode( ' OR ', $prefix_conditions ) . ')';
 		}
 
 		$sql = 'SELECT employee_no, full_name, department, team, position, cost_center, date_joined, email, factory
