@@ -46,6 +46,21 @@ class UMS_Annual_Allowance_Import {
 	);
 
 	/**
+	 * Định mức giày cấp ở kỳ kế tiếp cho CNV mới. Hai sheet có cùng ma trận
+	 * sản phẩm nhưng khác khoảng ngày vào và tháng cấp của năm kế tiếp.
+	 */
+	private static $newcomer_shoe_sheet_configs = array(
+		'ĐM Giày T9N+1 CNVM vào 1.9N-29.' => array(
+			'scope' => 'newcomer_shoe_september', 'header' => 1, 'start' => 2, 'month' => 9,
+			'period' => array( '09-01', '02-29' ), 'priority' => 500, 'product_scoped_matrix' => true,
+		),
+		'ĐM Giày T4N+1 CNVM vào 1.3N-31.' => array(
+			'scope' => 'newcomer_shoe_april', 'header' => 1, 'start' => 2, 'month' => 4,
+			'period' => array( '03-01', '08-31' ), 'priority' => 500, 'product_scoped_matrix' => true,
+		),
+	);
+
+	/**
 	 * Ma trận sản phẩm cố định E:AC dùng chung cho Phát T4 và Phát T9.
 	 */
 	public static function get_product_columns() {
@@ -121,6 +136,20 @@ class UMS_Annual_Allowance_Import {
 		if ( ! empty( $override_present ) && count( $override_present ) !== 4 ) {
 			$errors[] = 'Bộ định mức T9 chi tiết cho CNV mới phải có đủ bốn khoảng ngày vào công ty.';
 		}
+
+		$shoe_present = array();
+		foreach ( self::$newcomer_shoe_sheet_configs as $sheet_name => $config ) {
+			if ( ! $reader->has_sheet( $sheet_name ) ) {
+				continue;
+			}
+			$shoe_present[]    = $sheet_name;
+			$processed_sheets[] = $sheet_name;
+			$managed_scopes[]   = $config['scope'];
+			self::collect_sheet_rules( $reader->read_sheet( $sheet_name ), $sheet_name, $config, $rules, $errors );
+		}
+		if ( ! empty( $shoe_present ) && count( $shoe_present ) !== count( self::$newcomer_shoe_sheet_configs ) ) {
+			$errors[] = 'Bộ định mức giày CNV mới phải có đủ hai sheet T4 N+1 và T9 N+1.';
+		}
 		if ( empty( $processed_sheets ) ) {
 			$errors[] = 'Không tìm thấy sheet định mức UMS được hỗ trợ trong file Excel.';
 		}
@@ -135,7 +164,7 @@ class UMS_Annual_Allowance_Import {
 
 		$used_product_names = array();
 		foreach ( $rules as $rule ) {
-			if ( $rule['apply_type'] === 'product' && $rule['source_product_name'] !== '' ) {
+			if ( in_array( $rule['apply_type'], array( 'product', 'matrix' ), true ) && $rule['source_product_name'] !== '' ) {
 				$used_product_names[] = $rule['source_product_name'];
 			}
 		}
@@ -233,7 +262,7 @@ class UMS_Annual_Allowance_Import {
 		global $wpdb;
 		$wpdb->query( 'START TRANSACTION' );
 		foreach ( $preview['rules'] as $rule ) {
-			if ( $rule['apply_type'] === 'product' ) {
+			if ( in_array( $rule['apply_type'], array( 'product', 'matrix' ), true ) && $rule['source_product_name'] !== '' ) {
 				$product             = $mapped[ $rule['source_product_name'] ];
 				$rule['category_id'] = $product['category_id'];
 				$rule['item_variant'] = $product['item_variant'];
@@ -342,13 +371,21 @@ class UMS_Annual_Allowance_Import {
 				$rule_condition['position_code'] = $position_code;
 				$note = $layout['note'] !== '' ? self::normalize_space( $row[ $layout['note'] ] ?? '' ) : '';
 
-				$marker_key = self::rule_collection_key( $config['scope'], $rule_condition, $period, '__matrix__' );
-				if ( ! isset( $rules[ $marker_key ] ) ) {
-					$rules[ $marker_key ] = self::new_rule( $rule_condition, $config, $period, '', 'matrix', $note, $sheet_name, $row_number );
+				if ( empty( $config['product_scoped_matrix'] ) ) {
+					$marker_key = self::rule_collection_key( $config['scope'], $rule_condition, $period, '__matrix__' );
+					if ( ! isset( $rules[ $marker_key ] ) ) {
+						$rules[ $marker_key ] = self::new_rule( $rule_condition, $config, $period, '', 'matrix', $note, $sheet_name, $row_number );
+					}
 				}
 
 				foreach ( $products as $column => $product_name ) {
 					$product_name = self::normalize_space( $product_name );
+					if ( ! empty( $config['product_scoped_matrix'] ) ) {
+						$marker_key = self::rule_collection_key( $config['scope'], $rule_condition, $period, '__matrix__:' . $product_name );
+						if ( ! isset( $rules[ $marker_key ] ) ) {
+							$rules[ $marker_key ] = self::new_rule( $rule_condition, $config, $period, $product_name, 'matrix', $note, $sheet_name, $row_number );
+						}
+					}
 					$raw_quantity = $row[ $column ] ?? '';
 					if ( $raw_quantity !== '' && ! is_numeric( $raw_quantity ) ) {
 						$errors[] = sprintf( 'Sheet %s dòng %d, sản phẩm "%s" phải là số.', $sheet_name, $row_number, $product_name );
@@ -461,7 +498,8 @@ class UMS_Annual_Allowance_Import {
 	private static function build_summary( $rules ) {
 		$summary = array(
 			'annual' => 0, 'newcomer' => 0, 'newcomer_september' => 0,
-			'newcomer_september_override' => 0, 'matrix' => 0, 'total' => count( $rules ),
+			'newcomer_september_override' => 0, 'newcomer_shoe_april' => 0,
+			'newcomer_shoe_september' => 0, 'matrix' => 0, 'total' => count( $rules ),
 		);
 		foreach ( $rules as $rule ) {
 			if ( $rule['apply_type'] === 'matrix' ) {
@@ -478,7 +516,8 @@ class UMS_Annual_Allowance_Import {
 	private static function scope_priority( $scope ) {
 		$priorities = array(
 			'annual' => 100, 'newcomer' => 200, 'newcomer_september' => 300,
-			'newcomer_september_override' => 400,
+			'newcomer_september_override' => 400, 'newcomer_shoe_april' => 500,
+			'newcomer_shoe_september' => 500,
 		);
 		return isset( $priorities[ $scope ] ) ? $priorities[ $scope ] : 0;
 	}

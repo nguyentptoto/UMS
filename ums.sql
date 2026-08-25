@@ -173,7 +173,7 @@ CREATE TABLE `wp_uniform_sap_materials` (
 CREATE TABLE `wp_uniform_annual_allowance_rules` (
     `rule_id` INT AUTO_INCREMENT NOT NULL,
     `rule_key` CHAR(64) DEFAULT NULL COMMENT 'Khóa duy nhất sinh từ nguồn import và điều kiện áp dụng',
-    `rule_scope` VARCHAR(30) NOT NULL DEFAULT 'annual' COMMENT 'annual, newcomer, newcomer_september, newcomer_september_override, maternity, special',
+    `rule_scope` VARCHAR(30) NOT NULL DEFAULT 'annual' COMMENT 'annual, newcomer, newcomer_september, newcomer_september_override, newcomer_shoe_april, newcomer_shoe_september, maternity, special',
     `apply_type` VARCHAR(20) NOT NULL DEFAULT 'item' COMMENT 'category, item, product, matrix',
     `category_id` INT DEFAULT NULL,
     `item_id` INT DEFAULT NULL,
@@ -375,12 +375,12 @@ CREATE TABLE `wp_uniform_organization_employees` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
--- UPDATE CHO DATABASE DA TON TAI: DINH MUC CNV MOI
+-- UPDATE CHO DATABASE DA TON TAI: DINH MUC CNV MOI VA GIAY N+1
 -- Chay rieng khoi ALTER nay neu wp_uniform_annual_allowance_rules da ton tai.
 -- Khong xoa va khong thay doi du lieu rule hien co.
 -- ============================================================
 ALTER TABLE `wp_uniform_annual_allowance_rules`
     MODIFY COLUMN `rule_scope` VARCHAR(30) NOT NULL DEFAULT 'annual'
-        COMMENT 'annual, newcomer, newcomer_september, newcomer_september_override, maternity, special',
+        COMMENT 'annual, newcomer, newcomer_september, newcomer_september_override, newcomer_shoe_april, newcomer_shoe_september, maternity, special',
     MODIFY COLUMN `apply_type` VARCHAR(20) NOT NULL DEFAULT 'item'
         COMMENT 'category, item, product, matrix';

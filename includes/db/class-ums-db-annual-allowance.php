@@ -189,7 +189,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$position    = self::normalize_position_code( $context['position'] );
 		$date_joined = sanitize_text_field( (string) $context['date_joined'] );
 		$month_day   = preg_match( '/^\d{4}-(\d{2}-\d{2})$/', $date_joined, $matches ) ? $matches[1] : '';
-		$matrix_scope = self::get_applicable_matrix_scope( $context, $department, $team, $cost_center, $position, $position_id );
+		$matrix_scope = self::get_applicable_matrix_scope( $context, $department, $team, $cost_center, $position, $position_id, $item );
 
 		$sql = self::db()->prepare(
 			"SELECT rules.*, inventory.category_id AS item_category_id, child.parent_id AS item_parent_category_id,
@@ -201,7 +201,10 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
 			WHERE rules.is_active = 1
 				AND (
-					(rules.apply_type = 'matrix')
+					(rules.apply_type = 'matrix' AND (
+						(rules.category_id = 0 AND rules.item_variant = '')
+						OR (rules.category_id = inventory.category_id AND rules.item_variant = inventory.item_variant)
+					))
 					OR (rules.apply_type = 'item' AND rules.item_id = inventory.item_id)
 					OR (rules.apply_type = 'category' AND rules.category_id IN (inventory.category_id, child.parent_id))
 					OR (rules.apply_type = 'product' AND rules.category_id = inventory.category_id AND rules.item_variant = inventory.item_variant)
@@ -262,24 +265,32 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	 * Xác định ma trận đang chi phối nhân viên. Khi ma trận có giá trị 0 cho một
 	 * sản phẩm, hệ thống không được rơi xuống rule tổng quát cũ và cấp nhầm.
 	 */
-	private static function get_applicable_matrix_scope( $context, $department, $team, $cost_center, $position, $position_id ) {
+	private static function get_applicable_matrix_scope( $context, $department, $team, $cost_center, $position, $position_id, $item ) {
 		static $scope_cache = array();
-		$cache_key = md5( wp_json_encode( array( $department, $team, $cost_center, $position, $position_id, $context['date_joined'], $context['evaluation_date'] ) ) );
+		$item_category_id = absint( $item['category_id'] ?? 0 );
+		$item_variant     = trim( (string) ( $item['item_variant'] ?? '' ) );
+		$cache_key = md5( wp_json_encode( array( $department, $team, $cost_center, $position, $position_id, $context['date_joined'], $context['evaluation_date'], $item_category_id, $item_variant ) ) );
 		if ( array_key_exists( $cache_key, $scope_cache ) ) {
 			return $scope_cache[ $cache_key ];
 		}
 
 		$sql = self::db()->prepare(
 			'SELECT DISTINCT rule_scope, target_type, position_id, department, team, cost_center, position_code,
-				employment_start_md, employment_end_md, priority
+				employment_start_md, employment_end_md, priority, category_id, item_variant
 			FROM ' . self::table() . "
-			WHERE is_active = 1 AND target_type = 'organization'
+			WHERE is_active = 1 AND target_type = 'organization' AND apply_type = 'matrix'
 				AND (department = '' OR department = %s)
 				AND (team = '' OR team = %s)
-				AND (cost_center = '' OR cost_center = %s)",
+				AND (cost_center = '' OR cost_center = %s)
+				AND (
+					(category_id = 0 AND item_variant = '')
+					OR (category_id = %d AND item_variant = %s)
+				)",
 			$department,
 			$team,
-			$cost_center
+			$cost_center,
+			$item_category_id,
+			$item_variant
 		);
 		$rows       = self::db()->get_results( $sql, ARRAY_A );
 		$month_day  = preg_match( '/^\d{4}-(\d{2}-\d{2})$/', (string) $context['date_joined'], $matches ) ? $matches[1] : '';
@@ -329,7 +340,10 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		if ( $scope === 'annual' ) {
 			return true;
 		}
-		$newcomer_scopes = array( 'newcomer', 'newcomer_september', 'newcomer_september_override' );
+		$newcomer_scopes = array(
+			'newcomer', 'newcomer_september', 'newcomer_september_override',
+			'newcomer_shoe_april', 'newcomer_shoe_september',
+		);
 		if ( ! in_array( $scope, $newcomer_scopes, true ) || $month_day === '' || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_joined ) ) {
 			return false;
 		}
@@ -344,6 +358,18 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$evaluation_month = (int) date( 'n', $evaluation_timestamp );
 		$joined_year      = (int) date( 'Y', $joined_timestamp );
 		$joined_month     = (int) date( 'n', $joined_timestamp );
+
+		if ( $scope === 'newcomer_shoe_april' ) {
+			if ( $evaluation_month !== 4 || $joined_month < 3 || $joined_month > 8 || $evaluation_year !== $joined_year + 1 ) {
+				return false;
+			}
+		} elseif ( $scope === 'newcomer_shoe_september' ) {
+			$is_winter_join = $joined_month >= 9 || $joined_month <= 2;
+			$issue_year     = $joined_month >= 9 ? $joined_year + 1 : $joined_year;
+			if ( $evaluation_month !== 9 || ! $is_winter_join || $evaluation_year !== $issue_year ) {
+				return false;
+			}
+		}
 
 		if ( in_array( $scope, array( 'newcomer_september', 'newcomer_september_override' ), true ) && ( $evaluation_month !== 9 || $joined_year !== $evaluation_year ) ) {
 			return false;
@@ -378,7 +404,11 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$score += ! empty( $rule['position_code'] ) ? 8 : 0;
 		$score += ( $rule['apply_type'] ?? '' ) === 'item' ? 4 : 0;
 		$score += ( $rule['apply_type'] ?? '' ) === 'product' ? 2 : 0;
-		$score += in_array( $rule['rule_scope'] ?? '', array( 'newcomer', 'newcomer_september', 'newcomer_september_override' ), true ) ? 128 : 0;
+		$score += in_array(
+			$rule['rule_scope'] ?? '',
+			array( 'newcomer', 'newcomer_september', 'newcomer_september_override', 'newcomer_shoe_april', 'newcomer_shoe_september' ),
+			true
+		) ? 128 : 0;
 		return $score;
 	}
 
@@ -397,7 +427,11 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	 */
 	public static function requires_exact_quantity( $rule ) {
 		$scope = isset( $rule['rule_scope'] ) ? sanitize_key( $rule['rule_scope'] ) : '';
-		return in_array( $scope, array( 'newcomer', 'newcomer_september', 'newcomer_september_override' ), true );
+		return in_array(
+			$scope,
+			array( 'newcomer', 'newcomer_september', 'newcomer_september_override', 'newcomer_shoe_april', 'newcomer_shoe_september' ),
+			true
+		);
 	}
 
 	/**

@@ -15,6 +15,8 @@ $grid_rows_april     = array();
 $grid_rows_september = array();
 $grid_rows_newcomer  = array();
 $grid_rows_newcomer_september = array();
+$grid_rows_newcomer_shoe_april = array();
+$grid_rows_newcomer_shoe_september = array();
 $matrix_rows         = array();
 $normalize_product = function( $value ) {
 	return strtolower( remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) ) );
@@ -37,13 +39,19 @@ foreach ( $rules as $rule ) {
 	if ( $rule_scope !== 'annual' ) {
 		$period_start = (string) ( $rule['employment_start_md'] ?? '' );
 		$period_end   = (string) ( $rule['employment_end_md'] ?? '' );
-		$quantity = $rule_scope === 'newcomer'
-			? ( empty( $monthly_quantities ) ? 0 : max( array_map( 'absint', $monthly_quantities ) ) )
-			: absint( $monthly_quantities[9] ?? 0 );
+		if ( $rule_scope === 'newcomer' ) {
+			$quantity = empty( $monthly_quantities ) ? 0 : max( array_map( 'absint', $monthly_quantities ) );
+		} elseif ( $rule_scope === 'newcomer_shoe_april' ) {
+			$quantity = absint( $monthly_quantities[4] ?? 0 );
+		} else {
+			$quantity = absint( $monthly_quantities[9] ?? 0 );
+		}
 		$scope_labels = array(
 			'newcomer' => 'Cấp ban đầu',
 			'newcomer_september' => 'T9 tổng quát',
 			'newcomer_september_override' => 'T9 theo cost center',
+			'newcomer_shoe_april' => 'Giày T4 N+1',
+			'newcomer_shoe_september' => 'Giày T9 N+1',
 		);
 		$newcomer_row = array(
 			'rule_type' => $scope_labels[ $rule_scope ] ?? $rule_scope,
@@ -59,6 +67,10 @@ foreach ( $rules as $rule ) {
 		);
 		if ( $rule_scope === 'newcomer' ) {
 			$grid_rows_newcomer[] = $newcomer_row;
+		} elseif ( $rule_scope === 'newcomer_shoe_april' ) {
+			$grid_rows_newcomer_shoe_april[] = $newcomer_row;
+		} elseif ( $rule_scope === 'newcomer_shoe_september' ) {
+			$grid_rows_newcomer_shoe_september[] = $newcomer_row;
 		} else {
 			$grid_rows_newcomer_september[] = $newcomer_row;
 		}
@@ -147,7 +159,7 @@ $newcomer_grid_columns = array(
 			<input type="file" name="ums_allowance_import_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
 			<button type="submit" class="button button-primary" <?php disabled( ! $allowance_import_ready ); ?>>Đọc và xem trước</button>
 		</form>
-		<p class="description">Hỗ trợ định mức thường Phát T4/Phát T9, cấp ban đầu cho CNV mới và cấp bổ sung tháng 9 theo khoảng ngày vào công ty. Dữ liệu chỉ được ghi sau bước xác nhận.</p>
+		<p class="description">Hỗ trợ định mức thường Phát T4/Phát T9, cấp ban đầu, cấp bổ sung tháng 9 và định mức giày T4/T9 N+1 cho CNV mới. Dữ liệu chỉ được ghi sau bước xác nhận.</p>
 	</div>
 
 	<?php if ( is_array( $import_preview ) ) : ?>
@@ -157,7 +169,8 @@ $newcomer_grid_columns = array(
 				Tổng <?php echo esc_html( number_format_i18n( $import_preview['summary']['total'] ) ); ?> bản ghi:
 				<?php echo esc_html( number_format_i18n( $import_preview['summary']['annual'] ?? 0 ) ); ?> định mức thường,
 				<?php echo esc_html( number_format_i18n( $import_preview['summary']['newcomer'] ?? 0 ) ); ?> cấp ban đầu,
-				<?php echo esc_html( number_format_i18n( ( $import_preview['summary']['newcomer_september'] ?? 0 ) + ( $import_preview['summary']['newcomer_september_override'] ?? 0 ) ) ); ?> cấp bổ sung T9 và
+				<?php echo esc_html( number_format_i18n( ( $import_preview['summary']['newcomer_september'] ?? 0 ) + ( $import_preview['summary']['newcomer_september_override'] ?? 0 ) ) ); ?> cấp bổ sung T9,
+				<?php echo esc_html( number_format_i18n( ( $import_preview['summary']['newcomer_shoe_april'] ?? 0 ) + ( $import_preview['summary']['newcomer_shoe_september'] ?? 0 ) ) ); ?> định mức giày N+1 và
 				<?php echo esc_html( number_format_i18n( $import_preview['summary']['matrix'] ?? 0 ) ); ?> điều kiện ma trận.
 			</p>
 			<?php if ( ! empty( $import_preview['processed_sheets'] ) ) : ?>
@@ -264,6 +277,22 @@ $newcomer_grid_columns = array(
 			id="ums-annual-allowance-grid-newcomer-september"
 			class="ums-jqx-grid"
 			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_newcomer_september ) ); ?>"
+			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
+		></div>
+
+		<h2 style="margin-top:28px;">5. Định mức giày Tháng 4 N+1 cho CNV mới</h2>
+		<div
+			id="ums-annual-allowance-grid-newcomer-shoe-april"
+			class="ums-jqx-grid"
+			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_newcomer_shoe_april ) ); ?>"
+			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
+		></div>
+
+		<h2 style="margin-top:28px;">6. Định mức giày Tháng 9 N+1 cho CNV mới</h2>
+		<div
+			id="ums-annual-allowance-grid-newcomer-shoe-september"
+			class="ums-jqx-grid"
+			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_newcomer_shoe_september ) ); ?>"
 			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
 		></div>
 	</div>
