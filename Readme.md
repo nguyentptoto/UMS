@@ -118,6 +118,17 @@ Khi user tạo hoặc sửa phiếu, hệ thống kiểm tra định mức trư�
 
 Trang `Định mức năm` có khu vực `Xuất định mức theo từng CNV`. Phạm vi báo cáo chỉ lấy nhân sự có Cost center bắt đầu bằng `1300`, `4400` hoặc `4900`, không quét toàn bộ nhân sự trong Sơ đồ tổ chức. Admin chọn năm, kỳ Tháng 4/Tháng 9, một đầu Cost center cụ thể hoặc cả ba, sau đó có thể lọc tiếp theo mã nhân viên, phòng, nhóm, cost center chi tiết hoặc vị trí. Danh sách nhân sự được đọc trực tiếp từ Sơ đồ tổ chức TVN; hệ thống không dùng công thức `VLOOKUP` hoặc liên kết tới workbook nhân sự bên ngoài.
 
+Tác vụ xuất đọc rule bằng truy vấn tối giản, chỉ tra tài khoản WordPress thuộc phạm vi CNV đã lọc, chỉ tải lịch sử của sản phẩm có rule và chia truy vấn lịch sử thành các batch nhỏ. Với database đã tồn tại trước bản tối ưu này, chạy một lần các index phục vụ báo cáo:
+
+```sql
+ALTER TABLE `wp_uniform_requests`
+    ADD KEY `idx_allowance_request_history` (`target_user_id`, `created_at`, `current_status`);
+
+ALTER TABLE `wp_uniform_inventory_movements`
+    ADD KEY `idx_allowance_employee_history` (`target_employee_no`, `movement_type`, `created_at`),
+    ADD KEY `idx_allowance_user_history` (`target_user_id`, `movement_type`, `created_at`);
+```
+
 Hai chế độ số lượng gồm:
 
 - `Còn được nhận`: lấy định mức của kỳ rồi trừ phiếu chưa bị từ chối và lịch sử xuất kho chủ động trong chu kỳ.

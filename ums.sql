@@ -277,7 +277,9 @@ CREATE TABLE `wp_uniform_inventory_movements` (
     KEY `idx_target_employee_no` (`target_employee_no`),
     KEY `idx_import_batch_id` (`import_batch_id`),
     KEY `idx_movement_type` (`movement_type`),
-    KEY `idx_created_at` (`created_at`)
+    KEY `idx_created_at` (`created_at`),
+    KEY `idx_allowance_employee_history` (`target_employee_no`, `movement_type`, `created_at`),
+    KEY `idx_allowance_user_history` (`target_user_id`, `movement_type`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 11. BANG PHIEU YEU CAU CAP PHAT
@@ -295,7 +297,8 @@ CREATE TABLE `wp_uniform_requests` (
     PRIMARY KEY (`request_id`),
     KEY `idx_creator` (`creator_id`),
     KEY `idx_target_user` (`target_user_id`),
-    KEY `idx_current_status` (`current_status`)
+    KEY `idx_current_status` (`current_status`),
+    KEY `idx_allowance_request_history` (`target_user_id`, `created_at`, `current_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 12. BANG CHI TIET PHIEU YEU CAU CAP PHAT

@@ -76,7 +76,15 @@ class UMS_Employee_Allowance_Report {
 			)
 		);
 		$products     = self::get_products();
-		$rules        = UMS_DB_Annual_Allowance::get_all( array( 'status' => 'active', 'limit' => 10000 ) );
+		$rules        = array_values(
+			array_filter(
+				UMS_DB_Annual_Allowance::get_active_for_report(),
+				function ( $rule ) use ( $filters ) {
+					$monthly = json_decode( (string) ( $rule['monthly_quantities'] ?? '' ), true );
+					return is_array( $monthly ) && absint( $monthly[ $filters['report_month'] ] ?? 0 ) > 0;
+				}
+			)
+		);
 		foreach ( $products as &$product ) {
 			$product['rules'] = array_values(
 				array_filter(
@@ -90,14 +98,15 @@ class UMS_Employee_Allowance_Report {
 		unset( $product );
 		$rule_item_ids = self::get_rule_item_ids( $products );
 		$position_ids = self::get_position_ids();
-		$user_ids     = $filters['quantity_mode'] === 'remaining' ? self::get_employee_user_ids() : array();
+		$user_ids     = $filters['quantity_mode'] === 'remaining' ? self::get_employee_user_ids( $employees ) : array();
 		$usage_index  = $filters['quantity_mode'] === 'remaining'
-			? self::get_usage_index( $employees, $user_ids, $rules, $filters['evaluation_date'] )
+			? self::get_usage_index( $employees, $user_ids, $rules, $filters['evaluation_date'], $rule_item_ids )
 			: array();
 		$rows         = array();
 		$warnings     = array();
 		$warning_keys = array();
 		$with_quota   = 0;
+		$allocation_cache = array();
 
 		foreach ( $employees as $employee ) {
 			$position_code = UMS_DB_Annual_Allowance::normalize_position_code( $employee['position'] ?? '' );
@@ -112,39 +121,26 @@ class UMS_Employee_Allowance_Report {
 			);
 			$employee_no = trim( (string) $employee['employee_no'] );
 			$totals      = array_fill_keys( array( 'hat', 'shoes', 'pants', 'shirt', 'jacket', 'coat' ), 0 );
-			$used_rules  = array();
 
 			if ( $context['date_joined'] === '' ) {
 				self::add_warning( $warnings, $warning_keys, 'missing-date-' . $employee_no, 'CNV ' . $employee_no . ' chưa có Ngày vào; các rule CNV mới sẽ không được áp dụng.' );
 			}
 
-			foreach ( $products as $product ) {
-				$rule = self::resolve_rule( $product, $product['rules'], $context, $position_id );
-				if ( ! $rule || isset( $used_rules[ $rule['rule_id'] ] ) ) {
-					continue;
-				}
-				$used_rules[ $rule['rule_id'] ] = true;
-				$monthly = json_decode( (string) ( $rule['monthly_quantities'] ?? '' ), true );
-				$quota   = is_array( $monthly ) ? absint( $monthly[ $filters['report_month'] ] ?? 0 ) : 0;
-				if ( $quota <= 0 ) {
-					continue;
-				}
+			$allocation_key = self::get_allocation_cache_key( $context, $position_id );
+			if ( ! isset( $allocation_cache[ $allocation_key ] ) ) {
+				$allocation_cache[ $allocation_key ] = self::get_allocations( $products, $context, $position_id, $filters['report_month'] );
+			}
+			foreach ( $allocation_cache[ $allocation_key ]['warnings'] as $warning ) {
+				self::add_warning( $warnings, $warning_keys, $warning['key'], $warning['message'] );
+			}
 
-				$group = self::resolve_export_group( $product );
-				if ( $group === '' ) {
-					self::add_warning(
-						$warnings,
-						$warning_keys,
-						'unmapped-' . $product['key'],
-						'Sản phẩm "' . $product['item_variant'] . '" chưa xác định được nhóm xuất định mức.'
-					);
-					continue;
-				}
-
+			foreach ( $allocation_cache[ $allocation_key ]['allocations'] as $allocation ) {
+				$rule     = $allocation['rule'];
+				$quota    = $allocation['quota'];
 				$quantity = $filters['quantity_mode'] === 'remaining'
 					? self::get_remaining_quantity( $quota, $rule, $employee_no, $filters['evaluation_date'], $usage_index, $rule_item_ids )
 					: $quota;
-				$totals[ $group ] += max( 0, $quantity );
+				$totals[ $allocation['group'] ] += max( 0, $quantity );
 			}
 
 			$total_quantity = array_sum( $totals );
@@ -183,6 +179,89 @@ class UMS_Employee_Allowance_Report {
 		);
 	}
 
+	private static function get_allocations( $products, $context, $position_id, $report_month ) {
+		$allocations = array();
+		$warnings    = array();
+		$used_rules  = array();
+		$matching_rule_ids = self::get_matching_rule_ids( $products, $context, $position_id );
+		foreach ( $products as $product ) {
+			$rule = self::resolve_rule( $product['rules'], $matching_rule_ids );
+			if ( ! $rule || isset( $used_rules[ $rule['rule_id'] ] ) ) {
+				continue;
+			}
+			$used_rules[ $rule['rule_id'] ] = true;
+			$monthly = json_decode( (string) ( $rule['monthly_quantities'] ?? '' ), true );
+			$quota   = is_array( $monthly ) ? absint( $monthly[ $report_month ] ?? 0 ) : 0;
+			if ( $quota <= 0 ) {
+				continue;
+			}
+			$group = self::resolve_export_group( $product );
+			if ( $group === '' ) {
+				$warnings[] = array(
+					'key'     => 'unmapped-' . $product['key'],
+					'message' => 'Sản phẩm "' . $product['item_variant'] . '" chưa xác định được nhóm xuất định mức.',
+				);
+				continue;
+			}
+			$allocations[] = array( 'rule' => $rule, 'quota' => $quota, 'group' => $group );
+		}
+		return array( 'allocations' => $allocations, 'warnings' => $warnings );
+	}
+
+	private static function get_matching_rule_ids( $products, $context, $position_id ) {
+		$matching = array();
+		$checked  = array();
+		$month_day = preg_match( '/^\d{4}-(\d{2}-\d{2})$/', $context['date_joined'], $parts ) ? $parts[1] : '';
+		foreach ( $products as $product ) {
+			foreach ( $product['rules'] as $rule ) {
+				$rule_id = absint( $rule['rule_id'] );
+				if ( isset( $checked[ $rule_id ] ) ) {
+					continue;
+				}
+				$checked[ $rule_id ] = true;
+				if ( ! UMS_DB_Annual_Allowance::organization_condition_matches(
+					$rule,
+					$context['department'],
+					$context['team'],
+					$context['cost_center'],
+					$context['position'],
+					$position_id
+				) ) {
+					continue;
+				}
+				if ( UMS_DB_Annual_Allowance::scope_matches( $rule, $month_day, $context['date_joined'], $context['evaluation_date'] ) ) {
+					$matching[ $rule_id ] = true;
+				}
+			}
+		}
+		return $matching;
+	}
+
+	private static function get_allocation_cache_key( $context, $position_id ) {
+		$date_key = (string) $context['date_joined'];
+		if ( preg_match( '/^(\d{4})-\d{2}-\d{2}$/', $date_key, $matches ) ) {
+			$evaluation_year = (int) substr( (string) $context['evaluation_date'], 0, 4 );
+			if ( (int) $matches[1] < $evaluation_year - 1 ) {
+				$date_key = 'legacy';
+			}
+		}
+		return hash(
+			'sha256',
+			implode(
+				'|',
+				array(
+					UMS_DB_Annual_Allowance::normalize_text( $context['department'] ),
+					UMS_DB_Annual_Allowance::normalize_text( $context['team'] ),
+					UMS_DB_Annual_Allowance::normalize_text( $context['cost_center'] ),
+					UMS_DB_Annual_Allowance::normalize_position_code( $context['position'] ),
+					absint( $position_id ),
+					$date_key,
+					$context['evaluation_date'],
+				)
+			)
+		);
+	}
+
 	private static function get_products() {
 		$groups = array();
 		foreach ( UMS_DB_Inventory::get_all() as $item ) {
@@ -203,24 +282,10 @@ class UMS_Employee_Allowance_Report {
 		return array_values( $groups );
 	}
 
-	private static function resolve_rule( $product, $rules, $context, $position_id ) {
+	private static function resolve_rule( $rules, $matching_rule_ids ) {
 		$matched = array();
-		$month_day = preg_match( '/^\d{4}-(\d{2}-\d{2})$/', $context['date_joined'], $parts ) ? $parts[1] : '';
 		foreach ( $rules as $rule ) {
-			if ( ! self::rule_applies_to_product( $rule, $product ) ) {
-				continue;
-			}
-			if ( ! UMS_DB_Annual_Allowance::organization_condition_matches(
-				$rule,
-				$context['department'],
-				$context['team'],
-				$context['cost_center'],
-				$context['position'],
-				$position_id
-			) ) {
-				continue;
-			}
-			if ( ! UMS_DB_Annual_Allowance::scope_matches( $rule, $month_day, $context['date_joined'], $context['evaluation_date'] ) ) {
+			if ( ! isset( $matching_rule_ids[ absint( $rule['rule_id'] ) ] ) ) {
 				continue;
 			}
 			$rule['_match_score'] = UMS_DB_Annual_Allowance::calculate_match_score( $rule );
@@ -356,7 +421,7 @@ class UMS_Employee_Allowance_Report {
 	/**
 	 * Đọc lịch sử một lần để báo cáo toàn công ty không tạo truy vấn cho từng CNV/rule.
 	 */
-	private static function get_usage_index( $employees, $user_ids, $rules, $evaluation_date ) {
+	private static function get_usage_index( $employees, $user_ids, $rules, $evaluation_date, $rule_item_ids ) {
 		global $wpdb;
 		$max_years = 1;
 		foreach ( $rules as $rule ) {
@@ -374,19 +439,32 @@ class UMS_Employee_Allowance_Report {
 			}
 		}
 		$index = array();
+		$item_ids = array();
+		foreach ( $rule_item_ids as $rule_items ) {
+			$item_ids = array_merge( $item_ids, $rule_items );
+		}
+		$item_ids = array_values( array_unique( array_map( 'absint', $item_ids ) ) );
+		if ( empty( $item_ids ) ) {
+			return $index;
+		}
+		$item_placeholders = implode( ',', array_fill( 0, count( $item_ids ), '%d' ) );
 
 		$request_rows = array();
 		$user_id_values = array_keys( $user_to_employee );
-		if ( ! empty( $user_id_values ) ) {
-			$user_placeholders = implode( ',', array_fill( 0, count( $user_id_values ), '%d' ) );
+		foreach ( array_chunk( $user_id_values, 250 ) as $user_id_batch ) {
+			$user_placeholders = implode( ',', array_fill( 0, count( $user_id_batch ), '%d' ) );
 			$request_sql = 'SELECT requests.request_id, requests.target_user_id, requests.created_at, details.item_id, details.quantity
 				FROM ' . UMS_DB_Request::table() . ' requests
 				INNER JOIN ' . UMS_DB_Request::detail_table() . " details ON details.request_id = requests.request_id
 				WHERE requests.current_status <> 'rejected' AND requests.created_at >= %s AND requests.created_at <= %s
-				AND requests.target_user_id IN ($user_placeholders)";
-			$request_rows = $wpdb->get_results(
-				$wpdb->prepare( $request_sql, array_merge( array( $start_date, $end_date ), $user_id_values ) ),
-				ARRAY_A
+				AND requests.target_user_id IN ($user_placeholders)
+				AND details.item_id IN ($item_placeholders)";
+			$request_rows = array_merge(
+				$request_rows,
+				$wpdb->get_results(
+					$wpdb->prepare( $request_sql, array_merge( array( $start_date, $end_date ), $user_id_batch, $item_ids ) ),
+					ARRAY_A
+				)
 			);
 		}
 		foreach ( $request_rows as $row ) {
@@ -406,25 +484,35 @@ class UMS_Employee_Allowance_Report {
 
 		$movement_rows = array();
 		$employee_keys = array_keys( $allowed_employees );
-		$movement_targets = array();
-		$movement_params  = array( $start_date, $end_date );
-		if ( ! empty( $employee_keys ) ) {
-			$movement_targets[] = 'target_employee_no IN (' . implode( ',', array_fill( 0, count( $employee_keys ), '%s' ) ) . ')';
-			$movement_params = array_merge( $movement_params, $employee_keys );
-		}
-		if ( ! empty( $user_id_values ) ) {
-			$movement_targets[] = 'target_user_id IN (' . implode( ',', array_fill( 0, count( $user_id_values ), '%d' ) ) . ')';
-			$movement_params = array_merge( $movement_params, $user_id_values );
-		}
-		if ( ! empty( $movement_targets ) ) {
-			$movement_sql = "SELECT movement_id, target_user_id, target_employee_no, created_at, item_id, quantity
-				FROM " . UMS_DB_Inventory_Movement::table() . "
-				WHERE movement_type = 'out' AND request_id IS NULL AND created_at >= %s AND created_at <= %s
-				AND (" . implode( ' OR ', $movement_targets ) . ')';
-			$movement_rows = $wpdb->get_results(
-				$wpdb->prepare( $movement_sql, $movement_params ),
+		$movement_base = "SELECT movement_id, target_user_id, target_employee_no, created_at, item_id, quantity
+			FROM " . UMS_DB_Inventory_Movement::table() . "
+			WHERE movement_type = 'out' AND request_id IS NULL AND created_at >= %s AND created_at <= %s
+			AND item_id IN ($item_placeholders)";
+		foreach ( array_chunk( $employee_keys, 250 ) as $employee_batch ) {
+			$employee_placeholders = implode( ',', array_fill( 0, count( $employee_batch ), '%s' ) );
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					$movement_base . " AND target_employee_no IN ($employee_placeholders)",
+					array_merge( array( $start_date, $end_date ), $item_ids, $employee_batch )
+				),
 				ARRAY_A
 			);
+			foreach ( $rows as $row ) {
+				$movement_rows[ absint( $row['movement_id'] ) ] = $row;
+			}
+		}
+		foreach ( array_chunk( $user_id_values, 250 ) as $user_id_batch ) {
+			$user_placeholders = implode( ',', array_fill( 0, count( $user_id_batch ), '%d' ) );
+			$rows = $wpdb->get_results(
+				$wpdb->prepare(
+					$movement_base . " AND target_user_id IN ($user_placeholders)",
+					array_merge( array( $start_date, $end_date ), $item_ids, $user_id_batch )
+				),
+				ARRAY_A
+			);
+			foreach ( $rows as $row ) {
+				$movement_rows[ absint( $row['movement_id'] ) ] = $row;
+			}
 		}
 		foreach ( $movement_rows as $row ) {
 			$employee_key = strtoupper( trim( (string) $row['target_employee_no'] ) );
@@ -466,14 +554,42 @@ class UMS_Employee_Allowance_Report {
 		return $map;
 	}
 
-	private static function get_employee_user_ids() {
+	private static function get_employee_user_ids( $employees ) {
 		global $wpdb;
-		$rows = $wpdb->get_results(
-			"SELECT users.ID, users.user_login, employee.meta_value AS employee_code
-			FROM {$wpdb->users} users
-			LEFT JOIN {$wpdb->usermeta} employee ON employee.user_id = users.ID AND employee.meta_key = 'ums_employee_code'",
-			ARRAY_A
+		$employee_codes = array_values(
+			array_unique(
+				array_filter(
+					array_map(
+						function ( $employee ) {
+							return strtoupper( trim( (string) ( $employee['employee_no'] ?? '' ) ) );
+						},
+						$employees
+					)
+				)
+			)
 		);
+		$rows = array();
+		foreach ( array_chunk( $employee_codes, 250 ) as $code_batch ) {
+			$placeholders = implode( ',', array_fill( 0, count( $code_batch ), '%s' ) );
+			$login_rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT ID, user_login, '' AS employee_code FROM {$wpdb->users} WHERE user_login IN ($placeholders)",
+					$code_batch
+				),
+				ARRAY_A
+			);
+			$meta_rows = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT users.ID, users.user_login, employee.meta_value AS employee_code
+					FROM {$wpdb->usermeta} employee
+					INNER JOIN {$wpdb->users} users ON users.ID = employee.user_id
+					WHERE employee.meta_key = 'ums_employee_code' AND employee.meta_value IN ($placeholders)",
+					$code_batch
+				),
+				ARRAY_A
+			);
+			$rows = array_merge( $rows, $login_rows, $meta_rows );
+		}
 		$map = array();
 		foreach ( $rows as $row ) {
 			foreach ( array( $row['user_login'], $row['employee_code'] ) as $employee_no ) {

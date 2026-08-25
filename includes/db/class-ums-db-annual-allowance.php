@@ -119,6 +119,16 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		return self::db()->get_row( $sql, ARRAY_A );
 	}
 
+	/**
+	 * Nguồn rule tối giản cho tác vụ tính hàng loạt, không JOIN dữ liệu hiển thị.
+	 */
+	public static function get_active_for_report() {
+		return self::db()->get_results(
+			'SELECT * FROM ' . self::table() . ' WHERE is_active = 1 ORDER BY rule_id ASC',
+			ARRAY_A
+		);
+	}
+
 	public static function get_by_rule_keys( $rule_keys ) {
 		$rule_keys = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', (array) $rule_keys ) ) ) );
 		if ( empty( $rule_keys ) ) {
