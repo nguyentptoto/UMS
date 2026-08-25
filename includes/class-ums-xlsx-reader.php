@@ -86,6 +86,10 @@ class UMS_XLSX_Reader {
 		$workbook->registerXPathNamespace( 'x', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' );
 		foreach ( $workbook->xpath( '//x:sheets/x:sheet' ) as $sheet ) {
 			$attributes          = $sheet->attributes();
+			$state               = isset( $attributes['state'] ) ? strtolower( (string) $attributes['state'] ) : '';
+			if ( $state !== '' && $state !== 'visible' ) {
+				continue;
+			}
 			$relation_attributes = $sheet->attributes( 'http://schemas.openxmlformats.org/officeDocument/2006/relationships' );
 			$target              = isset( $relation_map[ (string) $relation_attributes['id'] ] ) ? $relation_map[ (string) $relation_attributes['id'] ] : '';
 
