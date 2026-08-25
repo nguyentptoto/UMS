@@ -123,9 +123,9 @@ Hai chế độ số lượng gồm:
 - `Còn được nhận`: lấy định mức của kỳ rồi trừ phiếu chưa bị từ chối và lịch sử xuất kho chủ động trong chu kỳ.
 - `Định mức gốc`: xuất nguyên số lượng của rule, không trừ lịch sử.
 
-Rule được so khớp theo đúng thứ tự ưu tiên đang dùng khi tạo phiếu và xuất kho: phòng, nhóm, cost center, vị trí, ngày vào Công ty và scope CNV mới. Một rule sản phẩm chỉ được tính một lần dù sản phẩm có nhiều size. Kết quả được xem trước bằng jqxGrid và xuất thành sheet `Total` với các cột `Mã nhân viên`, `Họ và tên`, `Phòng`, `Cost center`, `Mũ & Giày định mức`, `SL quần`, `SL áo phông`, `SL áo khoác` và `SL áo phao`.
+Rule được so khớp theo đúng thứ tự ưu tiên đang dùng khi tạo phiếu và xuất kho: phòng, nhóm, cost center, vị trí, ngày vào Công ty và scope CNV mới. Một rule sản phẩm chỉ được tính một lần dù sản phẩm có nhiều size. Form xuất chạy thẳng một lần và tải sheet `Total`, không tính trước hoặc dựng bảng xem trước. File gồm các cột `Mã nhân viên`, `Họ và tên`, `Phòng`, `Cost center`, `Mũ & Giày định mức`, `SL quần`, `SL áo phông`, `SL áo khoác` và `SL áo phao`.
 
-File `.xlsx` được tạo mới hoàn toàn với dữ liệu tĩnh, bộ lọc và dòng tiêu đề cố định. Bảng xem trước giới hạn 500 dòng để giữ giao diện nhẹ; file tải xuống vẫn chứa đầy đủ nhân sự thỏa điều kiện.
+File `.xlsx` được tạo mới hoàn toàn với dữ liệu tĩnh, bộ lọc và dòng tiêu đề cố định. Mỗi lần bấm xuất chỉ thực hiện một lượt tính và chứa đầy đủ nhân sự thỏa điều kiện.
 
 ### Import định mức từ Excel
 

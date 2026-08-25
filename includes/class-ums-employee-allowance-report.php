@@ -368,17 +368,20 @@ class UMS_Employee_Allowance_Report {
 		}
 		$index = array();
 
-		$request_rows = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT requests.request_id, requests.target_user_id, requests.created_at, details.item_id, details.quantity
+		$request_rows = array();
+		$user_id_values = array_keys( $user_to_employee );
+		if ( ! empty( $user_id_values ) ) {
+			$user_placeholders = implode( ',', array_fill( 0, count( $user_id_values ), '%d' ) );
+			$request_sql = 'SELECT requests.request_id, requests.target_user_id, requests.created_at, details.item_id, details.quantity
 				FROM ' . UMS_DB_Request::table() . ' requests
 				INNER JOIN ' . UMS_DB_Request::detail_table() . " details ON details.request_id = requests.request_id
-				WHERE requests.current_status <> 'rejected' AND requests.created_at >= %s AND requests.created_at <= %s",
-				$start_date,
-				$end_date
-			),
-			ARRAY_A
-		);
+				WHERE requests.current_status <> 'rejected' AND requests.created_at >= %s AND requests.created_at <= %s
+				AND requests.target_user_id IN ($user_placeholders)";
+			$request_rows = $wpdb->get_results(
+				$wpdb->prepare( $request_sql, array_merge( array( $start_date, $end_date ), $user_id_values ) ),
+				ARRAY_A
+			);
+		}
 		foreach ( $request_rows as $row ) {
 			$user_id = absint( $row['target_user_id'] );
 			if ( ! isset( $user_to_employee[ $user_id ] ) ) {
@@ -394,16 +397,28 @@ class UMS_Employee_Allowance_Report {
 			);
 		}
 
-		$movement_rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT movement_id, target_user_id, target_employee_no, created_at, item_id, quantity
+		$movement_rows = array();
+		$employee_keys = array_keys( $allowed_employees );
+		$movement_targets = array();
+		$movement_params  = array( $start_date, $end_date );
+		if ( ! empty( $employee_keys ) ) {
+			$movement_targets[] = 'target_employee_no IN (' . implode( ',', array_fill( 0, count( $employee_keys ), '%s' ) ) . ')';
+			$movement_params = array_merge( $movement_params, $employee_keys );
+		}
+		if ( ! empty( $user_id_values ) ) {
+			$movement_targets[] = 'target_user_id IN (' . implode( ',', array_fill( 0, count( $user_id_values ), '%d' ) ) . ')';
+			$movement_params = array_merge( $movement_params, $user_id_values );
+		}
+		if ( ! empty( $movement_targets ) ) {
+			$movement_sql = "SELECT movement_id, target_user_id, target_employee_no, created_at, item_id, quantity
 				FROM " . UMS_DB_Inventory_Movement::table() . "
-				WHERE movement_type = 'out' AND request_id IS NULL AND created_at >= %s AND created_at <= %s",
-				$start_date,
-				$end_date
-			),
-			ARRAY_A
-		);
+				WHERE movement_type = 'out' AND request_id IS NULL AND created_at >= %s AND created_at <= %s
+				AND (" . implode( ' OR ', $movement_targets ) . ')';
+			$movement_rows = $wpdb->get_results(
+				$wpdb->prepare( $movement_sql, $movement_params ),
+				ARRAY_A
+			);
+		}
 		foreach ( $movement_rows as $row ) {
 			$employee_key = strtoupper( trim( (string) $row['target_employee_no'] ) );
 			if ( $employee_key === '' ) {

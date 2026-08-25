@@ -512,15 +512,6 @@ class UMS_Admin {
         $organization_positions = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'position' ) : array();
         $allowance_import_ready = UMS_DB_Annual_Allowance::is_import_ready();
 		$allowance_report_filters = UMS_Employee_Allowance_Report::sanitize_filters( $_GET );
-		$allowance_report = null;
-		$allowance_report_error = '';
-		if ( isset( $_GET['allowance_report_preview'] ) && (string) $_GET['allowance_report_preview'] === '1' ) {
-			try {
-				$allowance_report = UMS_Employee_Allowance_Report::build( $allowance_report_filters );
-			} catch ( Throwable $error ) {
-				$allowance_report_error = $error->getMessage();
-			}
-		}
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php';
@@ -2541,6 +2532,10 @@ class UMS_Admin {
 		check_admin_referer( 'ums_export_employee_allowances' );
 
 		try {
+			wp_raise_memory_limit( 'admin' );
+			if ( function_exists( 'set_time_limit' ) ) {
+				set_time_limit( 0 );
+			}
 			$report = UMS_Employee_Allowance_Report::build( wp_unslash( $_POST ) );
 			UMS_Employee_Allowance_Report::stream( $report );
 		} catch ( Throwable $error ) {
