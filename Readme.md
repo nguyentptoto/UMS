@@ -214,6 +214,8 @@ Các trang portal hiện có:
 
 Module `Tạo yêu cầu` chỉ hiển thị cho user có `profile_id` nằm trong `approver_profile_ids` của bước duyệt `step_order = 1` thuộc phòng ban hiện tại. User ngoài bước 1 không thấy module này.
 
+Khi gửi hoặc sửa phiếu, plugin không tin giá, số lượng hay thông tin nhân sự từ HTML. Hệ thống đọc lại sản phẩm và tồn kho, gộp các dòng trùng, lấy Phòng/Nhóm/Cost center/Vị trí/Ngày vào từ Sơ đồ tổ chức TVN, chọn rule định mức phù hợp rồi kiểm tra tháng cấp, số lượng bắt buộc của CNV mới, số lượng đã dùng và tần suất trước khi lưu phiếu. Rule cấp ban đầu cho CNV mới vẫn hoạt động trong engine dù không hiển thị thành một bảng riêng trên trang quản trị định mức.
+
 Admin có quyền vào portal và xem toàn bộ phiếu ở góc nhìn quản trị.
 
 ## Luồng Tạo Yêu Cầu

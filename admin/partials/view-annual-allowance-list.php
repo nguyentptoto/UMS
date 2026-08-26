@@ -13,7 +13,6 @@ $is_editing = ! empty( $editing_rule );
 $page_url   = admin_url( 'admin.php?page=tvn-ums-annual-allowances' );
 $grid_rows_april     = array();
 $grid_rows_september = array();
-$grid_rows_newcomer  = array();
 $grid_rows_newcomer_september = array();
 $grid_rows_newcomer_shoe_april = array();
 $grid_rows_newcomer_shoe_september = array();
@@ -37,17 +36,18 @@ foreach ( $rules as $rule ) {
 	$monthly_quantities = is_array( $monthly_quantities ) ? $monthly_quantities : array();
 	$rule_scope = isset( $rule['rule_scope'] ) ? (string) $rule['rule_scope'] : 'annual';
 	if ( $rule_scope !== 'annual' ) {
+		// Rule cấp ban đầu vẫn được dùng để kiểm tra phiếu, nhưng không cần một grid quản trị riêng.
+		if ( $rule_scope === 'newcomer' ) {
+			continue;
+		}
 		$period_start = (string) ( $rule['employment_start_md'] ?? '' );
 		$period_end   = (string) ( $rule['employment_end_md'] ?? '' );
-		if ( $rule_scope === 'newcomer' ) {
-			$quantity = empty( $monthly_quantities ) ? 0 : max( array_map( 'absint', $monthly_quantities ) );
-		} elseif ( $rule_scope === 'newcomer_shoe_april' ) {
+		if ( $rule_scope === 'newcomer_shoe_april' ) {
 			$quantity = absint( $monthly_quantities[4] ?? 0 );
 		} else {
 			$quantity = absint( $monthly_quantities[9] ?? 0 );
 		}
 		$scope_labels = array(
-			'newcomer' => 'Cấp ban đầu',
 			'newcomer_september' => 'T9 tổng quát',
 			'newcomer_september_override' => 'T9 theo cost center',
 			'newcomer_shoe_april' => 'Giày T4 N+1',
@@ -65,9 +65,7 @@ foreach ( $rules as $rule ) {
 			'quantity' => $quantity,
 			'status' => (int) $rule['is_active'] === 1 ? 'Đang áp dụng' : 'Ngừng áp dụng',
 		);
-		if ( $rule_scope === 'newcomer' ) {
-			$grid_rows_newcomer[] = $newcomer_row;
-		} elseif ( $rule_scope === 'newcomer_shoe_april' ) {
+		if ( $rule_scope === 'newcomer_shoe_april' ) {
 			$grid_rows_newcomer_shoe_april[] = $newcomer_row;
 		} elseif ( $rule_scope === 'newcomer_shoe_september' ) {
 			$grid_rows_newcomer_shoe_september[] = $newcomer_row;
@@ -266,15 +264,7 @@ $newcomer_grid_columns = array(
 			data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
 		></div>
 
-		<h2 style="margin-top:28px;">3. Định mức cấp ban đầu cho CNV mới</h2>
-		<div
-			id="ums-annual-allowance-grid-newcomer"
-			class="ums-jqx-grid"
-			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_newcomer ) ); ?>"
-			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
-		></div>
-
-		<h2 style="margin-top:28px;">4. Định mức bổ sung Tháng 9 cho CNV mới</h2>
+		<h2 style="margin-top:28px;">3. Định mức bổ sung Tháng 9 cho CNV mới</h2>
 		<div
 			id="ums-annual-allowance-grid-newcomer-september"
 			class="ums-jqx-grid"
@@ -282,7 +272,7 @@ $newcomer_grid_columns = array(
 			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
 		></div>
 
-		<h2 style="margin-top:28px;">5. Định mức giày Tháng 4 N+1 cho CNV mới</h2>
+		<h2 style="margin-top:28px;">4. Định mức giày Tháng 4 N+1 cho CNV mới</h2>
 		<div
 			id="ums-annual-allowance-grid-newcomer-shoe-april"
 			class="ums-jqx-grid"
@@ -290,7 +280,7 @@ $newcomer_grid_columns = array(
 			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
 		></div>
 
-		<h2 style="margin-top:28px;">6. Định mức giày Tháng 9 N+1 cho CNV mới</h2>
+		<h2 style="margin-top:28px;">5. Định mức giày Tháng 9 N+1 cho CNV mới</h2>
 		<div
 			id="ums-annual-allowance-grid-newcomer-shoe-september"
 			class="ums-jqx-grid"

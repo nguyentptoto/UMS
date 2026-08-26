@@ -172,7 +172,15 @@ class UMS_User {
         $raw_items = isset( $_POST['request_items'] ) && is_array( $_POST['request_items'] )
             ? wp_unslash( $_POST['request_items'] )
             : array();
-        $details = self::sanitize_request_items( $raw_items );
+        $item_errors = array();
+        $details     = self::sanitize_request_items( $raw_items, $item_errors );
+        if ( ! empty( $item_errors ) ) {
+            self::redirect_with_notice(
+                $redirect_url,
+                'request_allowance_error',
+                array( 'ums_notice_extra' => implode( ' ', array_unique( $item_errors ) ) )
+            );
+        }
         if ( empty( $details ) ) {
             self::redirect_with_notice( $redirect_url, 'request_empty_items' );
         }
@@ -425,28 +433,46 @@ class UMS_User {
         return ob_get_clean();
     }
 
-    private static function sanitize_request_items( $raw_items ) {
-        $details = array();
+    private static function sanitize_request_items( $raw_items, &$errors = array() ) {
+        $grouped = array();
 
-        foreach ( $raw_items as $raw_item ) {
+        foreach ( $raw_items as $row_index => $raw_item ) {
+            $row_number = absint( $row_index ) + 1;
             if ( ! is_array( $raw_item ) ) {
+                $errors[] = 'Dòng đồng phục ' . $row_number . ' không hợp lệ.';
                 continue;
             }
 
             $item_id  = isset( $raw_item['inventory_item_id'] ) ? absint( $raw_item['inventory_item_id'] ) : 0;
-            $quantity = isset( $raw_item['quantity'] ) ? max( 1, absint( $raw_item['quantity'] ) ) : 1;
+            $quantity = isset( $raw_item['quantity'] ) ? absint( $raw_item['quantity'] ) : 0;
 
-            if ( $item_id <= 0 ) {
+            if ( $item_id <= 0 || $quantity <= 0 ) {
+                $errors[] = 'Dòng đồng phục ' . $row_number . ' phải có sản phẩm và số lượng lớn hơn 0.';
                 continue;
             }
 
             $inventory = UMS_DB_Inventory::get_by_id( $item_id );
             if ( ! $inventory || (int) $inventory['stock_qty'] <= 0 ) {
+                $errors[] = 'Sản phẩm tại dòng ' . $row_number . ' không tồn tại hoặc đã hết kho.';
                 continue;
             }
 
+            if ( ! isset( $grouped[ $item_id ] ) ) {
+                $grouped[ $item_id ] = array( 'inventory' => $inventory, 'quantity' => 0 );
+            }
+            $grouped[ $item_id ]['quantity'] += $quantity;
+        }
+
+        $details = array();
+        foreach ( $grouped as $item_id => $group ) {
+            $quantity  = (int) $group['quantity'];
+            $inventory = $group['inventory'];
+            if ( $quantity > (int) $inventory['stock_qty'] ) {
+                $errors[] = 'Số lượng "' . self::get_inventory_label( $inventory ) . '" vượt tồn kho hiện tại (' . (int) $inventory['stock_qty'] . ').';
+                continue;
+            }
             $details[] = array(
-                'item_id'          => $item_id,
+                'item_id'          => (int) $item_id,
                 'quantity'         => $quantity,
                 'price_at_request' => (float) $inventory['base_price'] * $quantity,
             );
@@ -458,8 +484,8 @@ class UMS_User {
     private static function validate_request_allowances( $details, $target_profile, $exclude_request_id = 0 ) {
         $errors      = array();
         $rule_groups = array();
-        $position_id = self::get_profile_position_id( $target_profile );
         $allowance_context = UMS_DB_Annual_Allowance::get_employee_context( $target_profile );
+        $position_id = self::get_profile_position_id( $target_profile, $allowance_context['position'] ?? '' );
 
         foreach ( $details as $detail ) {
             $item_id   = isset( $detail['item_id'] ) ? absint( $detail['item_id'] ) : 0;
@@ -530,7 +556,7 @@ class UMS_User {
                 $rule,
                 $month_start,
                 $month_end,
-                (string) $target_profile['employee_code']
+                (string) ( $allowance_context['employee_no'] ?? $target_profile['employee_code'] )
             );
             $used_in_month = (int) $month_usage['quantity'] + (int) $manual_month_usage['quantity'];
 
@@ -553,7 +579,7 @@ class UMS_User {
                 $rule,
                 $period_start,
                 $period_end,
-                (string) $target_profile['employee_code']
+                (string) ( $allowance_context['employee_no'] ?? $target_profile['employee_code'] )
             );
             $used_times = (int) $period_usage['request_count'] + (int) $manual_period_usage['request_count'];
 
@@ -565,8 +591,11 @@ class UMS_User {
         return array_unique( $errors );
     }
 
-    private static function get_profile_position_id( $profile ) {
-        $job_position = isset( $profile['job_position'] ) ? trim( (string) $profile['job_position'] ) : '';
+    private static function get_profile_position_id( $profile, $organization_position = '' ) {
+        $job_position = trim( (string) $organization_position );
+        if ( $job_position === '' ) {
+            $job_position = isset( $profile['job_position'] ) ? trim( (string) $profile['job_position'] ) : '';
+        }
         if ( $job_position === '' ) {
             return 0;
         }
