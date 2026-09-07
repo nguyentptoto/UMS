@@ -16,6 +16,8 @@ $grid_rows_september = array();
 $grid_rows_newcomer_september = array();
 $grid_rows_newcomer_shoe_april = array();
 $grid_rows_newcomer_shoe_september = array();
+$grid_rows_special_work_april = array();
+$grid_rows_special_work_september = array();
 $matrix_rows         = array();
 $normalize_product = function( $value ) {
 	return strtolower( remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) ) );
@@ -35,6 +37,9 @@ foreach ( $rules as $rule ) {
 	$monthly_quantities = json_decode( (string) $rule['monthly_quantities'], true );
 	$monthly_quantities = is_array( $monthly_quantities ) ? $monthly_quantities : array();
 	$rule_scope = isset( $rule['rule_scope'] ) ? (string) $rule['rule_scope'] : 'annual';
+	if ( UMS_DB_Annual_Allowance::is_special_work_scope( $rule_scope ) ) {
+		continue;
+	}
 	if ( $rule_scope !== 'annual' ) {
 		// Rule cấp ban đầu vẫn được dùng để kiểm tra phiếu, nhưng không cần một grid quản trị riêng.
 		if ( $rule_scope === 'newcomer' ) {
@@ -97,6 +102,49 @@ foreach ( $rules as $rule ) {
 	}
 }
 
+$special_product_columns = UMS_Annual_Allowance_Import::get_special_work_product_columns();
+$special_product_fields = array();
+foreach ( $special_product_columns as $column => $product_name ) {
+	$special_product_fields[ $normalize_product( $product_name ) ] = 'special_product_' . strtolower( $column );
+}
+$special_matrix_rows = array();
+foreach ( $special_work_rules as $rule ) {
+	$scope = (string) ( $rule['rule_scope'] ?? '' );
+	$month = $scope === 'special_work_april' ? 4 : 9;
+	$row_key = hash(
+		'sha256',
+		implode( '|', array( $scope, $rule['special_work_type'] ?? '', $rule['department'] ?? '', $rule['cost_center'] ?? '', $rule['is_active'] ?? 1 ) )
+	);
+	if ( ! isset( $special_matrix_rows[ $row_key ] ) ) {
+		$special_matrix_rows[ $row_key ] = array(
+			'scope' => $scope,
+			'special_work_type' => (string) ( $rule['special_work_type'] ?? '' ),
+			'department' => (string) ( $rule['department'] ?? '' ),
+			'cost_center' => (string) ( $rule['cost_center'] ?? '' ),
+			'status' => (int) ( $rule['is_active'] ?? 0 ) === 1 ? 'Đang áp dụng' : 'Ngừng áp dụng',
+		);
+		foreach ( $special_product_columns as $column => $unused ) {
+			$special_matrix_rows[ $row_key ][ 'special_product_' . strtolower( $column ) ] = 0;
+		}
+	}
+	if ( ( $rule['apply_type'] ?? '' ) !== 'product' ) {
+		continue;
+	}
+	$product_name = (string) ( $rule['source_product_name'] ?: $rule['item_variant'] );
+	$product_key  = $normalize_product( $product_name );
+	if ( isset( $special_product_fields[ $product_key ] ) ) {
+		$quantities = json_decode( (string) ( $rule['monthly_quantities'] ?? '' ), true );
+		$special_matrix_rows[ $row_key ][ $special_product_fields[ $product_key ] ] = absint( $quantities[ $month ] ?? 0 );
+	}
+}
+foreach ( $special_matrix_rows as $row ) {
+	if ( $row['scope'] === 'special_work_april' ) {
+		$grid_rows_special_work_april[] = $row;
+	} else {
+		$grid_rows_special_work_september[] = $row;
+	}
+}
+
 foreach ( $matrix_rows as $matrix_row ) {
 	$april_row     = $matrix_row;
 	$september_row = $matrix_row;
@@ -134,6 +182,20 @@ $newcomer_grid_columns = array(
 	array( 'text' => 'Số lượng', 'datafield' => 'quantity', 'width' => 90, 'cellsalign' => 'center' ),
 	array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => 115 ),
 );
+$special_work_grid_columns = array(
+	array( 'text' => 'Loại công việc', 'datafield' => 'special_work_type', 'width' => 360, 'pinned' => true ),
+	array( 'text' => 'Bộ phận', 'datafield' => 'department', 'width' => 240, 'pinned' => true ),
+	array( 'text' => 'Code center', 'datafield' => 'cost_center', 'width' => 125, 'pinned' => true ),
+);
+foreach ( $special_product_columns as $column => $product_name ) {
+	$special_work_grid_columns[] = array(
+		'text' => $product_name,
+		'datafield' => 'special_product_' . strtolower( $column ),
+		'width' => 145,
+		'cellsalign' => 'center',
+	);
+}
+$special_work_grid_columns[] = array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => 115 );
 ?>
 
 <div class="wrap ums-admin-wrap">
@@ -169,6 +231,7 @@ $newcomer_grid_columns = array(
 				<?php echo esc_html( number_format_i18n( $import_preview['summary']['newcomer'] ?? 0 ) ); ?> cấp ban đầu,
 				<?php echo esc_html( number_format_i18n( ( $import_preview['summary']['newcomer_september'] ?? 0 ) + ( $import_preview['summary']['newcomer_september_override'] ?? 0 ) ) ); ?> cấp bổ sung T9,
 				<?php echo esc_html( number_format_i18n( ( $import_preview['summary']['newcomer_shoe_april'] ?? 0 ) + ( $import_preview['summary']['newcomer_shoe_september'] ?? 0 ) ) ); ?> định mức giày N+1 và
+				<?php echo esc_html( number_format_i18n( ( $import_preview['summary']['special_work_april'] ?? 0 ) + ( $import_preview['summary']['special_work_september'] ?? 0 ) ) ); ?> định mức công việc đặc thù,
 				<?php echo esc_html( number_format_i18n( $import_preview['summary']['matrix'] ?? 0 ) ); ?> điều kiện ma trận.
 			</p>
 			<?php if ( ! empty( $import_preview['processed_sheets'] ) ) : ?>
@@ -217,6 +280,8 @@ $newcomer_grid_columns = array(
 		</div>
 	<?php endif; ?>
 
+	<?php include UMS_PLUGIN_DIR . 'admin/partials/view-special-work-assignments.php'; ?>
+
 	<?php include UMS_PLUGIN_DIR . 'admin/partials/view-employee-allowance-report.php'; ?>
 
 	<div class="ums-panel">
@@ -264,7 +329,23 @@ $newcomer_grid_columns = array(
 			data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
 		></div>
 
-		<h2 style="margin-top:28px;">3. Định mức bổ sung Tháng 9 cho CNV mới</h2>
+		<h2 style="margin-top:28px;">3. Định mức công việc đặc thù Tháng 4</h2>
+		<div
+			id="ums-annual-allowance-grid-special-work-april"
+			class="ums-jqx-grid"
+			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_special_work_april ) ); ?>"
+			data-columns="<?php echo esc_attr( wp_json_encode( $special_work_grid_columns ) ); ?>"
+		></div>
+
+		<h2 style="margin-top:28px;">4. Định mức công việc đặc thù Tháng 9</h2>
+		<div
+			id="ums-annual-allowance-grid-special-work-september"
+			class="ums-jqx-grid"
+			data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows_special_work_september ) ); ?>"
+			data-columns="<?php echo esc_attr( wp_json_encode( $special_work_grid_columns ) ); ?>"
+		></div>
+
+		<h2 style="margin-top:28px;">5. Định mức bổ sung Tháng 9 cho CNV mới</h2>
 		<div
 			id="ums-annual-allowance-grid-newcomer-september"
 			class="ums-jqx-grid"
@@ -272,7 +353,7 @@ $newcomer_grid_columns = array(
 			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
 		></div>
 
-		<h2 style="margin-top:28px;">4. Định mức giày Tháng 4 N+1 cho CNV mới</h2>
+		<h2 style="margin-top:28px;">6. Định mức giày Tháng 4 N+1 cho CNV mới</h2>
 		<div
 			id="ums-annual-allowance-grid-newcomer-shoe-april"
 			class="ums-jqx-grid"
@@ -280,7 +361,7 @@ $newcomer_grid_columns = array(
 			data-columns="<?php echo esc_attr( wp_json_encode( $newcomer_grid_columns ) ); ?>"
 		></div>
 
-		<h2 style="margin-top:28px;">5. Định mức giày Tháng 9 N+1 cho CNV mới</h2>
+		<h2 style="margin-top:28px;">7. Định mức giày Tháng 9 N+1 cho CNV mới</h2>
 		<div
 			id="ums-annual-allowance-grid-newcomer-shoe-september"
 			class="ums-jqx-grid"

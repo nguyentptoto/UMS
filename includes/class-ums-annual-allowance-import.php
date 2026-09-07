@@ -15,6 +15,17 @@ class UMS_Annual_Allowance_Import {
 		),
 	);
 
+	private static $special_work_sheet_configs = array(
+		'ĐM CV đặc thù T4' => array(
+			'scope' => 'special_work_april', 'header' => 1, 'start' => 2, 'month' => 4,
+			'priority' => 600,
+		),
+		'ĐM CV đặc thù T9' => array(
+			'scope' => 'special_work_september', 'header' => 1, 'start' => 2, 'month' => 9,
+			'priority' => 600,
+		),
+	);
+
 	/**
 	 * Các sheet CNV mới sử dụng tiêu đề sản phẩm động theo từng ma trận.
 	 */
@@ -66,6 +77,37 @@ class UMS_Annual_Allowance_Import {
 	public static function get_product_columns() {
 		return array(
 			'E'  => 'Áo phông cộc tay',
+			'F'  => 'Quần CN',
+			'G'  => 'Áo XLNT',
+			'H'  => 'Áo phông tím cộc tay',
+			'I'  => 'Áo kỹ thuật',
+			'J'  => 'Quần kỹ thuật',
+			'K'  => 'Áo khoác kỹ thuật',
+			'L'  => 'Áo khoác CN',
+			'M'  => 'Áo phao',
+			'N'  => 'Mũ hồng',
+			'O'  => 'Mũ phối trắng',
+			'P'  => 'Mũ phối ghi',
+			'Q'  => 'Mũ phối hồng',
+			'R'  => 'Mũ phối tím',
+			'S'  => 'Mũ phối xanh biển',
+			'T'  => 'Mũ phối xi măng',
+			'U'  => 'Mũ phối trắng ngà',
+			'V'  => 'Mũ phối xanh lá',
+			'W'  => 'Mũ Xanh lá',
+			'X'  => 'Mũ xanh biển',
+			'Y'  => 'Mũ đỏ',
+			'Z'  => 'Giầy KPR O-775',
+			'AA' => 'Giầy KPR O-010',
+			'AB' => 'Giầy Simon TS5511',
+			'AC' => 'Giầy Simon TS7011',
+		);
+	}
+
+	public static function get_special_work_product_columns() {
+		return array(
+			'D'  => 'Áo phông cộc tay',
+			'E'  => 'Áo phông dài tay',
 			'F'  => 'Quần CN',
 			'G'  => 'Áo XLNT',
 			'H'  => 'Áo phông tím cộc tay',
@@ -147,6 +189,16 @@ class UMS_Annual_Allowance_Import {
 			$managed_scopes[]   = $config['scope'];
 			$replace_scopes[]   = $config['scope'];
 			self::collect_sheet_rules( $reader->read_sheet( $sheet_name ), $sheet_name, $config, $rules, $errors );
+		}
+
+		foreach ( self::$special_work_sheet_configs as $sheet_name => $config ) {
+			if ( ! $reader->has_sheet( $sheet_name ) ) {
+				continue;
+			}
+			$processed_sheets[] = $sheet_name;
+			$managed_scopes[]   = $config['scope'];
+			$replace_scopes[]   = $config['scope'];
+			self::collect_special_work_sheet_rules( $reader->read_sheet( $sheet_name ), $sheet_name, $config, $rules, $errors );
 		}
 		if ( empty( $processed_sheets ) ) {
 			$errors[] = 'Không tìm thấy sheet định mức UMS được hỗ trợ trong file Excel.';
@@ -273,6 +325,9 @@ class UMS_Annual_Allowance_Import {
 
 		$existing_rules = UMS_DB_Annual_Allowance::get_by_rule_keys( array_column( $staged_rules, 'rule_key' ) );
 		foreach ( $staged_rules as $rule ) {
+			$rule['special_work_type'] = isset( $rule['special_work_type'] )
+				? sanitize_text_field( (string) $rule['special_work_type'] )
+				: '';
 			$existing_rule  = $existing_rules[ $rule['rule_key'] ] ?? null;
 			$managed_months = array_map( 'absint', (array) ( $rule['managed_months'] ?? array() ) );
 			if ( $existing_rule && ! empty( $managed_months ) ) {
@@ -372,6 +427,7 @@ class UMS_Annual_Allowance_Import {
 				'team' => $layout['team'] !== '' ? self::normalize_space( $row[ $layout['team'] ] ?? '' ) : '',
 				'cost_center' => $layout['cost_center'] !== '' ? self::normalize_space( $row[ $layout['cost_center'] ] ?? '' ) : '',
 				'position_code' => UMS_DB_Annual_Allowance::normalize_position_code( $row[ $layout['position'] ] ?? '' ),
+				'special_work_type' => '',
 			);
 			$period = isset( $config['period'] ) ? $config['period'] : array( '', '' );
 			if ( isset( $config['period_field'] ) ) {
@@ -440,6 +496,74 @@ class UMS_Annual_Allowance_Import {
 		}
 	}
 
+	private static function collect_special_work_sheet_rules( $rows, $sheet_name, $config, &$rules, &$errors ) {
+		if ( empty( $rows[ $config['header'] ] ) ) {
+			$errors[] = 'Sheet ' . $sheet_name . ' không có dòng tiêu đề hợp lệ.';
+			return;
+		}
+
+		$layout = self::discover_sheet_layout( $rows[ $config['header'] ] );
+		if ( empty( $layout['special_work_type'] ) || empty( $layout['department'] ) || empty( $layout['cost_center'] ) ) {
+			$errors[] = 'Sheet ' . $sheet_name . ' thiếu cột Loại công việc, Bộ phận hoặc Code center.';
+			return;
+		}
+		$products = self::get_special_work_product_columns();
+		foreach ( $products as $column => $product_name ) {
+			$actual_header = self::normalize_space( $rows[ $config['header'] ][ $column ] ?? '' );
+			if ( self::normalize_header( $actual_header ) !== self::normalize_header( $product_name ) ) {
+				$errors[] = sprintf( 'Sheet %s cột %s phải là "%s".', $sheet_name, $column, $product_name );
+			}
+		}
+
+		foreach ( $rows as $row_number => $row ) {
+			if ( $row_number < $config['start'] ) {
+				continue;
+			}
+			$work_type  = self::normalize_space( $row[ $layout['special_work_type'] ] ?? '' );
+			$department = self::normalize_space( $row[ $layout['department'] ] ?? '' );
+			$cost_center = self::normalize_space( $row[ $layout['cost_center'] ] ?? '' );
+			if ( $work_type === '' && $department === '' && $cost_center === '' ) {
+				continue;
+			}
+			if ( $work_type === '' || $department === '' || $cost_center === '' ) {
+				$errors[] = sprintf( 'Sheet %s dòng %d thiếu Loại công việc, Bộ phận hoặc Code center.', $sheet_name, $row_number );
+				continue;
+			}
+
+			$condition = array(
+				'department' => $department,
+				'team' => '',
+				'cost_center' => $cost_center,
+				'position_code' => '',
+				'special_work_type' => $work_type,
+			);
+			$period = array( '', '' );
+			$marker_key = self::rule_collection_key( $config['scope'], $condition, $period, '__matrix__' );
+			if ( ! isset( $rules[ $marker_key ] ) ) {
+				$rules[ $marker_key ] = self::new_rule( $condition, $config, $period, '', 'matrix', '', $sheet_name, $row_number );
+			}
+			self::merge_managed_months( $rules[ $marker_key ], $config );
+
+			foreach ( $products as $column => $product_name ) {
+				$product_name = self::normalize_space( $product_name );
+				$raw_quantity = $row[ $column ] ?? '';
+				if ( $raw_quantity !== '' && ! is_numeric( $raw_quantity ) ) {
+					$errors[] = sprintf( 'Sheet %s dòng %d, sản phẩm "%s" phải là số.', $sheet_name, $row_number, $product_name );
+					continue;
+				}
+				$quantity = is_numeric( $raw_quantity ) ? max( 0, (int) $raw_quantity ) : 0;
+				if ( $quantity <= 0 ) {
+					continue;
+				}
+
+				$key = self::rule_collection_key( $config['scope'], $condition, $period, $product_name );
+				$rules[ $key ] = self::new_rule( $condition, $config, $period, $product_name, 'product', '', $sheet_name, $row_number );
+				self::merge_managed_months( $rules[ $key ], $config );
+				$rules[ $key ]['monthly_quantities'][ (int) $config['month'] ] = $quantity;
+			}
+		}
+	}
+
 	private static function new_rule( $condition, $config, $period, $product_name, $apply_type, $note, $sheet_name, $row_number ) {
 		return array_merge(
 			$condition,
@@ -475,6 +599,7 @@ class UMS_Annual_Allowance_Import {
 			array(
 				$scope, $condition['department'], $condition['team'], $condition['cost_center'],
 				$condition['position_code'], $period[0], $period[1], $product_name,
+				$condition['special_work_type'] ?? '',
 			)
 		);
 	}
@@ -482,7 +607,7 @@ class UMS_Annual_Allowance_Import {
 	private static function discover_sheet_layout( $header ) {
 		$layout = array(
 			'department' => '', 'team' => '', 'cost_center' => '', 'position' => '',
-			'note' => '', 'employment_period' => '', 'products' => array(),
+			'note' => '', 'employment_period' => '', 'special_work_type' => '', 'products' => array(),
 		);
 		$field_aliases = array(
 			'department' => array( 'bo phan', 'phong' ),
@@ -491,6 +616,7 @@ class UMS_Annual_Allowance_Import {
 			'position' => array( 'vi tri', 'chuc vu', 'chuc danh' ),
 			'note' => array( 'luu y', 'ghi chu', 'ky phat dong phuc thang 04 nam do' ),
 			'employment_period' => array( 'thoi gian nhan viec', 'thoi diem nhan viec', 'khoang ngay nhan viec' ),
+			'special_work_type' => array( 'loai cong viec' ),
 		);
 
 		foreach ( $header as $column => $label ) {
@@ -539,7 +665,8 @@ class UMS_Annual_Allowance_Import {
 		$summary = array(
 			'annual' => 0, 'newcomer' => 0, 'newcomer_september' => 0,
 			'newcomer_september_override' => 0, 'newcomer_shoe_april' => 0,
-			'newcomer_shoe_september' => 0, 'matrix' => 0, 'total' => count( $rules ),
+			'newcomer_shoe_september' => 0, 'special_work_april' => 0,
+			'special_work_september' => 0, 'matrix' => 0, 'total' => count( $rules ),
 		);
 		foreach ( $rules as $rule ) {
 			if ( $rule['apply_type'] === 'matrix' ) {
@@ -558,6 +685,7 @@ class UMS_Annual_Allowance_Import {
 			'annual' => 100, 'newcomer' => 200, 'newcomer_september' => 300,
 			'newcomer_september_override' => 400, 'newcomer_shoe_april' => 500,
 			'newcomer_shoe_september' => 500,
+			'special_work_april' => 600, 'special_work_september' => 600,
 		);
 		return isset( $priorities[ $scope ] ) ? $priorities[ $scope ] : 0;
 	}

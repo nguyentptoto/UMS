@@ -81,7 +81,8 @@ class UMS_Employee_Allowance_Report {
 				UMS_DB_Annual_Allowance::get_active_for_report(),
 				function ( $rule ) use ( $filters ) {
 					$monthly = json_decode( (string) ( $rule['monthly_quantities'] ?? '' ), true );
-					return is_array( $monthly ) && absint( $monthly[ $filters['report_month'] ] ?? 0 ) > 0;
+					return ( $rule['apply_type'] ?? '' ) === 'matrix'
+						|| ( is_array( $monthly ) && absint( $monthly[ $filters['report_month'] ] ?? 0 ) > 0 );
 				}
 			)
 		);
@@ -107,19 +108,26 @@ class UMS_Employee_Allowance_Report {
 		$warning_keys = array();
 		$with_quota   = 0;
 		$allocation_cache = array();
+		$special_work_map = UMS_DB_Special_Work_Assignment::get_active_map(
+			array_column( $employees, 'employee_no' ),
+			$filters['report_month']
+		);
 
 		foreach ( $employees as $employee ) {
 			$position_code = UMS_DB_Annual_Allowance::normalize_position_code( $employee['position'] ?? '' );
 			$position_id   = isset( $position_ids[ $position_code ] ) ? $position_ids[ $position_code ] : 0;
+			$employee_no = trim( (string) $employee['employee_no'] );
+			$employee_key = strtoupper( $employee_no );
 			$context       = array(
+				'employee_no'    => $employee_no,
 				'department'     => (string) ( $employee['department'] ?? '' ),
 				'team'           => (string) ( $employee['team'] ?? '' ),
 				'cost_center'    => (string) ( $employee['cost_center'] ?? '' ),
 				'position'       => $position_code,
 				'date_joined'    => (string) ( $employee['date_joined'] ?? '' ),
 				'evaluation_date'=> $filters['evaluation_date'],
+				'special_work_type' => (string) ( $special_work_map[ $employee_key ] ?? '' ),
 			);
-			$employee_no = trim( (string) $employee['employee_no'] );
 			$totals      = array_fill_keys( array( 'hat', 'shoes', 'pants', 'shirt', 'jacket', 'coat' ), 0 );
 
 			if ( $context['date_joined'] === '' ) {
@@ -229,6 +237,9 @@ class UMS_Employee_Allowance_Report {
 				) ) {
 					continue;
 				}
+				if ( ! UMS_DB_Annual_Allowance::special_work_rule_matches( $rule, $context['special_work_type'] ?? '' ) ) {
+					continue;
+				}
 				if ( UMS_DB_Annual_Allowance::scope_matches( $rule, $month_day, $context['date_joined'], $context['evaluation_date'] ) ) {
 					$matching[ $rule_id ] = true;
 				}
@@ -255,6 +266,8 @@ class UMS_Employee_Allowance_Report {
 					UMS_DB_Annual_Allowance::normalize_text( $context['cost_center'] ),
 					UMS_DB_Annual_Allowance::normalize_position_code( $context['position'] ),
 					absint( $position_id ),
+					strtoupper( trim( (string) ( $context['employee_no'] ?? '' ) ) ),
+					UMS_DB_Annual_Allowance::normalize_text( $context['special_work_type'] ?? '' ),
 					$date_key,
 					$context['evaluation_date'],
 				)

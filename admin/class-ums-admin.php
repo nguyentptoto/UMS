@@ -43,6 +43,8 @@ class UMS_Admin {
         add_action( 'admin_post_ums_delete_annual_allowance', array( __CLASS__, 'handle_delete_annual_allowance' ) );
         add_action( 'admin_post_ums_preview_annual_allowance_import', array( __CLASS__, 'handle_preview_annual_allowance_import' ) );
         add_action( 'admin_post_ums_confirm_annual_allowance_import', array( __CLASS__, 'handle_confirm_annual_allowance_import' ) );
+		add_action( 'admin_post_ums_save_special_work_assignment', array( __CLASS__, 'handle_save_special_work_assignment' ) );
+		add_action( 'admin_post_ums_delete_special_work_assignment', array( __CLASS__, 'handle_delete_special_work_assignment' ) );
 		add_action( 'admin_post_ums_export_employee_allowances', array( __CLASS__, 'handle_export_employee_allowances' ) );
         add_action( 'admin_post_ums_sync_organization', array( __CLASS__, 'handle_sync_organization' ) );
         add_action( 'admin_post_ums_save_sheet_sync_settings', array( __CLASS__, 'handle_save_sheet_sync_settings' ) );
@@ -511,6 +513,14 @@ class UMS_Admin {
         $organization_cost_centers = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'cost_center' ) : array();
         $organization_positions = $organization_ready ? UMS_DB_Organization::get_distinct_values( 'position' ) : array();
         $allowance_import_ready = UMS_DB_Annual_Allowance::is_import_ready();
+		$special_work_ready = UMS_DB_Annual_Allowance::supports_special_work_rules();
+		$special_work_rules = $special_work_ready ? UMS_DB_Annual_Allowance::get_special_work_rules( $filters['status'] ) : array();
+		$special_work_types = array(
+			4 => $special_work_ready ? UMS_DB_Annual_Allowance::get_special_work_types( 4 ) : array(),
+			9 => $special_work_ready ? UMS_DB_Annual_Allowance::get_special_work_types( 9 ) : array(),
+		);
+		$special_work_assignments = $special_work_ready ? UMS_DB_Special_Work_Assignment::get_all() : array();
+		$organization_recipients = $organization_ready ? UMS_DB_Organization::get_recipient_options() : array();
 		$allowance_report_filters = UMS_Employee_Allowance_Report::sanitize_filters( $_GET );
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-annual-allowance-list.php' ) ) {
@@ -2442,6 +2452,82 @@ class UMS_Admin {
         return $parsed && $parsed->format( 'Y-m-d' ) === $date;
     }
 
+	public static function handle_save_special_work_assignment() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền thực hiện thao tác này.' );
+		}
+		check_admin_referer( 'ums_save_special_work_assignment' );
+		if ( ! UMS_DB_Annual_Allowance::supports_special_work_rules() ) {
+			self::redirect_to_annual_allowances( array( 'notice' => 'special_work_schema_missing' ) );
+		}
+
+		$employee_no = isset( $_POST['employee_no'] ) ? strtoupper( trim( sanitize_text_field( wp_unslash( $_POST['employee_no'] ) ) ) ) : '';
+		$work_types  = isset( $_POST['special_work_type'] ) && is_array( $_POST['special_work_type'] )
+			? wp_unslash( $_POST['special_work_type'] )
+			: array();
+		$employee = UMS_DB_Organization::get_by_employee_no( $employee_no );
+		if ( ! $employee ) {
+			self::redirect_to_annual_allowances(
+				array( 'notice' => 'special_work_assignment_invalid', 'notice_extra' => 'Không tìm thấy mã nhân viên trong Sơ đồ tổ chức TVN.' )
+			);
+		}
+
+		$pending_assignments = array();
+		$errors              = array();
+		foreach ( array( 4, 9 ) as $period_month ) {
+			$work_type = sanitize_text_field( (string) ( $work_types[ $period_month ] ?? '' ) );
+			if ( $work_type === '' ) {
+				continue;
+			}
+			if ( ! UMS_DB_Annual_Allowance::special_work_type_matches_employee( $employee, $period_month, $work_type ) ) {
+				$errors[] = sprintf( 'Loại công việc T%d không khớp bộ phận và cost center hiện tại của CNV.', $period_month );
+				continue;
+			}
+			$pending_assignments[ $period_month ] = $work_type;
+		}
+
+		if ( empty( $pending_assignments ) || ! empty( $errors ) ) {
+			self::redirect_to_annual_allowances(
+				array(
+					'notice' => 'special_work_assignment_invalid',
+					'notice_extra' => implode( ' ', $errors ?: array( 'Hãy chọn ít nhất một loại công việc T4 hoặc T9.' ) ),
+				)
+			);
+		}
+
+		global $wpdb;
+		$wpdb->query( 'START TRANSACTION' );
+		foreach ( $pending_assignments as $period_month => $work_type ) {
+			if ( ! UMS_DB_Special_Work_Assignment::upsert( $employee_no, $period_month, $work_type, get_current_user_id() ) ) {
+				$errors[] = sprintf( 'Không lưu được assignment T%d.', $period_month );
+				break;
+			}
+		}
+		if ( ! empty( $errors ) ) {
+			$wpdb->query( 'ROLLBACK' );
+			self::redirect_to_annual_allowances(
+				array(
+					'notice'       => 'special_work_assignment_invalid',
+					'notice_extra' => implode( ' ', $errors ),
+				)
+			);
+		}
+		$wpdb->query( 'COMMIT' );
+		self::redirect_to_annual_allowances( array( 'notice' => 'special_work_assignment_saved' ) );
+	}
+
+	public static function handle_delete_special_work_assignment() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền thực hiện thao tác này.' );
+		}
+		$assignment_id = isset( $_POST['assignment_id'] ) ? absint( $_POST['assignment_id'] ) : 0;
+		check_admin_referer( 'ums_delete_special_work_assignment_' . $assignment_id );
+		$result = $assignment_id > 0 ? UMS_DB_Special_Work_Assignment::delete( $assignment_id ) : false;
+		self::redirect_to_annual_allowances(
+			array( 'notice' => false === $result ? 'db_error' : 'special_work_assignment_deleted' )
+		);
+	}
+
     public static function handle_preview_annual_allowance_import() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
@@ -2920,6 +3006,10 @@ class UMS_Admin {
             'allowance_import_preview_expired' => array( 'error', 'Dữ liệu xem trước đã hết hạn. Vui lòng tải lại file Excel.' ),
             'allowance_import_failed' => array( 'error', 'Import định mức không thành công.' ),
             'allowance_import_completed' => array( 'success', 'Import định mức hoàn tất.' ),
+			'special_work_assignment_saved' => array( 'success', 'Đã lưu công việc đặc thù cho CNV.' ),
+			'special_work_assignment_deleted' => array( 'success', 'Đã xóa gán công việc đặc thù.' ),
+			'special_work_assignment_invalid' => array( 'error', 'Không thể lưu công việc đặc thù.' ),
+			'special_work_schema_missing' => array( 'error', 'Database chưa có cấu trúc quản lý công việc đặc thù.' ),
 			'allowance_employee_export_failed' => array( 'error', 'Không thể xuất định mức CNV.' ),
             'organization_synced' => array( 'success', 'Đồng bộ sơ đồ tổ chức thành công.' ),
             'organization_sync_failed' => array( 'error', 'Không thể đồng bộ sơ đồ tổ chức.' ),

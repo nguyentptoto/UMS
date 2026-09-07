@@ -173,7 +173,7 @@ CREATE TABLE `wp_uniform_sap_materials` (
 CREATE TABLE `wp_uniform_annual_allowance_rules` (
     `rule_id` INT AUTO_INCREMENT NOT NULL,
     `rule_key` CHAR(64) DEFAULT NULL COMMENT 'Khóa duy nhất sinh từ nguồn import và điều kiện áp dụng',
-    `rule_scope` VARCHAR(30) NOT NULL DEFAULT 'annual' COMMENT 'annual, newcomer, newcomer_september, newcomer_september_override, newcomer_shoe_april, newcomer_shoe_september, maternity, special',
+    `rule_scope` VARCHAR(30) NOT NULL DEFAULT 'annual' COMMENT 'annual, newcomer, newcomer_september, newcomer_september_override, newcomer_shoe_april, newcomer_shoe_september, special_work_april, special_work_september, maternity, special',
     `apply_type` VARCHAR(20) NOT NULL DEFAULT 'item' COMMENT 'category, item, product, matrix',
     `category_id` INT DEFAULT NULL,
     `item_id` INT DEFAULT NULL,
@@ -185,6 +185,7 @@ CREATE TABLE `wp_uniform_annual_allowance_rules` (
     `team` VARCHAR(255) NOT NULL DEFAULT '',
     `cost_center` VARCHAR(100) NOT NULL DEFAULT '',
     `position_code` VARCHAR(100) NOT NULL DEFAULT '',
+	`special_work_type` VARCHAR(500) NOT NULL DEFAULT '' COMMENT 'Loại công việc dùng cho ma trận đặc thù T4/T9',
     `employment_start_md` CHAR(5) DEFAULT NULL COMMENT 'MM-DD, dùng cho CNV mới',
     `employment_end_md` CHAR(5) DEFAULT NULL COMMENT 'MM-DD, dùng cho CNV mới; hỗ trợ khoảng qua năm',
     `eligibility_note` VARCHAR(255) DEFAULT NULL,
@@ -209,8 +210,25 @@ CREATE TABLE `wp_uniform_annual_allowance_rules` (
     KEY `idx_org_team` (`team`(100)),
     KEY `idx_org_cost_center` (`cost_center`),
     KEY `idx_org_position` (`position_code`),
+	KEY `idx_special_work_type` (`special_work_type`(191)),
     KEY `idx_source_batch_id` (`source_batch_id`),
     KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 9B. GAN DINH MUC CONG VIEC DAC THU CHO TUNG NHAN VIEN/KY
+CREATE TABLE `wp_uniform_special_work_assignments` (
+	`assignment_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+	`employee_no` VARCHAR(50) NOT NULL,
+	`period_month` TINYINT UNSIGNED NOT NULL COMMENT '4 hoac 9',
+	`special_work_type` VARCHAR(500) NOT NULL,
+	`is_active` TINYINT(1) NOT NULL DEFAULT 1,
+	`updated_by` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+	`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	PRIMARY KEY (`assignment_id`),
+	UNIQUE KEY `idx_employee_period` (`employee_no`, `period_month`),
+	KEY `idx_period_work_type` (`period_month`, `special_work_type`(191)),
+	KEY `idx_is_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 9A. BANG THEO DOI CAC LAN IMPORT DINH MUC TU EXCEL
@@ -384,6 +402,27 @@ CREATE TABLE `wp_uniform_organization_employees` (
 -- ============================================================
 ALTER TABLE `wp_uniform_annual_allowance_rules`
     MODIFY COLUMN `rule_scope` VARCHAR(30) NOT NULL DEFAULT 'annual'
-        COMMENT 'annual, newcomer, newcomer_september, newcomer_september_override, newcomer_shoe_april, newcomer_shoe_september, maternity, special',
+        COMMENT 'annual, newcomer, newcomer_september, newcomer_september_override, newcomer_shoe_april, newcomer_shoe_september, special_work_april, special_work_september, maternity, special',
     MODIFY COLUMN `apply_type` VARCHAR(20) NOT NULL DEFAULT 'item'
         COMMENT 'category, item, product, matrix';
+
+-- UPDATE CHO DATABASE DA TON TAI: DINH MUC CONG VIEC DAC THU T4/T9
+ALTER TABLE `wp_uniform_annual_allowance_rules`
+	ADD COLUMN IF NOT EXISTS `special_work_type` VARCHAR(500) NOT NULL DEFAULT ''
+		COMMENT 'Loai cong viec dung cho ma tran dac thu T4/T9' AFTER `position_code`,
+	ADD INDEX IF NOT EXISTS `idx_special_work_type` (`special_work_type`(191));
+
+CREATE TABLE IF NOT EXISTS `wp_uniform_special_work_assignments` (
+	`assignment_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+	`employee_no` VARCHAR(50) NOT NULL,
+	`period_month` TINYINT UNSIGNED NOT NULL COMMENT '4 hoac 9',
+	`special_work_type` VARCHAR(500) NOT NULL,
+	`is_active` TINYINT(1) NOT NULL DEFAULT 1,
+	`updated_by` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+	`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	PRIMARY KEY (`assignment_id`),
+	UNIQUE KEY `idx_employee_period` (`employee_no`, `period_month`),
+	KEY `idx_period_work_type` (`period_month`, `special_work_type`(191)),
+	KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

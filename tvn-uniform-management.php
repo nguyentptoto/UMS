@@ -88,6 +88,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-request.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-user.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-organization.php';
+	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-special-work-assignment.php';
 
     // Sau này thêm kho hay phiếu chỉ cần require thêm tại đây:
     // require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory.php';

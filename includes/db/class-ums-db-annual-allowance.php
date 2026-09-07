@@ -22,13 +22,25 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		return $supported;
 	}
 
+	public static function supports_special_work_rules() {
+		static $supported = null;
+		if ( null !== $supported ) {
+			return $supported;
+		}
+		$columns   = self::db()->get_col( 'SHOW COLUMNS FROM ' . self::table() );
+		$supported = in_array( 'special_work_type', $columns, true )
+			&& class_exists( 'UMS_DB_Special_Work_Assignment' )
+			&& UMS_DB_Special_Work_Assignment::table_exists();
+		return $supported;
+	}
+
 	public static function import_table_exists() {
 		$table = self::import_table();
 		return self::db()->get_var( self::db()->prepare( 'SHOW TABLES LIKE %s', $table ) ) === $table;
 	}
 
 	public static function is_import_ready() {
-		return self::supports_flexible_rules() && self::import_table_exists();
+		return self::supports_flexible_rules() && self::import_table_exists() && self::supports_special_work_rules();
 	}
 
 	public static function get_all( $args = array() ) {
@@ -129,6 +141,56 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		);
 	}
 
+	public static function get_special_work_rules( $status = '' ) {
+		if ( ! self::supports_special_work_rules() ) {
+			return array();
+		}
+		$where = "rule_scope IN ('special_work_april', 'special_work_september')";
+		if ( $status === 'active' ) {
+			$where .= ' AND is_active = 1';
+		} elseif ( $status === 'inactive' ) {
+			$where .= ' AND is_active = 0';
+		}
+		return self::db()->get_results(
+			'SELECT * FROM ' . self::table() . " WHERE $where ORDER BY rule_scope ASC, special_work_type ASC, department ASC, cost_center ASC, rule_id ASC",
+			ARRAY_A
+		);
+	}
+
+	public static function get_special_work_types( $period_month ) {
+		$period_month = absint( $period_month );
+		if ( ! self::supports_special_work_rules() || ! in_array( $period_month, array( 4, 9 ), true ) ) {
+			return array();
+		}
+		$scope = $period_month === 4 ? 'special_work_april' : 'special_work_september';
+		return self::db()->get_col(
+			self::db()->prepare(
+				'SELECT DISTINCT special_work_type FROM ' . self::table()
+				. " WHERE rule_scope = %s AND special_work_type <> '' AND is_active = 1 ORDER BY special_work_type ASC",
+				$scope
+			)
+		);
+	}
+
+	public static function special_work_type_matches_employee( $employee, $period_month, $special_work_type ) {
+		if ( ! self::supports_special_work_rules() || ! is_array( $employee ) ) {
+			return false;
+		}
+		$scope = absint( $period_month ) === 4 ? 'special_work_april' : 'special_work_september';
+		$count = self::db()->get_var(
+			self::db()->prepare(
+				'SELECT COUNT(*) FROM ' . self::table() . "
+				WHERE rule_scope = %s AND apply_type = 'matrix' AND is_active = 1
+				AND special_work_type = %s AND department = %s AND cost_center = %s",
+				$scope,
+				sanitize_text_field( (string) $special_work_type ),
+				(string) ( $employee['department'] ?? '' ),
+				(string) ( $employee['cost_center'] ?? '' )
+			)
+		);
+		return (int) $count > 0;
+	}
+
 	public static function get_by_rule_keys( $rule_keys ) {
 		$rule_keys = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', (array) $rule_keys ) ) ) );
 		if ( empty( $rule_keys ) ) {
@@ -198,12 +260,14 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$context         = wp_parse_args(
 			$context,
 			array(
+				'employee_no'  => '',
 				'department'  => '',
 				'team'        => '',
 				'cost_center' => '',
 				'position'    => '',
 				'date_joined' => '',
 				'evaluation_date' => current_time( 'Y-m-d' ),
+				'special_work_type' => null,
 			)
 		);
 		$item = UMS_DB_Inventory::get_by_id( $item_id );
@@ -217,7 +281,8 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$position    = self::normalize_position_code( $context['position'] );
 		$date_joined = sanitize_text_field( (string) $context['date_joined'] );
 		$month_day   = preg_match( '/^\d{4}-(\d{2}-\d{2})$/', $date_joined, $matches ) ? $matches[1] : '';
-		$matrix_scope = self::get_applicable_matrix_scope( $context, $department, $team, $cost_center, $position, $position_id, $item );
+		$special_work_type = self::get_context_special_work_type( $context );
+		$matrix_identity = self::get_applicable_matrix_identity( $context, $department, $team, $cost_center, $position, $position_id, $item, $special_work_type );
 
 		$sql = self::db()->prepare(
 			"SELECT rules.*, inventory.category_id AS item_category_id, child.parent_id AS item_parent_category_id,
@@ -256,7 +321,16 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$matched    = array();
 
 		foreach ( $candidates as $rule ) {
-			if ( $matrix_scope !== '' && ( $rule['target_type'] !== 'organization' || $rule['rule_scope'] !== $matrix_scope ) ) {
+			if ( self::is_special_work_scope( $rule['rule_scope'] ?? '' )
+				&& ! self::special_work_rule_matches( $rule, $special_work_type ) ) {
+				continue;
+			}
+			if ( $matrix_identity['scope'] !== ''
+				&& ( $rule['target_type'] !== 'organization' || $rule['rule_scope'] !== $matrix_identity['scope'] ) ) {
+				continue;
+			}
+			if ( $matrix_identity['special_work_type'] !== ''
+				&& ! self::special_work_rule_matches( $rule, $matrix_identity['special_work_type'] ) ) {
 				continue;
 			}
 			if ( ! self::organization_condition_matches( $rule, $department, $team, $cost_center, $position, $position_id ) ) {
@@ -293,18 +367,19 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	 * Xác định ma trận đang chi phối nhân viên. Khi ma trận có giá trị 0 cho một
 	 * sản phẩm, hệ thống không được rơi xuống rule tổng quát cũ và cấp nhầm.
 	 */
-	private static function get_applicable_matrix_scope( $context, $department, $team, $cost_center, $position, $position_id, $item ) {
+	private static function get_applicable_matrix_identity( $context, $department, $team, $cost_center, $position, $position_id, $item, $special_work_type ) {
 		static $scope_cache = array();
 		$item_category_id = absint( $item['category_id'] ?? 0 );
 		$item_variant     = trim( (string) ( $item['item_variant'] ?? '' ) );
-		$cache_key = md5( wp_json_encode( array( $department, $team, $cost_center, $position, $position_id, $context['date_joined'], $context['evaluation_date'], $item_category_id, $item_variant ) ) );
+		$cache_key = md5( wp_json_encode( array( $context['employee_no'] ?? '', $department, $team, $cost_center, $position, $position_id, $context['date_joined'], $context['evaluation_date'], $item_category_id, $item_variant, $special_work_type ) ) );
 		if ( array_key_exists( $cache_key, $scope_cache ) ) {
 			return $scope_cache[ $cache_key ];
 		}
 
+		$special_select = self::supports_special_work_rules() ? ', special_work_type' : ", '' AS special_work_type";
 		$sql = self::db()->prepare(
 			'SELECT DISTINCT rule_scope, target_type, position_id, department, team, cost_center, position_code,
-				employment_start_md, employment_end_md, priority, category_id, item_variant
+				employment_start_md, employment_end_md, priority, category_id, item_variant' . $special_select . '
 			FROM ' . self::table() . "
 			WHERE is_active = 1 AND target_type = 'organization' AND apply_type = 'matrix'
 				AND (department = '' OR department = %s)
@@ -323,9 +398,14 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$rows       = self::db()->get_results( $sql, ARRAY_A );
 		$month_day  = preg_match( '/^\d{4}-(\d{2}-\d{2})$/', (string) $context['date_joined'], $matches ) ? $matches[1] : '';
 		$best_scope = '';
+		$best_special_work_type = '';
 		$best_score = -1;
 
 		foreach ( $rows as $rule ) {
+			if ( self::is_special_work_scope( $rule['rule_scope'] ?? '' )
+				&& ! self::special_work_rule_matches( $rule, $special_work_type ) ) {
+				continue;
+			}
 			if ( ! self::organization_condition_matches( $rule, $department, $team, $cost_center, $position, $position_id ) ) {
 				continue;
 			}
@@ -337,11 +417,42 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			if ( $score > $best_score ) {
 				$best_score = $score;
 				$best_scope = $rule['rule_scope'];
+				$best_special_work_type = self::is_special_work_scope( $rule['rule_scope'] ?? '' )
+					? (string) ( $rule['special_work_type'] ?? '' )
+					: '';
 			}
 		}
 
-		$scope_cache[ $cache_key ] = $best_scope;
-		return $best_scope;
+		$scope_cache[ $cache_key ] = array(
+			'scope' => $best_scope,
+			'special_work_type' => $best_special_work_type,
+		);
+		return $scope_cache[ $cache_key ];
+	}
+
+	private static function get_context_special_work_type( $context ) {
+		if ( array_key_exists( 'special_work_type', $context ) && null !== $context['special_work_type'] ) {
+			return sanitize_text_field( (string) $context['special_work_type'] );
+		}
+		if ( ! self::supports_special_work_rules() ) {
+			return '';
+		}
+		$evaluation_timestamp = strtotime( (string) ( $context['evaluation_date'] ?? '' ) );
+		$period_month = $evaluation_timestamp ? (int) date( 'n', $evaluation_timestamp ) : 0;
+		$assignment = UMS_DB_Special_Work_Assignment::get_for_employee( $context['employee_no'] ?? '', $period_month );
+		return is_array( $assignment ) ? (string) $assignment['special_work_type'] : '';
+	}
+
+	public static function is_special_work_scope( $scope ) {
+		return in_array( sanitize_key( (string) $scope ), array( 'special_work_april', 'special_work_september' ), true );
+	}
+
+	public static function special_work_rule_matches( $rule, $special_work_type ) {
+		if ( ! self::is_special_work_scope( $rule['rule_scope'] ?? '' ) ) {
+			return true;
+		}
+		return $special_work_type !== ''
+			&& self::normalize_text( $rule['special_work_type'] ?? '' ) === self::normalize_text( $special_work_type );
 	}
 
 	public static function organization_condition_matches( $rule, $department, $team, $cost_center, $position, $position_id ) {
@@ -367,6 +478,11 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 		$scope = isset( $rule['rule_scope'] ) ? sanitize_key( $rule['rule_scope'] ) : 'annual';
 		if ( $scope === 'annual' ) {
 			return true;
+		}
+		if ( self::is_special_work_scope( $scope ) ) {
+			$evaluation_timestamp = strtotime( (string) $evaluation_date );
+			$required_month = $scope === 'special_work_april' ? 4 : 9;
+			return $evaluation_timestamp && (int) date( 'n', $evaluation_timestamp ) === $required_month;
 		}
 		$newcomer_scopes = array(
 			'newcomer', 'newcomer_september', 'newcomer_september_override',
@@ -437,6 +553,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			array( 'newcomer', 'newcomer_september', 'newcomer_september_override', 'newcomer_shoe_april', 'newcomer_shoe_september' ),
 			true
 		) ? 128 : 0;
+		$score += self::is_special_work_scope( $rule['rule_scope'] ?? '' ) ? 256 : 0;
 		return $score;
 	}
 
@@ -482,6 +599,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 					$rule['team'] ?? '',
 					$rule['cost_center'] ?? '',
 					self::normalize_position_code( $rule['position_code'] ?? '' ),
+					self::normalize_text( $rule['special_work_type'] ?? '' ),
 					$rule['employment_start_md'] ?? '',
 					$rule['employment_end_md'] ?? '',
 				)
@@ -521,6 +639,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			'date_joined_source' => $date_source,
 			'employee_no' => $employee_code,
 			'evaluation_date' => current_time( 'Y-m-d' ),
+			'special_work_type' => null,
 		);
 	}
 
@@ -557,11 +676,11 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 
 		$fields = array(
 			'rule_key', 'rule_scope', 'apply_type', 'category_id', 'item_id', 'item_variant', 'source_product_name',
-			'target_type', 'position_id', 'department', 'team', 'cost_center', 'position_code', 'employment_start_md',
+			'target_type', 'position_id', 'department', 'team', 'cost_center', 'position_code', 'special_work_type', 'employment_start_md',
 			'employment_end_md', 'eligibility_note', 'frequency_count', 'frequency_years', 'monthly_quantities',
 			'priority', 'source_batch_id', 'is_active',
 		);
-		$formats = array( '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%d', '%d', '%d' );
+		$formats = array( '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%d', '%d', '%d' );
 		$keys    = array_column( $rules, 'rule_key' );
 		$key_placeholders = implode( ',', array_fill( 0, count( $keys ), '%s' ) );
 		$existing_keys = self::db()->get_col(
@@ -668,6 +787,7 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			'team'               => '%s',
 			'cost_center'        => '%s',
 			'position_code'      => '%s',
+			'special_work_type'  => '%s',
 			'employment_start_md'=> '%s',
 			'employment_end_md'  => '%s',
 			'eligibility_note'   => '%s',
