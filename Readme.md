@@ -144,11 +144,11 @@ Trang `Định mức năm` hỗ trợ import trực tiếp file `.xlsx` theo tem
 
 Form thêm/sửa thủ công bám đúng ma trận của hai sheet: Bộ phận, Nhóm, Code center, Vị trí, Sản phẩm, số lượng Tháng 4, số lượng Tháng 9, Lưu ý và Trạng thái. Khóa rule được sinh chung với dữ liệu import để tầng kiểm tra định mức xử lý thống nhất.
 
-Danh sách định mức được trình bày bằng hai jqxGrid độc lập cho Tháng 4 và Tháng 9. Hai bảng giữ cùng các cột tổ chức và 25 cột sản phẩm E:AC, nhưng mỗi ô chỉ hiển thị số lượng của tháng tương ứng.
+Danh sách định mức được trình bày bằng hai jqxGrid độc lập cho Tháng 4 và Tháng 9. Hai bảng giữ cùng các cột tổ chức và 26 cột sản phẩm E:AD, nhưng mỗi ô chỉ hiển thị số lượng của tháng tương ứng.
 
 Chức năng xuất kho chủ động lấy người nhận trực tiếp từ Sơ đồ tổ chức TVN bằng mã nhân viên. Lịch sử kho lưu thêm `target_employee_no`, do đó Admin có thể xuất cho CNV không có tài khoản WordPress mà vẫn kiểm tra định mức, ngày vào và truy vết đúng người nhận.
 
-Importer đọc hai sheet định mức thường và các ma trận dành cho CNV mới. Hai sheet định mức thường vẫn giữ cố định 25 cột sản phẩm từ `E` đến `AC`:
+Importer đọc hai sheet định mức thường và các ma trận dành cho CNV mới. Hai sheet định mức thường giữ cố định 26 cột sản phẩm từ `E` đến `AD`, trong đó cột `F` là `Áo phông dài tay`:
 
 - `Phát T4`: định mức định kỳ tháng 4.
 - `Phát T9`: định mức định kỳ tháng 9.

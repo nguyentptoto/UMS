@@ -72,35 +72,36 @@ class UMS_Annual_Allowance_Import {
 	);
 
 	/**
-	 * Ma trận sản phẩm cố định E:AC dùng chung cho Phát T4 và Phát T9.
+	 * Ma trận sản phẩm cố định E:AD dùng chung cho Phát T4 và Phát T9.
 	 */
 	public static function get_product_columns() {
 		return array(
 			'E'  => 'Áo phông cộc tay',
-			'F'  => 'Quần CN',
-			'G'  => 'Áo XLNT',
-			'H'  => 'Áo phông tím cộc tay',
-			'I'  => 'Áo kỹ thuật',
-			'J'  => 'Quần kỹ thuật',
-			'K'  => 'Áo khoác kỹ thuật',
-			'L'  => 'Áo khoác CN',
-			'M'  => 'Áo phao',
-			'N'  => 'Mũ hồng',
-			'O'  => 'Mũ phối trắng',
-			'P'  => 'Mũ phối ghi',
-			'Q'  => 'Mũ phối hồng',
-			'R'  => 'Mũ phối tím',
-			'S'  => 'Mũ phối xanh biển',
-			'T'  => 'Mũ phối xi măng',
-			'U'  => 'Mũ phối trắng ngà',
-			'V'  => 'Mũ phối xanh lá',
-			'W'  => 'Mũ Xanh lá',
-			'X'  => 'Mũ xanh biển',
-			'Y'  => 'Mũ đỏ',
-			'Z'  => 'Giầy KPR O-775',
-			'AA' => 'Giầy KPR O-010',
-			'AB' => 'Giầy Simon TS5511',
-			'AC' => 'Giầy Simon TS7011',
+			'F'  => 'Áo phông dài tay',
+			'G'  => 'Quần CN',
+			'H'  => 'Áo XLNT',
+			'I'  => 'Áo phông tím cộc tay',
+			'J'  => 'Áo kỹ thuật',
+			'K'  => 'Quần kỹ thuật',
+			'L'  => 'Áo khoác kỹ thuật',
+			'M'  => 'Áo khoác CN',
+			'N'  => 'Áo phao',
+			'O'  => 'Mũ hồng',
+			'P'  => 'Mũ phối trắng',
+			'Q'  => 'Mũ phối ghi',
+			'R'  => 'Mũ phối hồng',
+			'S'  => 'Mũ phối tím',
+			'T'  => 'Mũ phối xanh biển',
+			'U'  => 'Mũ phối xi măng',
+			'V'  => 'Mũ phối trắng ngà',
+			'W'  => 'Mũ phối xanh lá',
+			'X'  => 'Mũ Xanh lá',
+			'Y'  => 'Mũ xanh biển',
+			'Z'  => 'Mũ đỏ',
+			'AA' => 'Giầy KPR O-775',
+			'AB' => 'Giầy KPR O-010',
+			'AC' => 'Giầy Simon TS5511',
+			'AD' => 'Giầy Simon TS7011',
 		);
 	}
 

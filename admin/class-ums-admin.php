@@ -1468,7 +1468,7 @@ class UMS_Admin {
     }
 
     /**
-     * Lưu đồng thời 25 cột sản phẩm của ma trận Phát T4/Phát T9.
+     * Lưu đồng thời 26 cột sản phẩm của ma trận Phát T4/Phát T9.
      */
     private static function save_annual_allowance_matrix( $raw ) {
         $department   = isset( $raw['department'] ) ? sanitize_text_field( $raw['department'] ) : '';
