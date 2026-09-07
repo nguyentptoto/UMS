@@ -177,18 +177,23 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			return false;
 		}
 		$scope = absint( $period_month ) === 4 ? 'special_work_april' : 'special_work_september';
-		$count = self::db()->get_var(
+		$work_types = self::db()->get_col(
 			self::db()->prepare(
-				'SELECT COUNT(*) FROM ' . self::table() . "
+				'SELECT special_work_type FROM ' . self::table() . "
 				WHERE rule_scope = %s AND apply_type = 'matrix' AND is_active = 1
-				AND special_work_type = %s AND department = %s AND cost_center = %s",
+				AND department = %s AND cost_center = %s",
 				$scope,
-				sanitize_text_field( (string) $special_work_type ),
 				(string) ( $employee['department'] ?? '' ),
 				(string) ( $employee['cost_center'] ?? '' )
 			)
 		);
-		return (int) $count > 0;
+		$expected = self::normalize_text( sanitize_text_field( (string) $special_work_type ) );
+		foreach ( $work_types as $work_type ) {
+			if ( self::normalize_text( $work_type ) === $expected ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public static function get_by_rule_keys( $rule_keys ) {

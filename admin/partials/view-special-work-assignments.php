@@ -12,6 +12,69 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<?php if ( ! $special_work_ready ) : ?>
 		<div class="notice notice-warning inline"><p>Database chưa có bảng gán công việc đặc thù hoặc cột special_work_type.</p></div>
 	<?php else : ?>
+		<h3>Import danh sách CNV đặc thù</h3>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-filter-bar">
+			<?php wp_nonce_field( 'ums_preview_special_work_assignment_import' ); ?>
+			<input type="hidden" name="action" value="ums_preview_special_work_assignment_import">
+			<input type="file" name="ums_special_work_assignment_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+			<button type="submit" class="button button-primary">Đọc và xem trước</button>
+		</form>
+
+		<?php if ( is_array( $special_assignment_import_preview ) ) : ?>
+			<?php
+			$preview_periods = array_map(
+				function ( $period ) {
+					return 'T' . absint( $period );
+				},
+				$special_assignment_import_preview['processed_periods'] ?? array()
+			);
+			?>
+			<p>
+				<strong><?php echo esc_html( $special_assignment_import_preview['file_name'] ?? '' ); ?></strong>:
+				<?php echo esc_html( number_format_i18n( count( $special_assignment_import_preview['rows'] ?? array() ) ) ); ?> CNV hợp lệ,
+				kỳ <?php echo esc_html( implode( ', ', $preview_periods ) ); ?>.
+			</p>
+
+			<?php if ( ! empty( $special_assignment_import_preview['errors'] ) ) : ?>
+				<div class="notice notice-error inline"><p><?php echo esc_html( implode( ' ', array_slice( $special_assignment_import_preview['errors'], 0, 10 ) ) ); ?></p></div>
+			<?php endif; ?>
+			<?php if ( ! empty( $special_assignment_import_preview['warnings'] ) ) : ?>
+				<div class="notice notice-warning inline"><p><?php echo esc_html( implode( ' ', array_slice( $special_assignment_import_preview['warnings'], 0, 10 ) ) ); ?></p></div>
+			<?php endif; ?>
+
+			<?php if ( ! empty( $special_assignment_import_preview['rows'] ) ) : ?>
+				<div class="ums-table-scroll">
+					<table class="widefat striped">
+						<thead><tr><th>Sheet</th><th>Dòng</th><th>Mã NV</th><th>Họ tên TVN</th><th>Loại công việc</th><th>Bộ phận</th><th>Cost center</th></tr></thead>
+						<tbody>
+						<?php foreach ( $special_assignment_import_preview['rows'] as $preview_row ) : ?>
+							<tr>
+								<td><?php echo esc_html( $preview_row['source_sheet'] ); ?></td>
+								<td><?php echo esc_html( absint( $preview_row['source_row'] ) ); ?></td>
+								<td><?php echo esc_html( $preview_row['employee_no'] ); ?></td>
+								<td><?php echo esc_html( $preview_row['organization_full_name'] ); ?></td>
+								<td><?php echo esc_html( $preview_row['special_work_type'] ); ?></td>
+								<td><?php echo esc_html( $preview_row['department'] ?: '-' ); ?></td>
+								<td><?php echo esc_html( $preview_row['cost_center'] ?: '-' ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( empty( $special_assignment_import_preview['errors'] ) && ! empty( $special_assignment_import_preview['rows'] ) ) : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<?php wp_nonce_field( 'ums_confirm_special_work_assignment_import' ); ?>
+					<input type="hidden" name="action" value="ums_confirm_special_work_assignment_import">
+					<input type="hidden" name="special_assignment_preview_token" value="<?php echo esc_attr( $special_assignment_preview_token ); ?>">
+					<p class="submit"><button type="submit" class="button button-primary">Xác nhận import</button></p>
+				</form>
+			<?php endif; ?>
+		<?php endif; ?>
+
+		<hr>
+		<h3>Gán thủ công</h3>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ums-profile-form">
 			<?php wp_nonce_field( 'ums_save_special_work_assignment' ); ?>
 			<input type="hidden" name="action" value="ums_save_special_work_assignment">

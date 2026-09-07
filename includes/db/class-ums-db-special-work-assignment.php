@@ -122,6 +122,14 @@ class UMS_DB_Special_Work_Assignment extends UMS_DB_Base {
 		return self::db()->delete( self::table(), array( 'assignment_id' => absint( $assignment_id ) ), array( '%d' ) );
 	}
 
+	public static function delete_by_period( $period_month ) {
+		$period_month = absint( $period_month );
+		if ( ! self::table_exists() || ! in_array( $period_month, array( 4, 9 ), true ) ) {
+			return false;
+		}
+		return self::db()->delete( self::table(), array( 'period_month' => $period_month ), array( '%d' ) );
+	}
+
 	public static function get_last_error() {
 		return self::db()->last_error;
 	}

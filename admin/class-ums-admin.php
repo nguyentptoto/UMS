@@ -45,6 +45,8 @@ class UMS_Admin {
         add_action( 'admin_post_ums_confirm_annual_allowance_import', array( __CLASS__, 'handle_confirm_annual_allowance_import' ) );
 		add_action( 'admin_post_ums_save_special_work_assignment', array( __CLASS__, 'handle_save_special_work_assignment' ) );
 		add_action( 'admin_post_ums_delete_special_work_assignment', array( __CLASS__, 'handle_delete_special_work_assignment' ) );
+		add_action( 'admin_post_ums_preview_special_work_assignment_import', array( __CLASS__, 'handle_preview_special_work_assignment_import' ) );
+		add_action( 'admin_post_ums_confirm_special_work_assignment_import', array( __CLASS__, 'handle_confirm_special_work_assignment_import' ) );
 		add_action( 'admin_post_ums_export_employee_allowances', array( __CLASS__, 'handle_export_employee_allowances' ) );
         add_action( 'admin_post_ums_sync_organization', array( __CLASS__, 'handle_sync_organization' ) );
         add_action( 'admin_post_ums_save_sheet_sync_settings', array( __CLASS__, 'handle_save_sheet_sync_settings' ) );
@@ -520,6 +522,12 @@ class UMS_Admin {
 			9 => $special_work_ready ? UMS_DB_Annual_Allowance::get_special_work_types( 9 ) : array(),
 		);
 		$special_work_assignments = $special_work_ready ? UMS_DB_Special_Work_Assignment::get_all() : array();
+		$special_assignment_preview_token = isset( $_GET['special_assignment_preview_token'] )
+			? sanitize_key( wp_unslash( $_GET['special_assignment_preview_token'] ) )
+			: '';
+		$special_assignment_import_preview = $special_assignment_preview_token !== ''
+			? UMS_Special_Work_Assignment_Import::get_preview( $special_assignment_preview_token )
+			: null;
 		$organization_recipients = $organization_ready ? UMS_DB_Organization::get_recipient_options() : array();
 		$allowance_report_filters = UMS_Employee_Allowance_Report::sanitize_filters( $_GET );
 
@@ -2528,6 +2536,82 @@ class UMS_Admin {
 		);
 	}
 
+	public static function handle_preview_special_work_assignment_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		check_admin_referer( 'ums_preview_special_work_assignment_import' );
+		if ( ! UMS_DB_Annual_Allowance::supports_special_work_rules() ) {
+			self::redirect_to_annual_allowances( array( 'notice' => 'special_work_schema_missing' ) );
+		}
+
+		$file = isset( $_FILES['ums_special_work_assignment_file'] ) ? $_FILES['ums_special_work_assignment_file'] : array();
+		if ( empty( $file['tmp_name'] ) || ! empty( $file['error'] )
+			|| (int) $file['size'] > 10 * MB_IN_BYTES
+			|| strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
+			self::redirect_to_annual_allowances( array( 'notice' => 'special_work_import_invalid_file' ) );
+		}
+
+		try {
+			$preview = UMS_Special_Work_Assignment_Import::analyze( $file['tmp_name'], $file['name'] );
+			$token   = UMS_Special_Work_Assignment_Import::store_preview( $preview );
+			self::redirect_to_annual_allowances(
+				array(
+					'notice' => empty( $preview['errors'] ) ? 'special_work_import_preview_ready' : 'special_work_import_preview_warning',
+					'special_assignment_preview_token' => $token,
+				)
+			);
+		} catch ( Throwable $error ) {
+			self::redirect_to_annual_allowances(
+				array( 'notice' => 'special_work_import_invalid_file', 'notice_extra' => $error->getMessage() )
+			);
+		}
+	}
+
+	public static function handle_confirm_special_work_assignment_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		check_admin_referer( 'ums_confirm_special_work_assignment_import' );
+		$token = isset( $_POST['special_assignment_preview_token'] )
+			? sanitize_key( wp_unslash( $_POST['special_assignment_preview_token'] ) )
+			: '';
+		$preview = UMS_Special_Work_Assignment_Import::get_preview( $token );
+		if ( ! is_array( $preview ) ) {
+			self::redirect_to_annual_allowances( array( 'notice' => 'special_work_import_preview_expired' ) );
+		}
+		if ( ! empty( $preview['errors'] ) ) {
+			self::redirect_to_annual_allowances(
+				array( 'notice' => 'special_work_import_preview_warning', 'special_assignment_preview_token' => $token )
+			);
+		}
+
+		$result = UMS_Special_Work_Assignment_Import::import( $preview, get_current_user_id() );
+		if ( empty( $result['success'] ) ) {
+			self::redirect_to_annual_allowances(
+				array(
+					'notice' => 'special_work_import_failed',
+					'special_assignment_preview_token' => $token,
+					'notice_extra' => implode( ' ', array_slice( $result['errors'], 0, 5 ) ),
+				)
+			);
+		}
+
+		UMS_Special_Work_Assignment_Import::delete_preview( $token );
+		$period_labels = array_map(
+			function ( $period ) {
+				return 'T' . absint( $period );
+			},
+			$result['periods']
+		);
+		self::redirect_to_annual_allowances(
+			array(
+				'notice' => 'special_work_import_completed',
+				'notice_extra' => sprintf( 'Đã gán %d CNV cho kỳ %s.', $result['imported'], implode( ', ', $period_labels ) ),
+			)
+		);
+	}
+
     public static function handle_preview_annual_allowance_import() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
@@ -3010,6 +3094,12 @@ class UMS_Admin {
 			'special_work_assignment_deleted' => array( 'success', 'Đã xóa gán công việc đặc thù.' ),
 			'special_work_assignment_invalid' => array( 'error', 'Không thể lưu công việc đặc thù.' ),
 			'special_work_schema_missing' => array( 'error', 'Database chưa có cấu trúc quản lý công việc đặc thù.' ),
+			'special_work_import_preview_ready' => array( 'success', 'Đã đọc danh sách CNV đặc thù. Hãy kiểm tra trước khi xác nhận.' ),
+			'special_work_import_preview_warning' => array( 'warning', 'Danh sách CNV đặc thù còn lỗi và chưa thể xác nhận.' ),
+			'special_work_import_invalid_file' => array( 'error', 'File danh sách CNV đặc thù không hợp lệ hoặc không đọc được.' ),
+			'special_work_import_preview_expired' => array( 'error', 'Dữ liệu xem trước CNV đặc thù đã hết hạn. Vui lòng tải lại file.' ),
+			'special_work_import_failed' => array( 'error', 'Import danh sách CNV đặc thù không thành công.' ),
+			'special_work_import_completed' => array( 'success', 'Import danh sách CNV đặc thù hoàn tất.' ),
 			'allowance_employee_export_failed' => array( 'error', 'Không thể xuất định mức CNV.' ),
             'organization_synced' => array( 'success', 'Đồng bộ sơ đồ tổ chức thành công.' ),
             'organization_sync_failed' => array( 'error', 'Không thể đồng bộ sơ đồ tổ chức.' ),
