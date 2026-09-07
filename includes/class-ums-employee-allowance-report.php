@@ -254,7 +254,10 @@ class UMS_Employee_Allowance_Report {
 					$allocation['quota'], $allocation['rule'], $employee_no,
 					$filters['evaluation_date'], $usage_index, $rule_item_ids
 				);
-				$allocation['exact'] = UMS_DB_Annual_Allowance::requires_exact_quantity( $allocation['rule'] );
+				$allocation['exact'] = UMS_DB_Annual_Allowance::requires_exact_quantity(
+					$allocation['rule'],
+					$allocation['product']['item_variant'] ?? ''
+				);
 				$allocations[] = $allocation;
 			}
 			$result[ $employee_no ] = array(

@@ -587,15 +587,30 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	}
 
 	/**
-	 * Rule cấp cho CNV mới yêu cầu nhận đúng số lượng, không nhận thiếu hoặc dư.
+	 * Chỉ định mức mũ của CNV mới yêu cầu nhận đúng số lượng. Các sản phẩm
+	 * khác là hạn mức tối đa nên người nhận có thể đăng ký ít hơn.
 	 */
-	public static function requires_exact_quantity( $rule ) {
+	public static function requires_exact_quantity( $rule, $product_name = '' ) {
 		$scope = isset( $rule['rule_scope'] ) ? sanitize_key( $rule['rule_scope'] ) : '';
-		return in_array(
+		if ( ! in_array(
 			$scope,
 			array( 'newcomer', 'newcomer_september', 'newcomer_september_override', 'newcomer_shoe_april', 'newcomer_shoe_september' ),
 			true
-		);
+		) ) {
+			return false;
+		}
+
+		$product_name = trim( (string) $product_name );
+		if ( $product_name === '' ) {
+			$product_name = trim( (string) ( $rule['item_variant'] ?? '' ) );
+		}
+		if ( $product_name === '' ) {
+			$product_name = trim( (string) ( $rule['source_product_name'] ?? '' ) );
+		}
+
+		$normalized = strtolower( remove_accents( $product_name ) );
+		$normalized = trim( preg_replace( '/[^a-z0-9]+/', ' ', $normalized ) );
+		return preg_match( '/(^| )mu( |$)/', $normalized ) === 1;
 	}
 
 	/**

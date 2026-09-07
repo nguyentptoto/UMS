@@ -183,7 +183,7 @@ Thứ tự ưu tiên khi kiểm tra cấp phát:
 5. `annual`: định mức định kỳ tháng 4/tháng 9.
 6. Rule thủ công cũ khi nhân viên không thuộc ma trận Excel.
 
-Với rule `newcomer`, `newcomer_september`, `newcomer_september_override`, `newcomer_shoe_april` và `newcomer_shoe_september`, số lượng trên phiếu hoặc lần xuất kho chủ động phải đúng tuyệt đối với định mức. Ví dụ định mức mũ là `2` thì nhập `1` hoặc `3` đều bị từ chối; định mức giày là `1` thì không thể chọn loại giày khác hoặc nhập số lượng khác `1`. Hệ thống vẫn cộng lịch sử đã cấp để ngăn cấp lặp.
+Với các rule CNV mới, số lượng của áo, quần, áo khoác, áo phao và giày là hạn mức tối đa nên có thể đăng ký ít hơn nhưng không được vượt quá phần còn lại. Riêng mũ phải nhận đúng số lượng còn lại: ví dụ định mức mũ là `2` thì nhập `1` hoặc `3` đều bị từ chối. Hệ thống vẫn cộng lịch sử đã cấp để ngăn cấp lặp.
 
 Marker của hai ma trận giày được gắn theo từng sản phẩm UMS sau bước ánh xạ. Vì vậy loại giày có số lượng `0` không rơi xuống định mức khác, đồng thời scope giày không che định mức áo, quần hoặc mũ trong cùng kỳ cấp phát.
 

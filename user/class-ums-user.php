@@ -539,8 +539,8 @@ class UMS_User {
                 continue;
             }
 
-            if ( UMS_DB_Annual_Allowance::requires_exact_quantity( $rule ) && $requested !== $month_quota ) {
-                $errors[] = 'Định mức CNV mới của "' . $labels . '" yêu cầu đúng ' . $month_quota . ' sản phẩm; số lượng đã nhập là ' . $requested . '.';
+            if ( UMS_DB_Annual_Allowance::requires_exact_quantity( $rule, $labels ) && $requested !== $month_quota ) {
+                $errors[] = 'Định mức mũ CNV mới của "' . $labels . '" yêu cầu đúng ' . $month_quota . ' sản phẩm; số lượng đã nhập là ' . $requested . '.';
                 continue;
             }
 
