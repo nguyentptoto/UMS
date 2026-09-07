@@ -36,6 +36,8 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_download_inventory_import_template', array( __CLASS__, 'handle_download_inventory_import_template' ) );
 		add_action( 'admin_post_ums_preview_inventory_import', array( __CLASS__, 'handle_preview_inventory_import' ) );
 		add_action( 'admin_post_ums_confirm_inventory_import', array( __CLASS__, 'handle_confirm_inventory_import' ) );
+		add_action( 'admin_post_ums_preview_issue_registration_import', array( __CLASS__, 'handle_preview_issue_registration_import' ) );
+		add_action( 'admin_post_ums_confirm_issue_registration_import', array( __CLASS__, 'handle_confirm_issue_registration_import' ) );
 		add_action( 'admin_post_ums_repair_inventory_prices', array( __CLASS__, 'handle_repair_inventory_prices' ) );
 		add_action( 'admin_post_ums_preview_uniform_material_import', array( __CLASS__, 'handle_preview_uniform_material_import' ) );
 		add_action( 'admin_post_ums_confirm_uniform_material_import', array( __CLASS__, 'handle_confirm_uniform_material_import' ) );
@@ -437,6 +439,8 @@ class UMS_Admin {
 		$inventory_import_ready = UMS_DB_Inventory_Import::is_ready();
 		$inventory_preview_token = isset( $_GET['inventory_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['inventory_preview_token'] ) ) : '';
 		$inventory_import_preview = $inventory_preview_token !== '' ? UMS_Inventory_Import::get_preview( $inventory_preview_token ) : null;
+		$issue_preview_token = isset( $_GET['issue_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['issue_preview_token'] ) ) : '';
+		$issue_import_preview = $issue_preview_token !== '' ? UMS_Issue_Registration_Import::get_preview( $issue_preview_token ) : null;
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php';
@@ -1640,6 +1644,58 @@ class UMS_Admin {
 				'notice_extra' => sprintf( 'Đã nhập %d dòng, cộng tổng %s sản phẩm.', $result['imported'], number_format_i18n( $result['total'] ) ),
 			)
 		);
+	}
+
+	public static function handle_preview_issue_registration_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		check_admin_referer( 'ums_preview_issue_registration_import' );
+		@set_time_limit( 300 );
+		$file = isset( $_FILES['ums_issue_registration_file'] ) ? $_FILES['ums_issue_registration_file'] : array();
+		if ( empty( $file['tmp_name'] ) || ! empty( $file['error'] ) || (int) $file['size'] > 20 * MB_IN_BYTES
+			|| strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
+			self::redirect_to_inventory( array( 'notice' => 'issue_registration_invalid_file' ) );
+		}
+		try {
+			$preview = UMS_Issue_Registration_Import::analyze(
+				$file['tmp_name'], $file['name'],
+				isset( $_POST['issue_year'] ) ? absint( $_POST['issue_year'] ) : current_time( 'Y' ),
+				isset( $_POST['issue_month'] ) ? absint( $_POST['issue_month'] ) : 9
+			);
+			$token = UMS_Issue_Registration_Import::store_preview( $preview );
+			self::redirect_to_inventory( array(
+				'notice' => empty( $preview['errors'] ) ? 'issue_registration_preview_ready' : 'issue_registration_preview_error',
+				'issue_preview_token' => $token,
+			) );
+		} catch ( Throwable $error ) {
+			self::redirect_to_inventory( array( 'notice' => 'issue_registration_invalid_file', 'notice_extra' => $error->getMessage() ) );
+		}
+	}
+
+	public static function handle_confirm_issue_registration_import() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		check_admin_referer( 'ums_confirm_issue_registration_import' );
+		@set_time_limit( 300 );
+		$token = isset( $_POST['issue_preview_token'] ) ? sanitize_key( wp_unslash( $_POST['issue_preview_token'] ) ) : '';
+		$preview = UMS_Issue_Registration_Import::get_preview( $token );
+		if ( ! is_array( $preview ) ) {
+			self::redirect_to_inventory( array( 'notice' => 'issue_registration_preview_expired' ) );
+		}
+		if ( ! empty( $preview['errors'] ) ) {
+			self::redirect_to_inventory( array( 'notice' => 'issue_registration_preview_error', 'issue_preview_token' => $token ) );
+		}
+		$result = UMS_Issue_Registration_Import::import( $preview, get_current_user_id() );
+		if ( empty( $result['success'] ) ) {
+			self::redirect_to_inventory( array( 'notice' => 'issue_registration_import_failed', 'issue_preview_token' => $token, 'notice_extra' => implode( ' ', $result['errors'] ) ) );
+		}
+		UMS_Issue_Registration_Import::delete_preview( $token );
+		self::redirect_to_inventory( array(
+			'notice' => 'issue_registration_import_completed',
+			'notice_extra' => sprintf( 'Đã xuất %s sản phẩm qua %d dòng chi tiết.', number_format_i18n( $result['total'] ), $result['imported'] ),
+		) );
 	}
 
 	public static function handle_repair_inventory_prices() {
@@ -3073,6 +3129,12 @@ class UMS_Admin {
 			'inventory_prices_repaired' => array( 'success', 'Đã chuẩn hóa đơn giá dùng chung theo sản phẩm.' ),
 			'inventory_import_failed' => array( 'error', 'Import nhập kho không thành công.' ),
 			'inventory_import_completed' => array( 'success', 'Import nhập kho hoàn tất.' ),
+			'issue_registration_preview_ready' => array( 'success', 'File đăng ký hợp lệ. Hãy kiểm tra tổng hợp trước khi xác nhận xuất kho.' ),
+			'issue_registration_preview_error' => array( 'error', 'File đăng ký còn lỗi; hệ thống chưa xuất bất kỳ sản phẩm nào.' ),
+			'issue_registration_invalid_file' => array( 'error', 'File đăng ký cấp phát không hợp lệ hoặc không đọc được.' ),
+			'issue_registration_preview_expired' => array( 'error', 'Dữ liệu xem trước đăng ký đã hết hạn. Hãy tải lại file.' ),
+			'issue_registration_import_failed' => array( 'error', 'Import đăng ký và xuất kho không thành công.' ),
+			'issue_registration_import_completed' => array( 'success', 'Đã import đăng ký và ghi nhận xuất kho.' ),
 			'uniform_material_preview_ready' => array( 'success', 'Đã đọc sheet Mã đồng phục. Hãy kiểm tra dữ liệu trước khi xác nhận.' ),
 			'uniform_material_preview_error' => array( 'error', 'File GA có lỗi dữ liệu và chưa thể import.' ),
 			'uniform_material_invalid_file' => array( 'error', 'File GA không hợp lệ hoặc không đọc được sheet Mã đồng phục.' ),

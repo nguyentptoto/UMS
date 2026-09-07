@@ -253,6 +253,65 @@ unset( $section );
 		<?php endif; ?>
 	</div>
 
+	<div class="ums-panel" id="ums-issue-registration-import">
+		<h2>Import đăng ký cấp phát và xuất kho</h2>
+		<p>File chốt phải giữ nguyên cấu trúc Google Form. Hệ thống kiểm tra mã CNV, bản ghi trùng, size, định mức còn lại và tồn kho trước khi cho phép xuất.</p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
+			<?php wp_nonce_field( 'ums_preview_issue_registration_import' ); ?>
+			<input type="hidden" name="action" value="ums_preview_issue_registration_import">
+			<label>Năm cấp <input type="number" name="issue_year" value="<?php echo esc_attr( current_time( 'Y' ) ); ?>" min="2000" max="2100" required></label>
+			<label>Kỳ cấp
+				<select name="issue_month"><option value="4">Tháng 4</option><option value="9" selected>Tháng 9</option></select>
+			</label>
+			<input type="file" name="ums_issue_registration_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+			<button type="submit" class="button button-primary">Kiểm tra file đăng ký</button>
+		</form>
+	</div>
+
+	<?php if ( is_array( $issue_import_preview ) ) : ?>
+		<div class="ums-panel ums-issue-registration-preview">
+			<h2>Kết quả kiểm tra: <?php echo esc_html( $issue_import_preview['file_name'] ); ?></h2>
+			<p><?php echo esc_html( sprintf(
+				'Kỳ T%d/%d: %d CNV, %d dòng cấp phát, tổng số lượng %s, %d lỗi.',
+				$issue_import_preview['month'], $issue_import_preview['year'], $issue_import_preview['employee_count'],
+				count( $issue_import_preview['details'] ), number_format_i18n( $issue_import_preview['total_quantity'] ), count( $issue_import_preview['errors'] )
+			) ); ?></p>
+
+			<?php if ( ! empty( $issue_import_preview['errors'] ) ) : ?>
+				<div class="notice notice-error inline"><p><strong>Không thể xác nhận vì file còn lỗi:</strong></p></div>
+				<div class="ums-table-scroll" style="max-height:520px">
+					<table class="widefat striped"><thead><tr><th>STT</th><th>Nội dung lỗi</th></tr></thead><tbody>
+					<?php foreach ( $issue_import_preview['errors'] as $index => $error ) : ?>
+						<tr><td><?php echo esc_html( $index + 1 ); ?></td><td><?php echo esc_html( $error ); ?></td></tr>
+					<?php endforeach; ?>
+					</tbody></table>
+				</div>
+			<?php else : ?>
+				<?php
+				$issue_summary = array();
+				foreach ( $issue_import_preview['details'] as $detail ) {
+					$key = $detail['product'] . '|' . $detail['size'];
+					if ( ! isset( $issue_summary[ $key ] ) ) $issue_summary[ $key ] = array( 'product' => $detail['product'], 'size' => $detail['size'], 'quantity' => 0 );
+					$issue_summary[ $key ]['quantity'] += absint( $detail['quantity'] );
+				}
+				?>
+				<div class="ums-table-scroll" style="max-height:520px">
+					<table class="widefat striped"><thead><tr><th>Loại sản phẩm</th><th>Size</th><th>Tổng xuất</th></tr></thead><tbody>
+					<?php foreach ( $issue_summary as $summary_row ) : ?>
+						<tr><td><?php echo esc_html( $summary_row['product'] ); ?></td><td><?php echo esc_html( $summary_row['size'] ); ?></td><td><?php echo esc_html( number_format_i18n( $summary_row['quantity'] ) ); ?></td></tr>
+					<?php endforeach; ?>
+					</tbody></table>
+				</div>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<?php wp_nonce_field( 'ums_confirm_issue_registration_import' ); ?>
+					<input type="hidden" name="action" value="ums_confirm_issue_registration_import">
+					<input type="hidden" name="issue_preview_token" value="<?php echo esc_attr( $issue_preview_token ); ?>">
+					<p class="submit"><button type="submit" class="button button-primary">Xác nhận xuất kho toàn bộ</button></p>
+				</form>
+			<?php endif; ?>
+		</div>
+	<?php endif; ?>
+
 	<?php if ( is_array( $inventory_import_preview ) ) : ?>
 		<div class="ums-panel ums-inventory-import-preview">
 			<h2>Xem trước nhập kho: <?php echo esc_html( $inventory_import_preview['file_name'] ); ?></h2>

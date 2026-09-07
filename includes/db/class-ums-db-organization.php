@@ -197,6 +197,33 @@ class UMS_DB_Organization extends UMS_DB_Base {
 	}
 
 	/**
+	 * Lay nhieu nhan su trong mot truy van, lap chi muc theo ma nhan vien viet hoa.
+	 */
+	public static function get_by_employee_nos( $employee_nos ) {
+		$employee_nos = array_values( array_unique( array_filter( array_map( 'trim', (array) $employee_nos ) ) ) );
+		if ( empty( $employee_nos ) || ! self::table_exists() ) {
+			return array();
+		}
+
+		$result = array();
+		foreach ( array_chunk( $employee_nos, 250 ) as $batch ) {
+			$placeholders = implode( ',', array_fill( 0, count( $batch ), '%s' ) );
+			$rows = self::db()->get_results(
+				self::db()->prepare(
+					'SELECT employee_no, full_name, department, team, position, cost_center, date_joined, email, factory
+					FROM ' . self::table() . " WHERE employee_no IN ($placeholders)",
+					$batch
+				),
+				ARRAY_A
+			);
+			foreach ( $rows as $row ) {
+				$result[ strtoupper( trim( (string) $row['employee_no'] ) ) ] = $row;
+			}
+		}
+		return $result;
+	}
+
+	/**
 	 * Lấy nhân sự tổ chức gắn với một tài khoản WordPress.
 	 *
 	 * Mã nhân viên trong usermeta là nguồn liên kết chính. user_login chỉ là

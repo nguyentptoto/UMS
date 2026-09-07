@@ -187,6 +187,76 @@ class UMS_Employee_Allowance_Report {
 		);
 	}
 
+	/**
+	 * Tra ve chi tiet dinh muc con lai theo san pham cho mot danh sach CNV.
+	 * Phuong thuc nay dung chung bo may tinh theo lo cua bao cao de tranh N+1 query.
+	 */
+	public static function build_employee_allocations( $employee_nos, $year, $month ) {
+		$filters = self::sanitize_filters(
+			array(
+				'report_year' => $year,
+				'report_month' => $month,
+				'report_quantity_mode' => 'remaining',
+			)
+		);
+		$employee_map = UMS_DB_Organization::get_by_employee_nos( $employee_nos );
+		$employees    = array_values( $employee_map );
+		$products     = self::get_products();
+		$rules        = UMS_DB_Annual_Allowance::get_active_for_report();
+
+		foreach ( $products as &$product ) {
+			$product['rules'] = array_values(
+				array_filter(
+					$rules,
+					function ( $rule ) use ( $product ) {
+						return self::rule_applies_to_product( $rule, $product );
+					}
+				)
+			);
+		}
+		unset( $product );
+
+		$rule_item_ids   = self::get_rule_item_ids( $products );
+		$position_ids    = self::get_position_ids();
+		$user_ids        = self::get_employee_user_ids( $employees );
+		$usage_index     = self::get_usage_index( $employees, $user_ids, $rules, $filters['evaluation_date'], $rule_item_ids );
+		$special_work_map = UMS_DB_Special_Work_Assignment::get_active_map( array_column( $employees, 'employee_no' ), $filters['report_month'] );
+		$result           = array();
+
+		foreach ( $employees as $employee ) {
+			$employee_no  = strtoupper( trim( (string) $employee['employee_no'] ) );
+			$position_code = UMS_DB_Annual_Allowance::normalize_position_code( $employee['position'] ?? '' );
+			$position_id   = $position_ids[ $position_code ] ?? 0;
+			$context = array(
+				'employee_no' => $employee_no,
+				'department' => (string) ( $employee['department'] ?? '' ),
+				'team' => (string) ( $employee['team'] ?? '' ),
+				'cost_center' => (string) ( $employee['cost_center'] ?? '' ),
+				'position' => $position_code,
+				'date_joined' => (string) ( $employee['date_joined'] ?? '' ),
+				'evaluation_date' => $filters['evaluation_date'],
+				'special_work_type' => (string) ( $special_work_map[ $employee_no ] ?? '' ),
+			);
+			$resolved = self::get_allocations( $products, $context, $position_id, $filters['report_month'] );
+			$allocations = array();
+			foreach ( $resolved['allocations'] as $allocation ) {
+				$allocation['eligible_item_ids'] = $rule_item_ids[ absint( $allocation['rule']['rule_id'] ) ] ?? $allocation['product']['item_ids'];
+				$allocation['remaining'] = self::get_remaining_quantity(
+					$allocation['quota'], $allocation['rule'], $employee_no,
+					$filters['evaluation_date'], $usage_index, $rule_item_ids
+				);
+				$allocation['exact'] = UMS_DB_Annual_Allowance::requires_exact_quantity( $allocation['rule'] );
+				$allocations[] = $allocation;
+			}
+			$result[ $employee_no ] = array(
+				'employee' => $employee,
+				'allocations' => $allocations,
+				'warnings' => $resolved['warnings'],
+			);
+		}
+		return $result;
+	}
+
 	private static function get_allocations( $products, $context, $position_id, $report_month ) {
 		$allocations = array();
 		$warnings    = array();
@@ -211,7 +281,7 @@ class UMS_Employee_Allowance_Report {
 				);
 				continue;
 			}
-			$allocations[] = array( 'rule' => $rule, 'quota' => $quota, 'group' => $group );
+			$allocations[] = array( 'rule' => $rule, 'quota' => $quota, 'group' => $group, 'product' => $product );
 		}
 		return array( 'allocations' => $allocations, 'warnings' => $warnings );
 	}
