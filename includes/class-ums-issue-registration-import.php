@@ -79,8 +79,8 @@ class UMS_Issue_Registration_Import {
 					continue;
 				}
 				$item = self::select_inventory_item(
-					$allocation['eligible_item_ids'] ?? $allocation['product']['item_ids'],
-					$request['size'], $request['group'], $request['shirt_type'], $inventory_by_id
+					$allocation['product']['item_ids'] ?? array(),
+					$request['size'], (string) ( $allocation['product']['item_variant'] ?? '' ), $inventory_by_id
 				);
 				if ( is_wp_error( $item ) ) {
 					$errors[] = sprintf( 'Dòng %d, CNV %s: %s', $entry['source_row'], $employee_no, $item->get_error_message() );
@@ -225,20 +225,12 @@ class UMS_Issue_Registration_Import {
 		return reset( $candidates );
 	}
 
-	private static function select_inventory_item( $item_ids, $size, $group, $shirt_type, $inventory ) {
+	private static function select_inventory_item( $item_ids, $size, $product_name, $inventory ) {
 		$matches = array();
-		$eligible_products = array();
 		$available_sizes   = array();
 		foreach ( $item_ids as $item_id ) {
 			if ( ! isset( $inventory[ $item_id ] ) ) continue;
 			$item = $inventory[ $item_id ];
-			if ( UMS_Employee_Allowance_Report::get_business_group( $item ) !== $group ) continue;
-			if ( $group === 'shirt' && trim( $shirt_type ) !== '' ) {
-				$is_long = strpos( self::normalize( $item['item_variant'] ), 'dai tay' ) !== false;
-				$wants_long = strpos( self::normalize( $shirt_type ), 'dai tay' ) !== false;
-				if ( $is_long !== $wants_long ) continue;
-			}
-			$eligible_products[] = (string) $item['item_variant'];
 			$available_sizes[]   = self::normalize_size( $item['size'] );
 			if ( self::normalize_size( $item['size'] ) !== $size ) continue;
 			$matches[] = $item;
@@ -246,7 +238,7 @@ class UMS_Issue_Registration_Import {
 		if ( count( $matches ) !== 1 ) {
 			return new WP_Error( 'size', sprintf(
 				'sản phẩm định mức "%s" không có đúng một dòng size "%s" (tìm thấy %d). Size đang có: %s.',
-				implode( ', ', array_values( array_unique( $eligible_products ) ) ), $size, count( $matches ),
+				$product_name !== '' ? $product_name : '(chưa xác định tên)', $size, count( $matches ),
 				empty( $available_sizes ) ? 'không có' : implode( ', ', array_values( array_unique( $available_sizes ) ) )
 			) );
 		}
