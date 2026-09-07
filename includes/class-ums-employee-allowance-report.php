@@ -202,7 +202,16 @@ class UMS_Employee_Allowance_Report {
 		$employee_map = UMS_DB_Organization::get_by_employee_nos( $employee_nos );
 		$employees    = array_values( $employee_map );
 		$products     = self::get_products();
-		$rules        = UMS_DB_Annual_Allowance::get_active_for_report();
+		$rules        = array_values(
+			array_filter(
+				UMS_DB_Annual_Allowance::get_active_for_report(),
+				function ( $rule ) use ( $filters ) {
+					$monthly = json_decode( (string) ( $rule['monthly_quantities'] ?? '' ), true );
+					return ( $rule['apply_type'] ?? '' ) === 'matrix'
+						|| ( is_array( $monthly ) && absint( $monthly[ $filters['report_month'] ] ?? 0 ) > 0 );
+				}
+			)
+		);
 
 		foreach ( $products as &$product ) {
 			$product['rules'] = array_values(
@@ -273,7 +282,7 @@ class UMS_Employee_Allowance_Report {
 			if ( $quota <= 0 ) {
 				continue;
 			}
-			$group = self::resolve_export_group( $product );
+			$group = self::get_business_group( $product );
 			if ( $group === '' ) {
 				$warnings[] = array(
 					'key'     => 'unmapped-' . $product['key'],
@@ -425,15 +434,33 @@ class UMS_Employee_Allowance_Report {
 			if ( $type === 'matrix' && $category_id === 0 && $variant === '' ) {
 				return true;
 			}
-			return $category_id === $product['category_id']
-				&& UMS_DB_Annual_Allowance::normalize_text( $variant ) === UMS_DB_Annual_Allowance::normalize_text( $product['item_variant'] );
+			if ( $category_id === $product['category_id']
+				&& self::normalize_label( $variant ) === self::normalize_label( $product['item_variant'] ) ) {
+				return true;
+			}
+
+			// Danh muc co the duoc sap xep lai sau khi import dinh muc. Ten san pham
+			// van la dinh danh nghiep vu de noi rule voi cac dong size trong kho.
+			$product_name = self::normalize_label( $product['item_variant'] );
+			$source_name  = self::normalize_label( $rule['source_product_name'] ?? '' );
+			return $product_name !== ''
+				&& ( self::normalize_label( $variant ) === $product_name || $source_name === $product_name );
 		}
 		return false;
 	}
 
-	private static function resolve_export_group( $product ) {
+	/**
+	 * Nhom nghiep vu khong thay doi cau truc danh muc kho. Danh muc cha "Ao"
+	 * van co the chua ao phong, ao khoac va ao phao.
+	 */
+	public static function get_business_group( $product_data ) {
+		$product = is_array( $product_data ) ? $product_data : array( 'item_variant' => (string) $product_data );
 		$text = self::normalize_label(
-			implode( ' ', array( $product['parent_category_name'], $product['category_name'], $product['item_variant'] ) )
+			implode( ' ', array(
+				$product['parent_category_name'] ?? '',
+				$product['category_name'] ?? '',
+				$product['item_variant'] ?? '',
+			) )
 		);
 		$groups = apply_filters(
 			'ums_employee_allowance_export_groups',
@@ -454,6 +481,14 @@ class UMS_Employee_Allowance_Report {
 			}
 		}
 		return '';
+	}
+
+	public static function get_business_group_label( $group ) {
+		$labels = array(
+			'hat' => 'Mũ', 'shoes' => 'Giày', 'pants' => 'Quần',
+			'shirt' => 'Áo', 'jacket' => 'Áo khoác', 'coat' => 'Áo phao',
+		);
+		return $labels[ $group ] ?? (string) $group;
 	}
 
 	private static function get_remaining_quantity( $quota, $rule, $employee_no, $evaluation_date, $usage_index, $rule_item_ids ) {

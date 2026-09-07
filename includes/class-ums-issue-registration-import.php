@@ -67,7 +67,7 @@ class UMS_Issue_Registration_Import {
 				if ( $request['quantity'] <= 0 ) {
 					continue;
 				}
-				$allocation = self::select_allocation( $allocations, $request['group'], $request['shirt_type'] );
+				$allocation = self::select_allocation( $allocations, $request['group'], $request['shirt_type'], $request['quantity'] );
 				if ( is_wp_error( $allocation ) ) {
 					$errors[] = sprintf( 'Dòng %d, CNV %s: %s', $entry['source_row'], $employee_no, $allocation->get_error_message() );
 					continue;
@@ -158,13 +158,14 @@ class UMS_Issue_Registration_Import {
 	}
 
 	private static function add_request( &$requests, $group, $shirt_type, $raw_quantity, $size, $row, &$errors ) {
-		$quantity = self::quantity( $raw_quantity, $row, $group, $errors );
+		$group_label = UMS_Employee_Allowance_Report::get_business_group_label( $group );
+		$quantity = self::quantity( $raw_quantity, $row, $group_label, $errors );
 		if ( $quantity <= 0 ) {
 			return;
 		}
 		$size = self::normalize_size( $size );
 		if ( $size === '' ) {
-			$errors[] = sprintf( 'Dòng %d: %s có số lượng %d nhưng thiếu size.', $row, $group, $quantity );
+			$errors[] = sprintf( 'Dòng %d: %s có số lượng %d nhưng thiếu size.', $row, $group_label, $quantity );
 			return;
 		}
 		$requests[] = compact( 'group', 'shirt_type', 'quantity', 'size' );
@@ -180,7 +181,8 @@ class UMS_Issue_Registration_Import {
 		return absint( $value );
 	}
 
-	private static function select_allocation( $allocations, $group, $shirt_type ) {
+	private static function select_allocation( $allocations, $group, $shirt_type, $quantity ) {
+		$group_label = UMS_Employee_Allowance_Report::get_business_group_label( $group );
 		$candidates = array_values( array_filter( $allocations, function ( $item ) use ( $group ) { return $item['group'] === $group; } ) );
 		if ( count( $candidates ) > 1 && $group === 'shirt' && trim( $shirt_type ) !== '' ) {
 			$type = self::normalize( $shirt_type );
@@ -190,8 +192,29 @@ class UMS_Issue_Registration_Import {
 			} ) );
 			if ( ! empty( $filtered ) ) $candidates = $filtered;
 		}
+		if ( count( $candidates ) > 1 ) {
+			$exact_quantity = array_values( array_filter( $candidates, function ( $item ) use ( $quantity ) {
+				return absint( $item['remaining'] ?? 0 ) === absint( $quantity );
+			} ) );
+			if ( count( $exact_quantity ) === 1 ) $candidates = $exact_quantity;
+		}
+		if ( count( $candidates ) > 1 ) {
+			$within_quota = array_values( array_filter( $candidates, function ( $item ) use ( $quantity ) {
+				return absint( $item['remaining'] ?? 0 ) >= absint( $quantity );
+			} ) );
+			if ( count( $within_quota ) === 1 ) $candidates = $within_quota;
+		}
 		if ( count( $candidates ) !== 1 ) {
-			return new WP_Error( 'allocation', sprintf( 'không xác định được đúng một sản phẩm định mức cho nhóm %s (tìm thấy %d).', $group, count( $candidates ) ) );
+			if ( empty( $candidates ) ) {
+				return new WP_Error( 'allocation', sprintf( 'không có định mức còn hiệu lực cho nhóm %s trong kỳ đã chọn.', $group_label ) );
+			}
+			$products = array_values( array_unique( array_map( function ( $item ) {
+				return (string) ( $item['product']['item_variant'] ?? '' );
+			}, $candidates ) ) );
+			return new WP_Error( 'allocation', sprintf(
+				'có nhiều sản phẩm định mức cùng phù hợp nhóm %s và số lượng %d (%s); cần kiểm tra lại các rule bị chồng lặp.',
+				$group_label, absint( $quantity ), implode( ', ', $products )
+			) );
 		}
 		return reset( $candidates );
 	}
@@ -201,7 +224,7 @@ class UMS_Issue_Registration_Import {
 		foreach ( $item_ids as $item_id ) {
 			if ( ! isset( $inventory[ $item_id ] ) || self::normalize_size( $inventory[ $item_id ]['size'] ) !== $size ) continue;
 			$item = $inventory[ $item_id ];
-			if ( self::inventory_group( $item ) !== $group ) continue;
+			if ( UMS_Employee_Allowance_Report::get_business_group( $item ) !== $group ) continue;
 			if ( $group === 'shirt' && trim( $shirt_type ) !== '' ) {
 				$is_long = strpos( self::normalize( $item['item_variant'] ), 'dai tay' ) !== false;
 				$wants_long = strpos( self::normalize( $shirt_type ), 'dai tay' ) !== false;
@@ -213,16 +236,6 @@ class UMS_Issue_Registration_Import {
 			return new WP_Error( 'size', sprintf( 'size "%s" phải khớp đúng một dòng kho, hiện tìm thấy %d.', $size, count( $matches ) ) );
 		}
 		return reset( $matches );
-	}
-
-	private static function inventory_group( $item ) {
-		$text = ' ' . self::normalize( implode( ' ', array(
-			$item['parent_category_name'] ?? '', $item['category_name'] ?? '', $item['item_variant'] ?? '',
-		) ) ) . ' ';
-		foreach ( array( 'coat' => 'ao phao', 'jacket' => 'ao khoac', 'shoes' => 'giay', 'hat' => 'mu', 'pants' => 'quan', 'shirt' => 'ao' ) as $group => $word ) {
-			if ( strpos( $text, ' ' . $word . ' ' ) !== false ) return $group;
-		}
-		return '';
 	}
 
 	public static function import( $preview, $actor_user_id ) {
