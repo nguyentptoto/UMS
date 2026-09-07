@@ -480,6 +480,22 @@ unset( $section );
                 </button>
                 <?php if ( $is_editing ) : ?>
                     <a href="<?php echo esc_url( $page_url . '#ums-inventory-form' ); ?>" class="button">Hủy sửa</a>
+					<?php
+					$delete_item_url = wp_nonce_url(
+						add_query_arg(
+							array( 'action' => 'ums_delete_inventory_item', 'item_id' => absint( $form_values['item_id'] ) ),
+							admin_url( 'admin-post.php' )
+						),
+						'ums_delete_inventory_item_' . absint( $form_values['item_id'] )
+					);
+					?>
+					<a
+						href="<?php echo esc_url( $delete_item_url ); ?>"
+						class="button button-link-delete"
+						onclick="return confirm('Xóa dòng sản phẩm/size này khỏi kho? Thao tác này không thể hoàn tác.');"
+					>
+						<span class="dashicons dashicons-trash" aria-hidden="true"></span> Xóa size này
+					</a>
                 <?php endif; ?>
             </p>
         </form>

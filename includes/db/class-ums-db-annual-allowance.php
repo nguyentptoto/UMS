@@ -457,17 +457,17 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 			return true;
 		}
 		return $special_work_type !== ''
-			&& self::normalize_text( $rule['special_work_type'] ?? '' ) === self::normalize_text( $special_work_type );
+			&& self::normalize_organization_value( $rule['special_work_type'] ?? '' ) === self::normalize_organization_value( $special_work_type );
 	}
 
 	public static function organization_condition_matches( $rule, $department, $team, $cost_center, $position, $position_id ) {
-		if ( ! empty( $rule['department'] ) && self::normalize_text( $rule['department'] ) !== self::normalize_text( $department ) ) {
+		if ( ! empty( $rule['department'] ) && self::normalize_organization_value( $rule['department'] ) !== self::normalize_organization_value( $department ) ) {
 			return false;
 		}
-		if ( ! empty( $rule['team'] ) && self::normalize_text( $rule['team'] ) !== self::normalize_text( $team ) ) {
+		if ( ! empty( $rule['team'] ) && self::normalize_organization_value( $rule['team'] ) !== self::normalize_organization_value( $team ) ) {
 			return false;
 		}
-		if ( ! empty( $rule['cost_center'] ) && self::normalize_text( $rule['cost_center'] ) !== self::normalize_text( $cost_center ) ) {
+		if ( ! empty( $rule['cost_center'] ) && self::normalize_organization_code( $rule['cost_center'] ) !== self::normalize_organization_code( $cost_center ) ) {
 			return false;
 		}
 		if ( ! empty( $rule['position_code'] ) && self::normalize_position_code( $rule['position_code'] ) !== $position ) {
@@ -565,6 +565,20 @@ class UMS_DB_Annual_Allowance extends UMS_DB_Base {
 	public static function normalize_text( $value ) {
 		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+	}
+
+	/**
+	 * Chuan hoa gia tri den tu Excel/Google Sheet de dau cau va khoang trang an
+	 * khong lam mat dong dinh muc phu hop.
+	 */
+	public static function normalize_organization_value( $value ) {
+		$value = strtolower( remove_accents( (string) $value ) );
+		$value = preg_replace( '/[^a-z0-9]+/', ' ', $value );
+		return trim( preg_replace( '/\s+/', ' ', $value ) );
+	}
+
+	public static function normalize_organization_code( $value ) {
+		return strtoupper( preg_replace( '/[^0-9A-Za-z]+/', '', remove_accents( (string) $value ) ) );
 	}
 
 	public static function normalize_position_code( $value ) {

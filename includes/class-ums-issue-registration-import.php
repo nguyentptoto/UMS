@@ -69,7 +69,13 @@ class UMS_Issue_Registration_Import {
 				}
 				$allocation = self::select_allocation( $allocations, $request['group'], $request['shirt_type'], $request['quantity'] );
 				if ( is_wp_error( $allocation ) ) {
-					$errors[] = sprintf( 'Dòng %d, CNV %s: %s', $entry['source_row'], $employee_no, $allocation->get_error_message() );
+					$employee = $allowance_map[ $employee_no ]['employee'];
+					$errors[] = sprintf(
+						'Dòng %d, CNV %s: %s [Bộ phận: %s; Nhóm: %s; Cost center: %s; Vị trí: %s]',
+						$entry['source_row'], $employee_no, $allocation->get_error_message(),
+						(string) ( $employee['department'] ?? '' ), (string) ( $employee['team'] ?? '' ),
+						(string) ( $employee['cost_center'] ?? '' ), (string) ( $employee['position'] ?? '' )
+					);
 					continue;
 				}
 				$item = self::select_inventory_item(
@@ -221,8 +227,10 @@ class UMS_Issue_Registration_Import {
 
 	private static function select_inventory_item( $item_ids, $size, $group, $shirt_type, $inventory ) {
 		$matches = array();
+		$eligible_products = array();
+		$available_sizes   = array();
 		foreach ( $item_ids as $item_id ) {
-			if ( ! isset( $inventory[ $item_id ] ) || self::normalize_size( $inventory[ $item_id ]['size'] ) !== $size ) continue;
+			if ( ! isset( $inventory[ $item_id ] ) ) continue;
 			$item = $inventory[ $item_id ];
 			if ( UMS_Employee_Allowance_Report::get_business_group( $item ) !== $group ) continue;
 			if ( $group === 'shirt' && trim( $shirt_type ) !== '' ) {
@@ -230,10 +238,17 @@ class UMS_Issue_Registration_Import {
 				$wants_long = strpos( self::normalize( $shirt_type ), 'dai tay' ) !== false;
 				if ( $is_long !== $wants_long ) continue;
 			}
+			$eligible_products[] = (string) $item['item_variant'];
+			$available_sizes[]   = self::normalize_size( $item['size'] );
+			if ( self::normalize_size( $item['size'] ) !== $size ) continue;
 			$matches[] = $item;
 		}
 		if ( count( $matches ) !== 1 ) {
-			return new WP_Error( 'size', sprintf( 'size "%s" phải khớp đúng một dòng kho, hiện tìm thấy %d.', $size, count( $matches ) ) );
+			return new WP_Error( 'size', sprintf(
+				'sản phẩm định mức "%s" không có đúng một dòng size "%s" (tìm thấy %d). Size đang có: %s.',
+				implode( ', ', array_values( array_unique( $eligible_products ) ) ), $size, count( $matches ),
+				empty( $available_sizes ) ? 'không có' : implode( ', ', array_values( array_unique( $available_sizes ) ) )
+			) );
 		}
 		return reset( $matches );
 	}
