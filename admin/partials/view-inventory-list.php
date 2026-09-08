@@ -31,11 +31,12 @@ foreach ( $inventory as $item ) {
     $parent_id   = ! empty( $item['parent_category_id'] ) ? absint( $item['parent_category_id'] ) : absint( $item['category_id'] );
     $section_key = $parent_id > 0 ? 'parent-' . $parent_id : 'uncategorized';
     $section_name = ! empty( $item['parent_category_name'] ) ? $item['parent_category_name'] : ( ! empty( $item['category_name'] ) ? $item['category_name'] : 'Chưa phân loại' );
-    $category_name = ! empty( $item['item_variant'] ) ? $item['item_variant'] : ( ! empty( $item['category_name'] ) ? $item['category_name'] : $item['item_type'] );
-    $variant        = trim( (string) $item['item_variant'] );
+    $variant        = trim( (string) ( $item['item_variant'] ?? '' ) );
+    $category_name = $variant !== '' ? $variant : ( ! empty( $item['category_name'] ) ? $item['category_name'] : $item['item_type'] );
     $size           = trim( (string) $item['size'] );
     $size           = $size !== '' ? $size : 'Không size';
-    $row_key        = implode( '|', array( absint( $item['category_id'] ), $variant ) );
+    $variant_key    = strtolower( remove_accents( preg_replace( '/\s+/u', ' ', $variant ) ) );
+    $row_key        = implode( '|', array( absint( $item['category_id'] ), $variant_key ) );
 
     if ( ! isset( $inventory_sections[ $section_key ] ) ) {
         $inventory_sections[ $section_key ] = array(

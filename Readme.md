@@ -254,7 +254,7 @@ Nguồn dữ liệu nằm ở `wp_uniform_inventory_movements`:
 
 ### Import nhập kho bằng template UMS
 
-Trang `Sản phẩm & Tổng kho` có chức năng tải template `.xlsx` trống gồm `STT`, `Loại sản phẩm`, `Số lượng` và `Ghi chú`. Admin tự nhập các dòng hàng cần nhập kho; template không sinh trước danh sách sản phẩm. Size được đặt ở cuối tên, ví dụ `Quần CN Size L` hoặc `Giầy KPR O-010 Size 35`. Importer vẫn đọc được template 5 cột cũ có cột `Size` riêng.
+Trang `Sản phẩm & Tổng kho` có chức năng tải template `.xlsx` trống gồm `STT`, `Loại sản phẩm`, `Số lượng` và `Ghi chú`. Admin tự nhập các dòng hàng cần nhập kho; template không sinh trước danh sách sản phẩm. Size được đặt ở cuối tên, ví dụ `Quần CN Size L` hoặc `Giầy KPR O-010 Size 35`. Importer vẫn đọc được template 5 cột cũ có cột `Size` riêng. Hai cách viết `Giầy` và `Giày` được coi là tương đương khi đối chiếu và tổng hợp nhưng dữ liệu nguồn không bị tự ý đổi tên.
 
 Khi đọc file, UMS tách hậu tố `Size ...` rồi đối chiếu chính xác cặp `Loại sản phẩm + Size` với dữ liệu kho. Nếu tên không có hậu tố size và chưa tồn tại, hệ thống dùng size kỹ thuật `0`; nếu sản phẩm đã có nhiều size, hệ thống yêu cầu bổ sung size vào tên. Dòng khớp với nhiều bản ghi hoặc trùng sản phẩm/size với một dòng khác trong cùng file sẽ bị báo lỗi theo số dòng Excel.
 
