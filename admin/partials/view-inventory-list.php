@@ -35,7 +35,7 @@ foreach ( $inventory as $item ) {
     $category_name = $variant !== '' ? $variant : ( ! empty( $item['category_name'] ) ? $item['category_name'] : $item['item_type'] );
     $size           = trim( (string) $item['size'] );
     $size           = $size !== '' ? $size : 'Không size';
-    $variant_key    = strtolower( remove_accents( preg_replace( '/\s+/u', ' ', $variant ) ) );
+    $variant_key    = UMS_DB_Inventory::normalize_product_identity( $variant );
     $row_key        = implode( '|', array( absint( $item['category_id'] ), $variant_key ) );
 
     if ( ! isset( $inventory_sections[ $section_key ] ) ) {

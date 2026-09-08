@@ -473,11 +473,7 @@ class UMS_Inventory_Import {
 	}
 
 	private static function normalize( $value ) {
-		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
-		// Đồng nhất với collation utf8mb4_unicode_ci của MySQL để bước xem trước
-		// và bước xác nhận không hiểu khác nhau các tên như "Giày" / "Giầy".
-		$value = remove_accents( $value );
-		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+		return UMS_DB_Inventory::normalize_product_identity( $value );
 	}
 
 	private static function worksheet_xml() {

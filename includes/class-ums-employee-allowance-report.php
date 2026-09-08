@@ -360,7 +360,7 @@ class UMS_Employee_Allowance_Report {
 	private static function get_products() {
 		$groups = array();
 		foreach ( UMS_DB_Inventory::get_all() as $item ) {
-			$key = absint( $item['category_id'] ) . '|' . UMS_DB_Annual_Allowance::normalize_text( $item['item_variant'] );
+			$key = absint( $item['category_id'] ) . '|' . UMS_DB_Inventory::normalize_product_identity( $item['item_variant'] );
 			if ( ! isset( $groups[ $key ] ) ) {
 				$groups[ $key ] = array(
 					'key'                  => $key,

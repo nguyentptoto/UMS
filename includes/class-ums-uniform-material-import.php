@@ -286,9 +286,7 @@ class UMS_Uniform_Material_Import {
 	}
 
 	private static function normalize( $value ) {
-		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
-		$value = remove_accents( $value );
-		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+		return UMS_DB_Inventory::normalize_product_identity( $value );
 	}
 
 	private static function find_size_matches( $rows, $size ) {

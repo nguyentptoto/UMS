@@ -4,6 +4,18 @@
  */
 class UMS_DB_Inventory extends UMS_DB_Base {
 
+	/**
+	 * Khóa so sánh tên sản phẩm, giữ nguyên tên hiển thị trong database.
+	 * Ví dụ "Giầy Simon TS5511" và "Giày Simon TS5511" có cùng khóa.
+	 */
+	public static function normalize_product_identity( $product_name ) {
+		$product_name = preg_replace( '/\s+/u', ' ', trim( (string) $product_name ) );
+		$product_name = remove_accents( $product_name );
+		return function_exists( 'mb_strtolower' )
+			? mb_strtolower( $product_name, 'UTF-8' )
+			: strtolower( $product_name );
+	}
+
     /**
      * Tên bảng thực tế trong MySQL.
      */
