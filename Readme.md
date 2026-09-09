@@ -176,12 +176,15 @@ Import chạy theo batch trong transaction và cập nhật các rule trùng kh�
 
 Thứ tự ưu tiên khi kiểm tra cấp phát:
 
-1. `newcomer_shoe_april` và `newcomer_shoe_september`: giày T4/T9 N+1 theo đúng sản phẩm được chỉ định.
-2. `newcomer_september_override`: cấp bù tháng 9 theo cost center chi tiết.
-3. `newcomer_september`: cấp bù tháng 9 tổng quát cho CNV vào trong năm.
-4. `newcomer`: cấp ban đầu cho CNV mới.
-5. `annual`: định mức định kỳ tháng 4/tháng 9.
-6. Rule thủ công cũ khi nhân viên không thuộc ma trận Excel.
+1. `special_work_april` và `special_work_september`: định mức công việc đặc thù của kỳ tương ứng.
+2. `newcomer_shoe_april` và `newcomer_shoe_september`: giày T4/T9 N+1 theo đúng sản phẩm được chỉ định.
+3. `newcomer_september_override`: cấp bù tháng 9 theo cost center chi tiết.
+4. `newcomer_september`: cấp bù tháng 9 tổng quát cho CNV vào trong năm.
+5. `newcomer`: cấp ban đầu cho CNV mới.
+6. `annual`: định mức định kỳ tháng 4/tháng 9.
+7. Rule thủ công cũ khi nhân viên không thuộc ma trận Excel.
+
+Ô chọn `Kỳ cấp` vẫn chỉ gồm T4 và T9. Đây là mốc thời gian đối chiếu, không phải bộ lọc loại định mức: trong kỳ đã chọn, hệ thống xét toàn bộ rule phù hợp với từng CNV (định kỳ, CNV mới, giày N+1 và công việc đặc thù), sau đó dùng ma trận có ưu tiên cao nhất cho từng sản phẩm để không cộng chồng các định mức thay thế nhau.
 
 Với các rule CNV mới, số lượng của áo, quần, áo khoác, áo phao và giày là hạn mức tối đa nên có thể đăng ký ít hơn nhưng không được vượt quá phần còn lại. Riêng mũ phải nhận đúng số lượng còn lại: ví dụ định mức mũ là `2` thì nhập `1` hoặc `3` đều bị từ chối. Hệ thống vẫn cộng lịch sử đã cấp để ngăn cấp lặp.
 

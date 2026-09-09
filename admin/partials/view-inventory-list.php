@@ -256,7 +256,7 @@ unset( $section );
 
 	<div class="ums-panel" id="ums-issue-registration-import">
 		<h2>Import đăng ký cấp phát và xuất kho</h2>
-		<p>File chốt phải giữ nguyên cấu trúc Google Form. Hệ thống kiểm tra mã CNV, bản ghi trùng, size, định mức còn lại và tồn kho trước khi cho phép xuất.</p>
+		<p>File chốt phải giữ nguyên cấu trúc Google Form. Trong kỳ T4/T9 đã chọn, hệ thống xét toàn bộ định mức có thể áp dụng cho từng CNV, gồm định kỳ, CNV mới, giày N+1 và công việc đặc thù.</p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
 			<?php wp_nonce_field( 'ums_preview_issue_registration_import' ); ?>
 			<input type="hidden" name="action" value="ums_preview_issue_registration_import">
