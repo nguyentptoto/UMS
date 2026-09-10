@@ -315,7 +315,7 @@ ALTER TABLE `wp_uniform_organization_employees`
 
 ## Đồng Bộ Sơ Đồ Tổ Chức Từ Google Sheet
 
-Plugin cung cấp receiver `POST /wp-json/ums/v1/sync-organization`. Endpoint xác thực bằng header `X-Sync-Token`; token được lưu trong `wp_options` và hiển thị tại Admin menu `Đồng bộ Sheet`. Sheet nguồn duy nhất là `Danh sách CNV`, gồm các cột `STT`, `Mã nhân viên`, `Họ và tên`, `Phòng`, `Nhóm`, `Mã cost center`, `Ngày vào`, `Vị trí`, `Vị trí trước TT`, `Email`.
+Plugin cung cấp receiver `POST /wp-json/ums/v1/sync-organization`. Endpoint xác thực bằng header `X-Sync-Token`; token được lưu trong `wp_options` và hiển thị tại Admin menu `Đồng bộ Sheet`. Sheet nguồn duy nhất là `Danh sách CNV`, gồm các cột `STT`, `Mã nhân viên`, `Họ và tên`, `Phòng`, `Nhóm`, `Mã cost center`, `Ngày vào`, `Vị trí`, `Vị trí trước TT`, `Email`, `Ngày ký hợp đồng đầu tiên`.
 
 Do Google Workspace có SSO và WordPress chạy nội bộ, hệ thống dùng mô hình Popup Bridge thay vì GAS trigger server-to-server. Admin bấm `Đồng bộ từ Google Sheet` trong trang `Sơ đồ tổ chức TVN`, plugin mở Google Apps Script Web App bằng `window.open()`, popup đọc Sheet bằng phiên SSO trình duyệt rồi `fetch()` JSON về endpoint nội bộ của WordPress. Nếu trình duyệt chặn POST trực tiếp từ popup, popup chuyển payload về trang Admin bằng `postMessage` để Admin POST cùng-origin vào UMS.
 

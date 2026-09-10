@@ -412,6 +412,7 @@ CREATE TABLE `wp_uniform_organization_employees` (
     `position` VARCHAR(50) DEFAULT NULL,
     `cost_center` VARCHAR(100) DEFAULT NULL,
     `date_joined` DATE DEFAULT NULL,
+	`first_contract_date` DATE DEFAULT NULL,
     `previous_position` VARCHAR(50) DEFAULT NULL,
     `email` VARCHAR(255) DEFAULT NULL,
     `factory` VARCHAR(255) DEFAULT NULL,
@@ -427,6 +428,7 @@ CREATE TABLE `wp_uniform_organization_employees` (
     KEY `idx_department` (`department`(100)),
     KEY `idx_cost_center` (`cost_center`),
     KEY `idx_date_joined` (`date_joined`),
+	KEY `idx_first_contract_date` (`first_contract_date`),
     KEY `idx_factory` (`factory`(100)),
     KEY `idx_source_updated_at` (`source_updated_at`),
     KEY `idx_synced_at` (`synced_at`)
@@ -463,3 +465,8 @@ CREATE TABLE IF NOT EXISTS `wp_uniform_special_work_assignments` (
 	KEY `idx_period_work_type` (`period_month`, `special_work_type`(191)),
 	KEY `idx_is_active` (`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- UPDATE CHO DATABASE DA TON TAI: NGAY KY HOP DONG DAU TIEN TU SO DO TO CHUC
+ALTER TABLE `wp_uniform_organization_employees`
+	ADD COLUMN IF NOT EXISTS `first_contract_date` DATE DEFAULT NULL AFTER `date_joined`,
+	ADD INDEX IF NOT EXISTS `idx_first_contract_date` (`first_contract_date`);

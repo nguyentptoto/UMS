@@ -257,6 +257,7 @@ class UMS_Organization_Sync {
 		update_user_meta( $user_id, 'ums_department', isset( $row['department'] ) ? sanitize_text_field( $row['department'] ) : '' );
 		update_user_meta( $user_id, 'ums_job_position', isset( $row['position'] ) ? sanitize_text_field( $row['position'] ) : '' );
 		update_user_meta( $user_id, 'ums_date_joined', isset( $row['date_joined'] ) ? sanitize_text_field( $row['date_joined'] ) : '' );
+		update_user_meta( $user_id, 'ums_first_contract_date', isset( $row['first_contract_date'] ) ? sanitize_text_field( $row['first_contract_date'] ) : '' );
 		update_user_meta( $user_id, 'ums_organization_synced_at', current_time( 'mysql', 0 ) );
 
 		return array(
@@ -462,6 +463,7 @@ class UMS_Organization_Sync {
 			'factory'     => '',
 			'cost_center' => sanitize_text_field( self::first_scalar( $row, array( 'cost_center', 'mã cost center', 'ma cost center' ) ) ),
 			'date_joined' => self::normalize_date( self::first_scalar( $row, array( 'date_joined', 'ngày vào', 'ngay vao' ) ) ),
+			'first_contract_date' => self::normalize_date( self::first_scalar( $row, array( 'first_contract_date', 'ngày ký hợp đồng đầu tiên', 'ngay ky hop dong dau tien' ) ) ),
 			'previous_position' => sanitize_text_field( self::first_scalar( $row, array( 'previous_position', 'vị trí trước tt', 'vi tri truoc tt' ) ) ),
 			'time_create' => self::normalize_datetime( self::first_scalar( $row, array( 'source_created_at', 'time_create', 'created_at' ) ) ),
 			'time_update' => self::normalize_datetime( self::first_scalar( $row, array( 'source_updated_at', 'time_update', 'updated_at' ) ) ),

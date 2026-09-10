@@ -15,6 +15,7 @@ Ngày vào
 Vị trí
 Vị trí trước TT
 Email
+Ngày ký hợp đồng đầu tiên
 ```
 
 ## Vì sao popup đang mở giao diện app cũ?

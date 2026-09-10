@@ -649,10 +649,20 @@ class UMS_Admin {
             'order'      => isset( $_POST['sortorder'] ) ? sanitize_key( wp_unslash( $_POST['sortorder'] ) ) : 'asc',
         );
 
-        wp_send_json(
-            array(
-                'rows'  => UMS_DB_Organization::get_page( $args ),
-                'total' => UMS_DB_Organization::get_count( $args ),
+		$rows = UMS_DB_Organization::get_page( $args );
+		foreach ( $rows as &$row ) {
+			foreach ( array( 'date_joined', 'first_contract_date' ) as $date_field ) {
+				if ( ! empty( $row[ $date_field ] ) ) {
+					$row[ $date_field ] = mysql2date( 'd/m/Y', $row[ $date_field ] );
+				}
+			}
+		}
+		unset( $row );
+
+		wp_send_json(
+			array(
+				'rows'  => $rows,
+				'total' => UMS_DB_Organization::get_count( $args ),
             )
         );
     }

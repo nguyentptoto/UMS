@@ -46,6 +46,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			'position',
 			'cost_center',
 			'date_joined',
+			'first_contract_date',
 			'previous_position',
 			'email',
 			'factory',
@@ -60,7 +61,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		$table   = self::table();
 
 		$sql = "SELECT source_id, sheet_stt, source_version, employee_no, full_name, division, department, section, team,
-			position, cost_center, date_joined, previous_position, email, factory, source_created_at, source_updated_at, synced_at
+			position, cost_center, date_joined, first_contract_date, previous_position, email, factory, source_created_at, source_updated_at, synced_at
 			FROM $table
 			WHERE " . implode( ' AND ', $where ) . "
 			ORDER BY $orderby $order, source_id ASC
@@ -101,7 +102,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		}
 
 		return self::db()->get_results(
-			'SELECT employee_no, full_name, department, team, position, date_joined
+			'SELECT employee_no, full_name, department, team, position, date_joined, first_contract_date
 			FROM ' . self::table() . "
 			WHERE employee_no <> ''
 			ORDER BY employee_no ASC",
@@ -163,7 +164,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			$where[] = '(' . implode( ' OR ', $prefix_conditions ) . ')';
 		}
 
-		$sql = 'SELECT employee_no, full_name, department, team, position, cost_center, date_joined, email, factory
+		$sql = 'SELECT employee_no, full_name, department, team, position, cost_center, date_joined, first_contract_date, email, factory
 			FROM ' . self::table() . '
 			WHERE ' . implode( ' AND ', $where ) . '
 			ORDER BY employee_no ASC';
@@ -210,7 +211,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			$placeholders = implode( ',', array_fill( 0, count( $batch ), '%s' ) );
 			$rows = self::db()->get_results(
 				self::db()->prepare(
-					'SELECT employee_no, full_name, department, team, position, cost_center, date_joined, email, factory
+					'SELECT employee_no, full_name, department, team, position, cost_center, date_joined, first_contract_date, email, factory
 					FROM ' . self::table() . " WHERE employee_no IN ($placeholders)",
 					$batch
 				),
@@ -254,7 +255,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		$params       = array();
 
 		foreach ( $rows as $row ) {
-			$placeholders[] = '(%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)';
+			$placeholders[] = '(%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)';
 			$params[] = absint( $row['id'] );
 			$params[] = absint( $row['sheet_stt'] );
 			$params[] = (int) $row['version'];
@@ -267,6 +268,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			$params[] = $row['position'];
 			$params[] = $row['cost_center'];
 			$params[] = $row['date_joined'];
+			$params[] = $row['first_contract_date'];
 			$params[] = $row['previous_position'];
 			$params[] = $row['email'];
 			$params[] = $row['factory'];
@@ -279,12 +281,12 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		$table = self::table();
 		$sql = "INSERT INTO $table
 			(source_id, sheet_stt, source_version, employee_no, full_name, division, department, section, team, position,
-			cost_center, date_joined, previous_position, email, factory, source_created_at, source_updated_at, synced_at, sync_token)
+			cost_center, date_joined, first_contract_date, previous_position, email, factory, source_created_at, source_updated_at, synced_at, sync_token)
 			VALUES " . implode( ',', $placeholders ) . '
 			ON DUPLICATE KEY UPDATE
 			sheet_stt = VALUES(sheet_stt), source_version = VALUES(source_version), employee_no = VALUES(employee_no), full_name = VALUES(full_name),
 			division = VALUES(division), department = VALUES(department), section = VALUES(section), team = VALUES(team),
-			position = VALUES(position), cost_center = VALUES(cost_center), date_joined = VALUES(date_joined),
+			position = VALUES(position), cost_center = VALUES(cost_center), date_joined = VALUES(date_joined), first_contract_date = VALUES(first_contract_date),
 			previous_position = VALUES(previous_position), email = VALUES(email), factory = VALUES(factory),
 			source_created_at = VALUES(source_created_at), source_updated_at = VALUES(source_updated_at),
 			synced_at = VALUES(synced_at), sync_token = VALUES(sync_token)';
