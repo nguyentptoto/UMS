@@ -273,9 +273,10 @@ unset( $section );
 		<div class="ums-panel ums-issue-registration-preview">
 			<h2>Kết quả kiểm tra: <?php echo esc_html( $issue_import_preview['file_name'] ); ?></h2>
 			<p><?php echo esc_html( sprintf(
-				'Kỳ T%d/%d: %d CNV, %d dòng cấp phát, tổng số lượng %s, %d lỗi.',
+				'Kỳ T%d/%d: %d CNV, %d dòng cấp phát, tổng số lượng %s, %d lỗi chặn và %d cảnh báo.',
 				$issue_import_preview['month'], $issue_import_preview['year'], $issue_import_preview['employee_count'],
-				count( $issue_import_preview['details'] ), number_format_i18n( $issue_import_preview['total_quantity'] ), count( $issue_import_preview['errors'] )
+				count( $issue_import_preview['details'] ), number_format_i18n( $issue_import_preview['total_quantity'] ),
+				count( $issue_import_preview['errors'] ), count( $issue_import_preview['warnings'] ?? array() )
 			) ); ?></p>
 
 			<?php if ( ! empty( $issue_import_preview['errors'] ) ) : ?>
@@ -287,7 +288,20 @@ unset( $section );
 					<?php endforeach; ?>
 					</tbody></table>
 				</div>
-			<?php else : ?>
+			<?php endif; ?>
+
+			<?php if ( ! empty( $issue_import_preview['warnings'] ) ) : ?>
+				<div class="notice notice-warning inline"><p><strong>Cảnh báo và điều chỉnh tự động:</strong> Các dòng hợp lệ khác vẫn có thể được xuất kho.</p></div>
+				<div class="ums-table-scroll" style="max-height:520px">
+					<table class="widefat striped"><thead><tr><th>STT</th><th>Nội dung cảnh báo</th></tr></thead><tbody>
+					<?php foreach ( $issue_import_preview['warnings'] as $index => $warning ) : ?>
+						<tr><td><?php echo esc_html( $index + 1 ); ?></td><td><?php echo esc_html( $warning ); ?></td></tr>
+					<?php endforeach; ?>
+					</tbody></table>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( empty( $issue_import_preview['errors'] ) && ! empty( $issue_import_preview['details'] ) ) : ?>
 				<?php
 				$issue_summary = array();
 				foreach ( $issue_import_preview['details'] as $detail ) {
@@ -309,6 +323,8 @@ unset( $section );
 					<input type="hidden" name="issue_preview_token" value="<?php echo esc_attr( $issue_preview_token ); ?>">
 					<p class="submit"><button type="submit" class="button button-primary">Xác nhận xuất kho toàn bộ</button></p>
 				</form>
+			<?php elseif ( empty( $issue_import_preview['errors'] ) ) : ?>
+				<div class="notice notice-info inline"><p>Không có dòng cấp phát hợp lệ để xuất kho.</p></div>
 			<?php endif; ?>
 		</div>
 	<?php endif; ?>

@@ -27,16 +27,16 @@ class UMS_Issue_Registration_Import {
 			}
 			$employee_no = strtoupper( preg_replace( '/\s+/u', '', trim( (string) ( $row['C'] ?? '' ) ) ) );
 			if ( ! preg_match( '/^[A-Z][0-9]{6}$/', $employee_no ) ) {
-				$errors[] = sprintf( 'Dòng %d: Mã nhân viên "%s" sai định dạng (yêu cầu 1 chữ cái và 6 chữ số).', $row_number, $employee_no );
+				$warnings[] = sprintf( 'Dòng %d: Mã nhân viên "%s" sai định dạng nên dòng này không được cấp.', $row_number, $employee_no );
 				continue;
 			}
 			$code_rows[ $employee_no ][] = $row_number;
-			$parsed[] = self::parse_row( $row_number, $row, $employee_no, $errors );
+			$parsed[] = self::parse_row( $row_number, $row, $employee_no, $warnings );
 		}
 
 		foreach ( $code_rows as $employee_no => $row_numbers ) {
 			if ( count( $row_numbers ) > 1 ) {
-				$errors[] = sprintf( 'Mã nhân viên %s xuất hiện nhiều lần tại các dòng %s.', $employee_no, implode( ', ', $row_numbers ) );
+				$warnings[] = sprintf( 'Mã nhân viên %s xuất hiện nhiều lần tại các dòng %s nên các dòng này không được cấp.', $employee_no, implode( ', ', $row_numbers ) );
 			}
 		}
 
@@ -44,7 +44,7 @@ class UMS_Issue_Registration_Import {
 		$organization = UMS_DB_Organization::get_by_employee_nos( $employee_nos );
 		foreach ( $employee_nos as $employee_no ) {
 			if ( ! isset( $organization[ $employee_no ] ) ) {
-				$errors[] = sprintf( 'Mã nhân viên %s không tồn tại trong Sơ đồ tổ chức TVN.', $employee_no );
+				$warnings[] = sprintf( 'Mã nhân viên %s không tồn tại trong Sơ đồ tổ chức TVN nên không được cấp; các CNV hợp lệ khác vẫn được xử lý.', $employee_no );
 			}
 		}
 
@@ -63,6 +63,7 @@ class UMS_Issue_Registration_Import {
 			}
 			$allocations = $allowance_map[ $employee_no ]['allocations'];
 			$requested_by_rule = array();
+			$accepted_by_rule  = array();
 			foreach ( $entry['requests'] as $request ) {
 				if ( $request['quantity'] <= 0 ) {
 					continue;
@@ -70,7 +71,7 @@ class UMS_Issue_Registration_Import {
 				$allocation = self::select_allocation( $allocations, $request['group'], $request['shirt_type'], $request['quantity'] );
 				if ( is_wp_error( $allocation ) ) {
 					$employee = $allowance_map[ $employee_no ]['employee'];
-					$errors[] = sprintf(
+					$warnings[] = sprintf(
 						'Dòng %d, CNV %s: %s [Bộ phận: %s; Nhóm: %s; Cost center: %s; Vị trí: %s]',
 						$entry['source_row'], $employee_no, $allocation->get_error_message(),
 						(string) ( $employee['department'] ?? '' ), (string) ( $employee['team'] ?? '' ),
@@ -83,16 +84,30 @@ class UMS_Issue_Registration_Import {
 					$request['size'], (string) ( $allocation['product']['item_variant'] ?? '' ), $inventory_by_id
 				);
 				if ( is_wp_error( $item ) ) {
-					$errors[] = sprintf( 'Dòng %d, CNV %s: %s', $entry['source_row'], $employee_no, $item->get_error_message() );
+					$warnings[] = sprintf( 'Dòng %d, CNV %s: %s Sản phẩm này không được cấp.', $entry['source_row'], $employee_no, $item->get_error_message() );
 					continue;
 				}
 				$rule_id = absint( $allocation['rule']['rule_id'] );
 				$requested_by_rule[ $rule_id ] = ( $requested_by_rule[ $rule_id ] ?? 0 ) + $request['quantity'];
+				$remaining = absint( $allocation['remaining'] );
+				$available = max( 0, $remaining - absint( $accepted_by_rule[ $rule_id ] ?? 0 ) );
+				$accepted  = min( absint( $request['quantity'] ), $available );
+				$accepted_by_rule[ $rule_id ] = absint( $accepted_by_rule[ $rule_id ] ?? 0 ) + $accepted;
+				if ( $accepted < absint( $request['quantity'] ) ) {
+					$warnings[] = sprintf(
+						'Dòng %d, CNV %s: "%s" đăng ký %d nhưng định mức còn lại là %d; hệ thống chỉ cấp %d.',
+						$entry['source_row'], $employee_no, (string) $item['item_variant'],
+						absint( $request['quantity'] ), $available, $accepted
+					);
+				}
+				if ( $accepted <= 0 ) {
+					continue;
+				}
 				$details[] = array(
 					'source_row' => $entry['source_row'], 'employee_no' => $employee_no,
 					'full_name' => (string) $allowance_map[ $employee_no ]['employee']['full_name'],
 					'item_id' => absint( $item['item_id'] ), 'product' => (string) $item['item_variant'],
-					'size' => (string) $item['size'], 'quantity' => $request['quantity'],
+					'size' => (string) $item['size'], 'quantity' => $accepted,
 					'rule_id' => $rule_id, 'quota' => absint( $allocation['quota'] ),
 					'remaining' => absint( $allocation['remaining'] ), 'exact' => ! empty( $allocation['exact'] ),
 				);
@@ -101,12 +116,14 @@ class UMS_Issue_Registration_Import {
 			foreach ( $allocations as $allocation ) {
 				$rule_id   = absint( $allocation['rule']['rule_id'] );
 				$requested = absint( $requested_by_rule[ $rule_id ] ?? 0 );
+				$accepted  = absint( $accepted_by_rule[ $rule_id ] ?? 0 );
 				$remaining = absint( $allocation['remaining'] );
 				$label     = (string) $allocation['product']['item_variant'];
-				if ( ! empty( $allocation['exact'] ) && $requested !== $remaining ) {
-					$errors[] = sprintf( 'Dòng %d, CNV %s: "%s" phải đăng ký đúng %d, hiện đăng ký %d.', $entry['source_row'], $employee_no, $label, $remaining, $requested );
-				} elseif ( $requested > $remaining ) {
-					$errors[] = sprintf( 'Dòng %d, CNV %s: "%s" đăng ký %d, vượt định mức còn lại %d (định mức kỳ %d).', $entry['source_row'], $employee_no, $label, $requested, $remaining, absint( $allocation['quota'] ) );
+				if ( ! empty( $allocation['exact'] ) && $requested < $remaining ) {
+					$warnings[] = sprintf(
+						'Dòng %d, CNV %s: "%s" có định mức %d nhưng chỉ đăng ký %d; hệ thống cấp theo số đã đăng ký là %d.',
+						$entry['source_row'], $employee_no, $label, $remaining, $requested, $accepted
+					);
 				}
 			}
 		}
@@ -128,7 +145,7 @@ class UMS_Issue_Registration_Import {
 			$errors[] = 'File này đã được xác nhận xuất kho trước đó; không thể nhập lại.';
 		}
 		if ( empty( $details ) && empty( $errors ) ) {
-			$errors[] = 'File không có sản phẩm nào cần xuất kho.';
+			$warnings[] = 'File không có dòng cấp phát hợp lệ; không có dữ liệu để xác nhận xuất kho.';
 		}
 
 		return array(
@@ -139,49 +156,49 @@ class UMS_Issue_Registration_Import {
 		);
 	}
 
-	private static function parse_row( $row_number, $row, $employee_no, &$errors ) {
+	private static function parse_row( $row_number, $row, $employee_no, &$warnings ) {
 		$requests = array();
-		self::add_request( $requests, 'hat', '', $row['G'] ?? '', '0', $row_number, $errors );
-		self::add_request( $requests, 'shoes', '', $row['H'] ?? '', $row['I'] ?? '', $row_number, $errors );
-		self::add_request( $requests, 'pants', '', $row['K'] ?? '', $row['L'] ?? '', $row_number, $errors );
-		$shirt_qty = self::quantity( $row['N'] ?? '', $row_number, 'áo', $errors );
+		self::add_request( $requests, 'hat', '', $row['G'] ?? '', '0', $row_number, $warnings );
+		self::add_request( $requests, 'shoes', '', $row['H'] ?? '', $row['I'] ?? '', $row_number, $warnings );
+		self::add_request( $requests, 'pants', '', $row['K'] ?? '', $row['L'] ?? '', $row_number, $warnings );
+		$shirt_qty = self::quantity( $row['N'] ?? '', $row_number, 'áo', $warnings );
 		if ( $shirt_qty === 1 ) {
-			self::add_request( $requests, 'shirt', (string) ( $row['P'] ?? '' ), 1, $row['O'] ?? '', $row_number, $errors );
+			self::add_request( $requests, 'shirt', (string) ( $row['P'] ?? '' ), 1, $row['O'] ?? '', $row_number, $warnings );
 		} elseif ( $shirt_qty === 2 ) {
 			$type = trim( (string) ( $row['R'] ?? '' ) );
 			if ( strpos( self::normalize( $type ), '1 ao dai tay 1 ao coc tay' ) !== false ) {
-				self::add_request( $requests, 'shirt', 'Dài tay', 1, $row['Q'] ?? '', $row_number, $errors );
-				self::add_request( $requests, 'shirt', 'Cộc tay', 1, $row['Q'] ?? '', $row_number, $errors );
+				self::add_request( $requests, 'shirt', 'Dài tay', 1, $row['Q'] ?? '', $row_number, $warnings );
+				self::add_request( $requests, 'shirt', 'Cộc tay', 1, $row['Q'] ?? '', $row_number, $warnings );
 			} else {
-				self::add_request( $requests, 'shirt', $type, 2, $row['Q'] ?? '', $row_number, $errors );
+				self::add_request( $requests, 'shirt', $type, 2, $row['Q'] ?? '', $row_number, $warnings );
 			}
 		} elseif ( $shirt_qty > 0 ) {
-			$errors[] = sprintf( 'Dòng %d: số lượng áo %d không có nhánh size/loại hợp lệ trong biểu mẫu.', $row_number, $shirt_qty );
+			$warnings[] = sprintf( 'Dòng %d: số lượng áo %d không có nhánh size/loại hợp lệ trong biểu mẫu nên áo không được cấp.', $row_number, $shirt_qty );
 		}
-		self::add_request( $requests, 'jacket', '', $row['T'] ?? '', $row['U'] ?? '', $row_number, $errors );
-		self::add_request( $requests, 'coat', '', $row['W'] ?? '', $row['X'] ?? '', $row_number, $errors );
+		self::add_request( $requests, 'jacket', '', $row['T'] ?? '', $row['U'] ?? '', $row_number, $warnings );
+		self::add_request( $requests, 'coat', '', $row['W'] ?? '', $row['X'] ?? '', $row_number, $warnings );
 		return array( 'source_row' => $row_number, 'employee_no' => $employee_no, 'requests' => $requests );
 	}
 
-	private static function add_request( &$requests, $group, $shirt_type, $raw_quantity, $size, $row, &$errors ) {
+	private static function add_request( &$requests, $group, $shirt_type, $raw_quantity, $size, $row, &$warnings ) {
 		$group_label = UMS_Employee_Allowance_Report::get_business_group_label( $group );
-		$quantity = self::quantity( $raw_quantity, $row, $group_label, $errors );
+		$quantity = self::quantity( $raw_quantity, $row, $group_label, $warnings );
 		if ( $quantity <= 0 ) {
 			return;
 		}
 		$size = self::normalize_size( $size );
 		if ( $size === '' ) {
-			$errors[] = sprintf( 'Dòng %d: %s có số lượng %d nhưng thiếu size.', $row, $group_label, $quantity );
+			$warnings[] = sprintf( 'Dòng %d: %s có số lượng %d nhưng thiếu size nên sản phẩm này không được cấp.', $row, $group_label, $quantity );
 			return;
 		}
 		$requests[] = compact( 'group', 'shirt_type', 'quantity', 'size' );
 	}
 
-	private static function quantity( $value, $row, $label, &$errors ) {
+	private static function quantity( $value, $row, $label, &$warnings ) {
 		$value = trim( (string) $value );
 		if ( $value === '' ) return 0;
 		if ( ! preg_match( '/^\d+$/', $value ) ) {
-			$errors[] = sprintf( 'Dòng %d: số lượng %s "%s" không phải số nguyên không âm.', $row, $label, $value );
+			$warnings[] = sprintf( 'Dòng %d: số lượng %s "%s" không phải số nguyên không âm nên sản phẩm này không được cấp.', $row, $label, $value );
 			return 0;
 		}
 		return absint( $value );

@@ -186,7 +186,7 @@ Thứ tự ưu tiên khi kiểm tra cấp phát:
 
 Ô chọn `Kỳ cấp` vẫn chỉ gồm T4 và T9. Đây là mốc thời gian đối chiếu, không phải bộ lọc loại định mức: trong kỳ đã chọn, hệ thống xét toàn bộ rule phù hợp với từng CNV (định kỳ, CNV mới, giày N+1 và công việc đặc thù), sau đó dùng ma trận có ưu tiên cao nhất cho từng sản phẩm để không cộng chồng các định mức thay thế nhau.
 
-Với các rule CNV mới, số lượng của áo, quần, áo khoác, áo phao và giày là hạn mức tối đa nên có thể đăng ký ít hơn nhưng không được vượt quá phần còn lại. Riêng mũ phải nhận đúng số lượng còn lại: ví dụ định mức mũ là `2` thì nhập `1` hoặc `3` đều bị từ chối. Hệ thống vẫn cộng lịch sử đã cấp để ngăn cấp lặp.
+Khi import file đăng ký xuất kho, số lượng còn lại là giới hạn cấp tối đa. Nếu CNV đăng ký ít hơn hoặc bằng giới hạn thì cấp theo số đăng ký; nếu đăng ký nhiều hơn thì hệ thống tự giảm xuống đúng số lượng còn lại và ghi cảnh báo. Với sản phẩm không thuộc định mức, size không hợp lệ hoặc CNV không có trong Sơ đồ tổ chức TVN, hệ thống bỏ phần cấp tương ứng và ghi cảnh báo nhưng vẫn cho nhập các dòng hợp lệ khác. Thiếu tồn kho vẫn là lỗi chặn; file đã xuất trước đó cũng bị chặn để tránh trừ kho hai lần. Hệ thống tiếp tục cộng lịch sử đã cấp để ngăn cấp lặp.
 
 Marker của hai ma trận giày được gắn theo từng sản phẩm UMS sau bước ánh xạ. Vì vậy loại giày có số lượng `0` không rơi xuống định mức khác, đồng thời scope giày không che định mức áo, quần hoặc mũ trong cùng kỳ cấp phát.
 
