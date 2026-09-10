@@ -11,9 +11,71 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<h1 class="wp-heading-inline">UMS - Tính số lượng PR</h1>
 	<hr class="wp-header-end">
 
+	<?php if ( ! empty( $notice ) ) : ?>
+		<div class="notice notice-<?php echo esc_attr( $notice['type'] ); ?> is-dismissible">
+			<p><?php echo esc_html( $notice['message'] ); ?></p>
+		</div>
+	<?php endif; ?>
+
 	<?php if ( ! $table_ready ) : ?>
 		<div class="notice notice-error inline"><p>Chưa có đầy đủ master mã SAP hoặc bảng kết quả tính số lượng cấp phát. Hãy cập nhật <code>ums.sql</code>, import master SAP và chốt kết quả cấp phát trước khi lập PR.</p></div>
 	<?php endif; ?>
+
+	<div class="ums-panel">
+		<h2>SL cấp phát đã chốt</h2>
+		<?php if ( empty( $allocation_batches ) ) : ?>
+			<div class="notice notice-info inline"><p>Chưa có kết quả số lượng cấp phát nào được chốt. Hãy thực hiện tại trang Sản phẩm &amp; Kho trước khi tính PR.</p></div>
+		<?php else : ?>
+			<form method="get" class="ums-filter-bar">
+				<input type="hidden" name="page" value="tvn-ums-pr-calculation">
+				<label>
+					<span>Kết quả đang xem</span>
+					<select name="allocation_batch_id" onchange="this.form.submit()">
+						<?php foreach ( $allocation_batches as $batch ) : ?>
+							<option value="<?php echo esc_attr( $batch['batch_id'] ); ?>" <?php selected( $selected_batch_id, $batch['batch_id'] ); ?>>
+								<?php echo esc_html( sprintf( 'T%d/%d - %s', $batch['period_month'], $batch['calculation_year'], $batch['file_name'] ) ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+				<noscript><button type="submit" class="button">Xem</button></noscript>
+			</form>
+
+			<?php if ( $selected_batch ) : ?>
+				<p>
+					<strong><?php echo esc_html( sprintf( 'Kỳ T%d/%d', $selected_batch['period_month'], $selected_batch['calculation_year'] ) ); ?></strong>
+					<?php echo esc_html( sprintf(
+						' | File: %s | %s CNV | Đăng ký: %s | Cấp phát: %s | Chốt lúc: %s%s',
+						$selected_batch['file_name'],
+						number_format_i18n( $selected_batch['employee_count'] ),
+						number_format_i18n( $selected_batch['requested_qty'] ),
+						number_format_i18n( $selected_batch['allocated_qty'] ),
+						$selected_batch['created_at'],
+						! empty( $selected_batch['calculated_by_login'] ) ? ' bởi ' . $selected_batch['calculated_by_login'] : ''
+					) ); ?>
+				</p>
+				<div class="ums-table-scroll" style="max-height:520px">
+					<table class="widefat striped">
+						<thead><tr><th>Loại đồng phục lên PR</th><th>Size</th><th>Số CNV</th><th>SL đăng ký</th><th>SL cấp phát</th></tr></thead>
+						<tbody>
+						<?php foreach ( $allocation_summary_rows as $row ) : ?>
+							<tr>
+								<td><?php echo esc_html( $row['item_variant'] ?: 'Sản phẩm kho #' . $row['item_id'] ); ?></td>
+								<td><?php echo esc_html( $row['size'] ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $row['employee_count'] ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $row['requested_quantity'] ) ); ?></td>
+								<td><strong><?php echo esc_html( number_format_i18n( $row['allocated_quantity'] ) ); ?></strong></td>
+							</tr>
+						<?php endforeach; ?>
+						<?php if ( empty( $allocation_summary_rows ) ) : ?>
+							<tr><td colspan="5">Bản chốt chưa có dòng cấp phát.</td></tr>
+						<?php endif; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endif; ?>
+		<?php endif; ?>
+	</div>
 
 	<div class="ums-panel">
 		<h2>Dữ liệu lập PR</h2>
@@ -34,8 +96,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<label>
 					<span>Kỳ lập PR *</span>
 					<select name="period_month" required>
-						<option value="4">Tháng 4</option>
-						<option value="9">Tháng 9</option>
+						<option value="4" <?php selected( $default_month, 4 ); ?>>Tháng 4</option>
+						<option value="9" <?php selected( $default_month, 9 ); ?>>Tháng 9</option>
 					</select>
 				</label>
 				<label>

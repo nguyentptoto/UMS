@@ -120,4 +120,44 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 			ARRAY_A
 		);
 	}
+
+	public static function get_active_batches( $limit = 20 ) {
+		if ( ! self::is_ready() ) {
+			return array();
+		}
+		$limit = max( 1, min( 100, absint( $limit ) ) );
+		return self::db()->get_results(
+			self::db()->prepare(
+				'SELECT batches.*, actor.user_login AS calculated_by_login
+				FROM ' . self::table() . ' batches
+				LEFT JOIN ' . self::db()->users . ' actor ON actor.ID = batches.calculated_by
+				WHERE batches.is_active = 1
+				ORDER BY batches.calculation_year DESC, batches.period_month DESC, batches.batch_id DESC
+				LIMIT %d',
+				$limit
+			),
+			ARRAY_A
+		);
+	}
+
+	public static function get_batch_summary_rows( $batch_id ) {
+		if ( ! self::is_ready() || absint( $batch_id ) <= 0 ) {
+			return array();
+		}
+		return self::db()->get_results(
+			self::db()->prepare(
+				'SELECT details.item_id, inventory.item_variant, inventory.size,
+					SUM(details.requested_quantity) AS requested_quantity,
+					SUM(details.allocated_quantity) AS allocated_quantity,
+					COUNT(DISTINCT details.employee_no) AS employee_count
+				FROM ' . self::detail_table() . ' details
+				LEFT JOIN ' . UMS_DB_Inventory::table() . ' inventory ON inventory.item_id = details.item_id
+				WHERE details.batch_id = %d
+				GROUP BY details.item_id, inventory.item_variant, inventory.size
+				ORDER BY inventory.item_variant ASC, inventory.size ASC',
+				absint( $batch_id )
+			),
+			ARRAY_A
+		);
+	}
 }

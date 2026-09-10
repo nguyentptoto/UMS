@@ -488,8 +488,30 @@ class UMS_Admin {
 	}
 
 	public static function render_pr_calculation_page() {
-		$table_ready  = UMS_DB_Uniform_Material::is_ready() && UMS_DB_Allocation_Calculation::is_ready();
+		$allocation_ready = UMS_DB_Allocation_Calculation::is_ready();
+		$table_ready  = UMS_DB_Uniform_Material::is_ready() && $allocation_ready;
 		$default_year = (int) current_time( 'Y' );
+		$notice       = self::get_notice();
+		$allocation_batches = $allocation_ready ? UMS_DB_Allocation_Calculation::get_active_batches() : array();
+		$selected_batch_id  = isset( $_GET['allocation_batch_id'] ) ? absint( $_GET['allocation_batch_id'] ) : 0;
+		$selected_batch     = null;
+		foreach ( $allocation_batches as $allocation_batch ) {
+			if ( $selected_batch_id <= 0 || absint( $allocation_batch['batch_id'] ) === $selected_batch_id ) {
+				$selected_batch = $allocation_batch;
+				break;
+			}
+		}
+		if ( ! $selected_batch && ! empty( $allocation_batches ) ) {
+			$selected_batch = reset( $allocation_batches );
+		}
+		if ( $selected_batch ) {
+			$selected_batch_id = absint( $selected_batch['batch_id'] );
+			$default_year      = absint( $selected_batch['calculation_year'] );
+		}
+		$default_month = $selected_batch ? absint( $selected_batch['period_month'] ) : 9;
+		$allocation_summary_rows = $selected_batch
+			? UMS_DB_Allocation_Calculation::get_batch_summary_rows( $selected_batch_id )
+			: array();
 
 		if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-pr-calculation.php' ) ) {
 			include UMS_PLUGIN_DIR . 'admin/partials/view-pr-calculation.php';
@@ -1693,8 +1715,9 @@ class UMS_Admin {
 			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_save_failed', 'allocation_preview_token' => $token, 'notice_extra' => implode( ' ', $result['errors'] ) ) );
 		}
 		UMS_Allocation_Calculation::delete_preview( $token );
-		self::redirect_to_inventory( array(
+		self::redirect_to_pr_calculation( array(
 			'notice' => 'allocation_calculation_saved',
+			'allocation_batch_id' => absint( $result['batch_id'] ),
 			'notice_extra' => sprintf( 'Đã chốt %s sản phẩm qua %d dòng chi tiết.', number_format_i18n( $result['total'] ), $result['detail_count'] ),
 		) );
 	}
@@ -3445,6 +3468,21 @@ class UMS_Admin {
 		$url = add_query_arg(
 			array_filter(
 				array_merge( array( 'page' => 'tvn-ums-uniform-materials' ), $args ),
+				function( $value ) {
+					return $value !== null && $value !== '';
+				}
+			),
+			admin_url( 'admin.php' )
+		);
+
+		wp_safe_redirect( $url );
+		exit;
+	}
+
+	private static function redirect_to_pr_calculation( $args = array() ) {
+		$url = add_query_arg(
+			array_filter(
+				array_merge( array( 'page' => 'tvn-ums-pr-calculation' ), $args ),
 				function( $value ) {
 					return $value !== null && $value !== '';
 				}

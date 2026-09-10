@@ -188,6 +188,8 @@ Thứ tự ưu tiên khi kiểm tra cấp phát:
 
 Chức năng `Tính số lượng cấp phát` đọc file đăng ký nhưng không xuất hoặc trừ tồn kho. Số lượng còn lại là giới hạn cấp tối đa: đăng ký ít hơn hoặc bằng giới hạn thì tính theo số đăng ký, đăng ký nhiều hơn thì tự giảm xuống đúng số lượng còn lại và ghi cảnh báo. Sản phẩm không thuộc định mức, size không hợp lệ hoặc CNV không có trong Sơ đồ tổ chức TVN bị loại khỏi kết quả nhưng không làm mất các dòng hợp lệ khác. Kết quả được chốt thành một snapshot theo `Năm + T4/T9`; snapshot mới thay thế snapshot đang hoạt động cùng kỳ và là nguồn nhu cầu cấp phát cho PR.
 
+Sau khi chốt, hệ thống chuyển tới trang `Tính số lượng PR`. Khu vực `SL cấp phát đã chốt` hiển thị file nguồn, kỳ cấp, người chốt, tổng đăng ký, tổng cấp phát và bảng tổng hợp theo `Loại đồng phục lên PR + Size`. Có thể chuyển giữa các snapshot đang hoạt động của từng năm/kỳ; form tính PR tự chọn năm và kỳ của snapshot đang xem.
+
 Marker của hai ma trận giày được gắn theo từng sản phẩm UMS sau bước ánh xạ. Vì vậy loại giày có số lượng `0` không rơi xuống định mức khác, đồng thời scope giày không che định mức áo, quần hoặc mũ trong cùng kỳ cấp phát.
 
 Một ô số lượng `0` trong ma trận có nghĩa là không được cấp sản phẩm ở kỳ tương ứng. Mỗi dòng điều kiện được lưu thêm một marker ma trận, kể cả khi toàn bộ sản phẩm đều bằng `0`. Riêng CNV vào `01/09-31/12`, scope cấp bù T9 không được kích hoạt để nhân viên vẫn nhận đúng bộ cấp ban đầu `New commer`; rule cấp ban đầu đồng thời ngăn hệ thống rơi xuống định mức thường của tháng 9.
