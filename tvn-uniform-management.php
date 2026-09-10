@@ -84,6 +84,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory-movement.php';
 	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-inventory-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-uniform-material.php';
+	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-allocation-calculation.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-annual-allowance.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-request.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-user.php';

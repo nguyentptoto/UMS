@@ -1,9 +1,9 @@
 <?php
 /**
- * Import danh sach dang ky dong phuc da chot va xuat kho theo dinh muc UMS.
+ * Tinh va chot nhu cau cap phat tu file dang ky theo dinh muc UMS.
  */
-class UMS_Issue_Registration_Import {
-	const PREVIEW_PREFIX = 'ums_issue_registration_preview_';
+class UMS_Allocation_Calculation {
+	const PREVIEW_PREFIX = 'ums_allocation_calculation_preview_';
 	const PREVIEW_TTL    = 2 * HOUR_IN_SECONDS;
 
 	public static function analyze( $file_path, $file_name, $year, $month ) {
@@ -41,6 +41,10 @@ class UMS_Issue_Registration_Import {
 		}
 
 		$employee_nos = array_keys( $code_rows );
+		$requested_quantity = 0;
+		foreach ( $parsed as $entry ) {
+			$requested_quantity += array_sum( array_column( $entry['requests'], 'quantity' ) );
+		}
 		$organization = UMS_DB_Organization::get_by_employee_nos( $employee_nos );
 		foreach ( $employee_nos as $employee_no ) {
 			if ( ! isset( $organization[ $employee_no ] ) ) {
@@ -107,7 +111,7 @@ class UMS_Issue_Registration_Import {
 					'source_row' => $entry['source_row'], 'employee_no' => $employee_no,
 					'full_name' => (string) $allowance_map[ $employee_no ]['employee']['full_name'],
 					'item_id' => absint( $item['item_id'] ), 'product' => (string) $item['item_variant'],
-					'size' => (string) $item['size'], 'quantity' => $accepted,
+					'size' => (string) $item['size'], 'requested_quantity' => absint( $request['quantity'] ), 'quantity' => $accepted,
 					'rule_id' => $rule_id, 'quota' => absint( $allocation['quota'] ),
 					'remaining' => absint( $allocation['remaining'] ), 'exact' => ! empty( $allocation['exact'] ),
 				);
@@ -128,29 +132,15 @@ class UMS_Issue_Registration_Import {
 			}
 		}
 
-		$stock_totals = array();
-		foreach ( $details as $detail ) {
-			$stock_totals[ $detail['item_id'] ] = ( $stock_totals[ $detail['item_id'] ] ?? 0 ) + $detail['quantity'];
-		}
-		foreach ( $stock_totals as $item_id => $required ) {
-			$stock = absint( $inventory_by_id[ $item_id ]['stock_qty'] ?? 0 );
-			if ( $required > $stock ) {
-				$item = $inventory_by_id[ $item_id ];
-				$errors[] = sprintf( 'Thiếu tồn kho "%s" size %s: cần %d, hiện có %d, thiếu %d.', $item['item_variant'], $item['size'], $required, $stock, $required - $stock );
-			}
-		}
-
 		$file_hash = hash_file( 'sha256', $file_path );
-		if ( get_option( 'ums_issue_registration_imported_' . sanitize_key( $file_hash ) ) ) {
-			$errors[] = 'File này đã được xác nhận xuất kho trước đó; không thể nhập lại.';
-		}
 		if ( empty( $details ) && empty( $errors ) ) {
-			$warnings[] = 'File không có dòng cấp phát hợp lệ; không có dữ liệu để xác nhận xuất kho.';
+			$warnings[] = 'File không có dòng cấp phát hợp lệ để chốt kết quả tính.';
 		}
 
 		return array(
 			'file_name' => sanitize_file_name( $file_name ), 'file_hash' => $file_hash,
 			'year' => $year, 'month' => $month, 'employee_count' => count( $employee_nos ),
+			'requested_quantity' => $requested_quantity,
 			'details' => $details, 'total_quantity' => array_sum( array_column( $details, 'quantity' ) ),
 			'errors' => array_values( array_unique( $errors ) ), 'warnings' => array_values( array_unique( $warnings ) ),
 		);
@@ -262,50 +252,12 @@ class UMS_Issue_Registration_Import {
 		return reset( $matches );
 	}
 
-	public static function import( $preview, $actor_user_id ) {
+	public static function save_calculation( $preview, $actor_user_id ) {
 		if ( ! empty( $preview['errors'] ) ) return array( 'success' => false, 'errors' => $preview['errors'] );
-		$hash_key = 'ums_issue_registration_imported_' . sanitize_key( $preview['file_hash'] );
-		if ( get_option( $hash_key ) ) return array( 'success' => false, 'errors' => array( 'File này đã được nhập xuất kho trước đó.' ) );
-		global $wpdb;
-		$wpdb->query( 'START TRANSACTION' );
-		$totals = array();
-		foreach ( $preview['details'] as $detail ) $totals[ $detail['item_id'] ] = ( $totals[ $detail['item_id'] ] ?? 0 ) + $detail['quantity'];
-		$locked = array();
-		foreach ( $totals as $item_id => $required ) {
-			$item = UMS_DB_Inventory::get_by_id_for_update( $item_id );
-			if ( ! $item || absint( $item['stock_qty'] ) < $required ) {
-				$wpdb->query( 'ROLLBACK' );
-				return array( 'success' => false, 'errors' => array( 'Tồn kho đã thay đổi sau bước xem trước. Hãy tải lại file để kiểm tra.' ) );
-			}
-			$locked[ $item_id ] = $item;
-		}
-		$current = array_map( function ( $item ) { return absint( $item['stock_qty'] ); }, $locked );
-		foreach ( $preview['details'] as $detail ) {
-			$item_id = absint( $detail['item_id'] );
-			$before = $current[ $item_id ];
-			$after  = $before - absint( $detail['quantity'] );
-			if ( false === $wpdb->update( UMS_DB_Inventory::table(), array( 'stock_qty' => $after ), array( 'item_id' => $item_id ), array( '%d' ), array( '%d' ) ) ) {
-				$wpdb->query( 'ROLLBACK' );
-				return array( 'success' => false, 'errors' => array( $wpdb->last_error ?: 'Không cập nhật được tồn kho.' ) );
-			}
-			$price = (float) $locked[ $item_id ]['base_price'];
-			$ok = UMS_DB_Inventory_Movement::insert( array(
-				'item_id' => $item_id, 'request_id' => null, 'movement_type' => 'out',
-				'quantity' => $detail['quantity'], 'before_qty' => $before, 'after_qty' => $after,
-				'unit_price' => $price, 'total_price' => $price * $detail['quantity'],
-				'actor_user_id' => absint( $actor_user_id ), 'target_user_id' => null,
-				'target_employee_no' => $detail['employee_no'],
-				'note' => sprintf( 'Import đăng ký cấp phát T%d/%d, file %s, dòng %d.', $preview['month'], $preview['year'], $preview['file_name'], $detail['source_row'] ),
-			) );
-			if ( ! $ok ) {
-				$wpdb->query( 'ROLLBACK' );
-				return array( 'success' => false, 'errors' => array( UMS_DB_Inventory_Movement::get_last_error() ?: 'Không ghi được lịch sử xuất kho.' ) );
-			}
-			$current[ $item_id ] = $after;
-		}
-		$wpdb->query( 'COMMIT' );
-		update_option( $hash_key, current_time( 'mysql' ), false );
-		return array( 'success' => true, 'imported' => count( $preview['details'] ), 'total' => $preview['total_quantity'] );
+		if ( empty( $preview['details'] ) ) return array( 'success' => false, 'errors' => array( 'Không có dòng cấp phát hợp lệ để chốt.' ) );
+		$result = UMS_DB_Allocation_Calculation::save_snapshot( $preview, $actor_user_id );
+		if ( is_wp_error( $result ) ) return array( 'success' => false, 'errors' => array( $result->get_error_message() ) );
+		return array_merge( array( 'success' => true ), $result );
 	}
 
 	public static function store_preview( $preview ) {

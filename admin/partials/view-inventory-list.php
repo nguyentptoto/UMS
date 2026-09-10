@@ -230,7 +230,7 @@ unset( $section );
 
 	<div class="ums-panel" id="ums-inventory-import">
 		<h2>Import nhập kho</h2>
-		<p>Nhập <strong>Loại sản phẩm</strong> kèm size ở cuối tên, ví dụ <code>Quần CN Size L</code>, sau đó nhập <strong>Số lượng</strong> và <strong>Ghi chú</strong> nếu có. Sản phẩm không có size chỉ được nhận khi tên khớp duy nhất một dòng kho.</p>
+		<p>Nhập <strong>Loại sản phẩm</strong> theo cột <strong>Loại</strong> trong master Mã SAP, hoặc theo <strong>Loại đồng phục lên PR + Size</strong>. Hệ thống chỉ cộng tồn vào sản phẩm UMS đã ánh xạ và không tự tạo sản phẩm mới.</p>
 
 		<div class="ums-inline-actions">
 			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ums_download_inventory_import_template' ), 'ums_download_inventory_import_template' ) ); ?>">
@@ -250,81 +250,85 @@ unset( $section );
 		</div>
 
 		<?php if ( ! $inventory_import_ready ) : ?>
-			<div class="notice notice-warning inline"><p>Hãy cập nhật bảng import kho và hai cột lịch sử theo <code>ums.sql</code> trước khi sử dụng.</p></div>
+			<div class="notice notice-warning inline"><p>Hãy cập nhật cấu trúc import kho trong <code>ums.sql</code> và import master Mã SAP trước khi sử dụng.</p></div>
 		<?php endif; ?>
 	</div>
 
-	<div class="ums-panel" id="ums-issue-registration-import">
-		<h2>Import đăng ký cấp phát và xuất kho</h2>
-		<p>File chốt phải giữ nguyên cấu trúc Google Form. Trong kỳ T4/T9 đã chọn, hệ thống xét toàn bộ định mức có thể áp dụng cho từng CNV, gồm định kỳ, CNV mới, giày N+1 và công việc đặc thù.</p>
+	<div class="ums-panel" id="ums-allocation-calculation">
+		<h2>Tính số lượng cấp phát</h2>
+		<p>File đăng ký phải giữ nguyên cấu trúc Google Form. Hệ thống áp dụng toàn bộ định mức phù hợp, tự giới hạn số đăng ký vượt mức và tổng hợp nhu cầu cho PR; thao tác này không xuất hoặc trừ tồn kho.</p>
+		<?php if ( ! $allocation_calculation_ready ) : ?>
+			<div class="notice notice-error inline"><p>Database chưa có bảng lưu kết quả tính số lượng cấp phát. Hãy cập nhật phần SQL tương ứng trong <code>ums.sql</code>.</p></div>
+		<?php endif; ?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
-			<?php wp_nonce_field( 'ums_preview_issue_registration_import' ); ?>
-			<input type="hidden" name="action" value="ums_preview_issue_registration_import">
-			<label>Năm cấp <input type="number" name="issue_year" value="<?php echo esc_attr( current_time( 'Y' ) ); ?>" min="2000" max="2100" required></label>
+			<?php wp_nonce_field( 'ums_preview_allocation_calculation' ); ?>
+			<input type="hidden" name="action" value="ums_preview_allocation_calculation">
+			<label>Năm cấp <input type="number" name="allocation_year" value="<?php echo esc_attr( current_time( 'Y' ) ); ?>" min="2000" max="2100" required></label>
 			<label>Kỳ cấp
-				<select name="issue_month"><option value="4">Tháng 4</option><option value="9" selected>Tháng 9</option></select>
+				<select name="allocation_month"><option value="4">Tháng 4</option><option value="9" selected>Tháng 9</option></select>
 			</label>
-			<input type="file" name="ums_issue_registration_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-			<button type="submit" class="button button-primary">Kiểm tra file đăng ký</button>
+			<input type="file" name="ums_allocation_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+			<button type="submit" class="button button-primary">Tính số lượng cấp phát</button>
 		</form>
 	</div>
 
-	<?php if ( is_array( $issue_import_preview ) ) : ?>
-		<div class="ums-panel ums-issue-registration-preview">
-			<h2>Kết quả kiểm tra: <?php echo esc_html( $issue_import_preview['file_name'] ); ?></h2>
+	<?php if ( is_array( $allocation_preview ) ) : ?>
+		<div class="ums-panel ums-allocation-calculation-preview">
+			<h2>Kết quả tính số lượng cấp phát: <?php echo esc_html( $allocation_preview['file_name'] ); ?></h2>
 			<p><?php echo esc_html( sprintf(
-				'Kỳ T%d/%d: %d CNV, %d dòng cấp phát, tổng số lượng %s, %d lỗi chặn và %d cảnh báo.',
-				$issue_import_preview['month'], $issue_import_preview['year'], $issue_import_preview['employee_count'],
-				count( $issue_import_preview['details'] ), number_format_i18n( $issue_import_preview['total_quantity'] ),
-				count( $issue_import_preview['errors'] ), count( $issue_import_preview['warnings'] ?? array() )
+				'Kỳ T%d/%d: %d CNV, đăng ký %s, được cấp %s qua %d dòng; %d lỗi và %d cảnh báo.',
+				$allocation_preview['month'], $allocation_preview['year'], $allocation_preview['employee_count'],
+				number_format_i18n( $allocation_preview['requested_quantity'] ?? 0 ), number_format_i18n( $allocation_preview['total_quantity'] ),
+				count( $allocation_preview['details'] ), count( $allocation_preview['errors'] ), count( $allocation_preview['warnings'] ?? array() )
 			) ); ?></p>
 
-			<?php if ( ! empty( $issue_import_preview['errors'] ) ) : ?>
-				<div class="notice notice-error inline"><p><strong>Không thể xác nhận vì file còn lỗi:</strong></p></div>
+			<?php if ( ! empty( $allocation_preview['errors'] ) ) : ?>
+				<div class="notice notice-error inline"><p><strong>Không thể hoàn tất phép tính:</strong></p></div>
 				<div class="ums-table-scroll" style="max-height:520px">
 					<table class="widefat striped"><thead><tr><th>STT</th><th>Nội dung lỗi</th></tr></thead><tbody>
-					<?php foreach ( $issue_import_preview['errors'] as $index => $error ) : ?>
+					<?php foreach ( $allocation_preview['errors'] as $index => $error ) : ?>
 						<tr><td><?php echo esc_html( $index + 1 ); ?></td><td><?php echo esc_html( $error ); ?></td></tr>
 					<?php endforeach; ?>
 					</tbody></table>
 				</div>
 			<?php endif; ?>
 
-			<?php if ( ! empty( $issue_import_preview['warnings'] ) ) : ?>
-				<div class="notice notice-warning inline"><p><strong>Cảnh báo và điều chỉnh tự động:</strong> Các dòng hợp lệ khác vẫn có thể được xuất kho.</p></div>
+			<?php if ( ! empty( $allocation_preview['warnings'] ) ) : ?>
+				<div class="notice notice-warning inline"><p><strong>Cảnh báo và điều chỉnh tự động:</strong> Các dòng hợp lệ khác vẫn được tính.</p></div>
 				<div class="ums-table-scroll" style="max-height:520px">
 					<table class="widefat striped"><thead><tr><th>STT</th><th>Nội dung cảnh báo</th></tr></thead><tbody>
-					<?php foreach ( $issue_import_preview['warnings'] as $index => $warning ) : ?>
+					<?php foreach ( $allocation_preview['warnings'] as $index => $warning ) : ?>
 						<tr><td><?php echo esc_html( $index + 1 ); ?></td><td><?php echo esc_html( $warning ); ?></td></tr>
 					<?php endforeach; ?>
 					</tbody></table>
 				</div>
 			<?php endif; ?>
 
-			<?php if ( empty( $issue_import_preview['errors'] ) && ! empty( $issue_import_preview['details'] ) ) : ?>
+			<?php if ( empty( $allocation_preview['errors'] ) && ! empty( $allocation_preview['details'] ) ) : ?>
 				<?php
-				$issue_summary = array();
-				foreach ( $issue_import_preview['details'] as $detail ) {
-					$key = $detail['product'] . '|' . $detail['size'];
-					if ( ! isset( $issue_summary[ $key ] ) ) $issue_summary[ $key ] = array( 'product' => $detail['product'], 'size' => $detail['size'], 'quantity' => 0 );
-					$issue_summary[ $key ]['quantity'] += absint( $detail['quantity'] );
+				$allocation_summary = array();
+				foreach ( $allocation_preview['details'] as $detail ) {
+					$key = absint( $detail['item_id'] );
+					if ( ! isset( $allocation_summary[ $key ] ) ) $allocation_summary[ $key ] = array( 'product' => $detail['product'], 'size' => $detail['size'], 'requested' => 0, 'quantity' => 0 );
+					$allocation_summary[ $key ]['requested'] += absint( $detail['requested_quantity'] ?? $detail['quantity'] );
+					$allocation_summary[ $key ]['quantity'] += absint( $detail['quantity'] );
 				}
 				?>
 				<div class="ums-table-scroll" style="max-height:520px">
-					<table class="widefat striped"><thead><tr><th>Loại sản phẩm</th><th>Size</th><th>Tổng xuất</th></tr></thead><tbody>
-					<?php foreach ( $issue_summary as $summary_row ) : ?>
-						<tr><td><?php echo esc_html( $summary_row['product'] ); ?></td><td><?php echo esc_html( $summary_row['size'] ); ?></td><td><?php echo esc_html( number_format_i18n( $summary_row['quantity'] ) ); ?></td></tr>
+					<table class="widefat striped"><thead><tr><th>Loại sản phẩm</th><th>Size</th><th>SL đăng ký</th><th>SL cấp phát</th></tr></thead><tbody>
+					<?php foreach ( $allocation_summary as $summary_row ) : ?>
+						<tr><td><?php echo esc_html( $summary_row['product'] ); ?></td><td><?php echo esc_html( $summary_row['size'] ); ?></td><td><?php echo esc_html( number_format_i18n( $summary_row['requested'] ) ); ?></td><td><?php echo esc_html( number_format_i18n( $summary_row['quantity'] ) ); ?></td></tr>
 					<?php endforeach; ?>
 					</tbody></table>
 				</div>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-					<?php wp_nonce_field( 'ums_confirm_issue_registration_import' ); ?>
-					<input type="hidden" name="action" value="ums_confirm_issue_registration_import">
-					<input type="hidden" name="issue_preview_token" value="<?php echo esc_attr( $issue_preview_token ); ?>">
-					<p class="submit"><button type="submit" class="button button-primary">Xác nhận xuất kho toàn bộ</button></p>
+					<?php wp_nonce_field( 'ums_save_allocation_calculation' ); ?>
+					<input type="hidden" name="action" value="ums_save_allocation_calculation">
+					<input type="hidden" name="allocation_preview_token" value="<?php echo esc_attr( $allocation_preview_token ); ?>">
+					<p class="submit"><button type="submit" class="button button-primary" <?php disabled( ! $allocation_calculation_ready ); ?>>Chốt kết quả tính cho PR</button></p>
 				</form>
-			<?php elseif ( empty( $issue_import_preview['errors'] ) ) : ?>
-				<div class="notice notice-info inline"><p>Không có dòng cấp phát hợp lệ để xuất kho.</p></div>
+			<?php elseif ( empty( $allocation_preview['errors'] ) ) : ?>
+				<div class="notice notice-info inline"><p>Không có dòng cấp phát hợp lệ để chốt kết quả.</p></div>
 			<?php endif; ?>
 		</div>
 	<?php endif; ?>
@@ -332,25 +336,22 @@ unset( $section );
 	<?php if ( is_array( $inventory_import_preview ) ) : ?>
 		<div class="ums-panel ums-inventory-import-preview">
 			<h2>Xem trước nhập kho: <?php echo esc_html( $inventory_import_preview['file_name'] ); ?></h2>
-			<?php $new_inventory_rows = isset( $inventory_import_preview['new_rows'] ) ? absint( $inventory_import_preview['new_rows'] ) : 0; ?>
-			<p><?php echo esc_html( sprintf( '%d dòng hợp lệ, tổng số lượng %s; trong đó %d dòng sẽ tạo sản phẩm mới.', count( $inventory_import_preview['rows'] ), number_format_i18n( $inventory_import_preview['total_quantity'] ), $new_inventory_rows ) ); ?></p>
-			<?php if ( $new_inventory_rows > 0 ) : ?>
-				<div class="notice notice-warning inline"><p>Size mới sẽ kế thừa đơn giá khi sản phẩm đã có đúng một mức giá. Sản phẩm hoàn toàn mới chưa có giá tham chiếu sẽ được tạo với đơn giá 0 và cần cập nhật trước khi cấp phát hoặc tính PR.</p></div>
-			<?php endif; ?>
+			<p><?php echo esc_html( sprintf( '%d dòng hợp lệ, tổng số lượng nhập %s. Không có sản phẩm mới được tạo từ file này.', count( $inventory_import_preview['rows'] ), number_format_i18n( $inventory_import_preview['total_quantity'] ) ) ); ?></p>
 
 			<?php if ( ! empty( $inventory_import_preview['errors'] ) ) : ?>
 				<div class="notice notice-error inline"><p><?php echo esc_html( implode( ' ', array_slice( $inventory_import_preview['errors'], 0, 10 ) ) ); ?></p></div>
 			<?php else : ?>
 				<div class="ums-table-scroll">
 					<table class="widefat striped">
-						<thead><tr><th>Dòng Excel</th><th>Loại sản phẩm</th><th>Size</th><th>Xử lý</th><th>SL nhập</th><th>Tồn trước</th><th>Tồn sau</th><th>Đơn giá áp dụng</th><th>Ghi chú</th></tr></thead>
+						<thead><tr><th>Dòng Excel</th><th>Loại trong file</th><th>Loại đồng phục lên PR</th><th>Size</th><th>Xử lý</th><th>SL nhập</th><th>Tồn trước</th><th>Tồn sau</th><th>Đơn giá áp dụng</th><th>Ghi chú</th></tr></thead>
 						<tbody>
 						<?php foreach ( $inventory_import_preview['rows'] as $preview_row ) : ?>
 							<tr>
 								<td><?php echo esc_html( $preview_row['source_row'] ); ?></td>
+								<td><?php echo esc_html( $preview_row['source_product'] ); ?></td>
 								<td><?php echo esc_html( $preview_row['product'] ); ?></td>
 								<td><?php echo esc_html( $preview_row['size'] ); ?></td>
-								<td><?php echo ! empty( $preview_row['is_new'] ) ? esc_html( 'Tạo mới / ' . $preview_row['category_name'] ) : 'Cộng tồn'; ?></td>
+								<td>Cộng tồn theo Mã SAP</td>
 								<td><?php echo esc_html( number_format_i18n( $preview_row['quantity'] ) ); ?></td>
 								<td><?php echo esc_html( number_format_i18n( $preview_row['before_qty'] ) ); ?></td>
 								<td><?php echo esc_html( number_format_i18n( $preview_row['after_qty'] ) ); ?></td>

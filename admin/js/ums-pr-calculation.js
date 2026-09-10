@@ -48,7 +48,7 @@
                 ['sap_code', 'Mã SAP'],
                 ['item_name', 'Loại đồng phục'],
                 ['size', 'Size'],
-                ['periodic_qty', 'SL định kỳ'],
+				['periodic_qty', 'SL cấp phát'],
                 ['reserve_qty', 'SL dự phòng'],
                 ['stock_qty', 'Tồn kho'],
                 ['final_pr_qty', 'SL PR'],
@@ -123,7 +123,7 @@
                     {text: 'Mã SAP', datafield: 'sap_code', width: 115},
                     {text: 'Loại đồng phục', datafield: 'item_name', minwidth: 260},
                     {text: 'Size', datafield: 'size', width: 70, cellsalign: 'center'},
-                    {text: 'SL định kỳ', datafield: 'periodic_qty', width: 100, cellsalign: 'right'},
+					{text: 'SL cấp phát', datafield: 'periodic_qty', width: 100, cellsalign: 'right'},
                     {text: 'SL dự phòng', datafield: 'reserve_qty', width: 105, cellsalign: 'right'},
                     {text: 'Tồn kho', datafield: 'stock_qty', width: 90, cellsalign: 'right'},
                     {text: 'SL PR', datafield: 'final_pr_qty', width: 90, cellsalign: 'right'},
@@ -221,7 +221,7 @@
 
                 renderMessages([], data.warnings || []);
                 $summary.text(
-                    'Định kỳ: ' + formatNumber(resultSummary.periodic_qty) +
+					'Cấp phát: ' + formatNumber(resultSummary.periodic_qty) +
                     ' | Dự phòng: ' + formatNumber(resultSummary.reserve_qty) +
                     ' | Tồn kho: ' + formatNumber(resultSummary.stock_qty) +
                     ' | Số lượng PR: ' + formatNumber(resultSummary.final_pr_qty) +

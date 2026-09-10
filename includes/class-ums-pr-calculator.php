@@ -18,6 +18,13 @@ class UMS_PR_Calculator {
 		if ( ! UMS_DB_Uniform_Material::is_ready() ) {
 			throw new RuntimeException( 'Chưa có cấu trúc master mã SAP. Hãy import đầy đủ file ums.sql.' );
 		}
+		if ( ! UMS_DB_Allocation_Calculation::is_ready() ) {
+			throw new RuntimeException( 'Chưa có cấu trúc lưu kết quả tính số lượng cấp phát. Hãy cập nhật file ums.sql.' );
+		}
+		$allocation_batch = UMS_DB_Allocation_Calculation::get_active_batch( $year, $period_month );
+		if ( ! $allocation_batch ) {
+			throw new RuntimeException( sprintf( 'Chưa chốt kết quả tính số lượng cấp phát cho kỳ T%d/%d.', $period_month, $year ) );
+		}
 
 		$reserve  = self::read_reserve_file( $file_path );
 		$material_rows = UMS_DB_Uniform_Material::get_all(
@@ -59,7 +66,7 @@ class UMS_PR_Calculator {
 				: $row['quantity'];
 		}
 
-		$periodic_by_item = UMS_DB_Request::get_completed_demand_by_item( $year );
+		$periodic_by_item = UMS_DB_Allocation_Calculation::get_active_totals( $year, $period_month );
 		foreach ( $periodic_by_item as $item_id => $quantity ) {
 			if ( $quantity > 0 && empty( $materials_by_item[ absint( $item_id ) ] ) ) {
 				$errors[] = sprintf( 'Sản phẩm kho #%d có nhu cầu đã duyệt nhưng chưa được ánh xạ master SAP.', $item_id );
@@ -191,6 +198,7 @@ class UMS_PR_Calculator {
 			),
 			'year'         => $year,
 			'period_month' => $period_month,
+			'allocation_batch_id' => absint( $allocation_batch['batch_id'] ),
 			'can_export'   => empty( $warnings ) && array_sum( array_column( $rows, 'final_pr_qty' ) ) > 0,
 		);
 	}

@@ -416,7 +416,7 @@
                         {text: 'Mã SAP', datafield: 'sap_code', width: 115},
                         {text: 'Loại đồng phục', datafield: 'item_name', minwidth: 260},
                         {text: 'Size', datafield: 'size', width: 70, cellsalign: 'center'},
-                        {text: 'SL định kỳ', datafield: 'periodic_qty', width: 100, cellsalign: 'right'},
+						{text: 'SL cấp phát', datafield: 'periodic_qty', width: 100, cellsalign: 'right'},
                         {text: 'SL dự phòng', datafield: 'reserve_qty', width: 105, cellsalign: 'right'},
                         {text: 'Tồn kho', datafield: 'stock_qty', width: 90, cellsalign: 'right'},
                         {text: 'SL PR', datafield: 'final_pr_qty', width: 90, cellsalign: 'right'},
@@ -472,7 +472,7 @@
                     renderPrGrid(data.rows || []);
                     renderPrMessages([], data.warnings || []);
                     $prSummary.text(
-                        'Định kỳ: ' + numberFormat.format(summary.periodic_qty || 0) +
+						'Cấp phát: ' + numberFormat.format(summary.periodic_qty || 0) +
                         ' | Dự phòng: ' + numberFormat.format(summary.reserve_qty || 0) +
                         ' | Tồn kho: ' + numberFormat.format(summary.stock_qty || 0) +
                         ' | Số lượng PR: ' + numberFormat.format(summary.final_pr_qty || 0) +

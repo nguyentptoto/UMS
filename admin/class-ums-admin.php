@@ -36,8 +36,8 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_download_inventory_import_template', array( __CLASS__, 'handle_download_inventory_import_template' ) );
 		add_action( 'admin_post_ums_preview_inventory_import', array( __CLASS__, 'handle_preview_inventory_import' ) );
 		add_action( 'admin_post_ums_confirm_inventory_import', array( __CLASS__, 'handle_confirm_inventory_import' ) );
-		add_action( 'admin_post_ums_preview_issue_registration_import', array( __CLASS__, 'handle_preview_issue_registration_import' ) );
-		add_action( 'admin_post_ums_confirm_issue_registration_import', array( __CLASS__, 'handle_confirm_issue_registration_import' ) );
+		add_action( 'admin_post_ums_preview_allocation_calculation', array( __CLASS__, 'handle_preview_allocation_calculation' ) );
+		add_action( 'admin_post_ums_save_allocation_calculation', array( __CLASS__, 'handle_save_allocation_calculation' ) );
 		add_action( 'admin_post_ums_repair_inventory_prices', array( __CLASS__, 'handle_repair_inventory_prices' ) );
 		add_action( 'admin_post_ums_preview_uniform_material_import', array( __CLASS__, 'handle_preview_uniform_material_import' ) );
 		add_action( 'admin_post_ums_confirm_uniform_material_import', array( __CLASS__, 'handle_confirm_uniform_material_import' ) );
@@ -436,11 +436,12 @@ class UMS_Admin {
         $form_values       = self::get_default_inventory_values( $editing_item );
         $available_items   = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
         $recipient_options = UMS_DB_Organization::get_recipient_options();
-		$inventory_import_ready = UMS_DB_Inventory_Import::is_ready();
+		$inventory_import_ready = UMS_DB_Inventory_Import::is_ready() && UMS_DB_Uniform_Material::is_ready();
 		$inventory_preview_token = isset( $_GET['inventory_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['inventory_preview_token'] ) ) : '';
 		$inventory_import_preview = $inventory_preview_token !== '' ? UMS_Inventory_Import::get_preview( $inventory_preview_token ) : null;
-		$issue_preview_token = isset( $_GET['issue_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['issue_preview_token'] ) ) : '';
-		$issue_import_preview = $issue_preview_token !== '' ? UMS_Issue_Registration_Import::get_preview( $issue_preview_token ) : null;
+		$allocation_calculation_ready = UMS_DB_Allocation_Calculation::is_ready();
+		$allocation_preview_token = isset( $_GET['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['allocation_preview_token'] ) ) : '';
+		$allocation_preview = $allocation_preview_token !== '' ? UMS_Allocation_Calculation::get_preview( $allocation_preview_token ) : null;
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php';
@@ -487,7 +488,7 @@ class UMS_Admin {
 	}
 
 	public static function render_pr_calculation_page() {
-		$table_ready  = UMS_DB_Uniform_Material::is_ready();
+		$table_ready  = UMS_DB_Uniform_Material::is_ready() && UMS_DB_Allocation_Calculation::is_ready();
 		$default_year = (int) current_time( 'Y' );
 
 		if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-pr-calculation.php' ) ) {
@@ -1646,55 +1647,55 @@ class UMS_Admin {
 		);
 	}
 
-	public static function handle_preview_issue_registration_import() {
+	public static function handle_preview_allocation_calculation() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
 		}
-		check_admin_referer( 'ums_preview_issue_registration_import' );
+		check_admin_referer( 'ums_preview_allocation_calculation' );
 		@set_time_limit( 300 );
-		$file = isset( $_FILES['ums_issue_registration_file'] ) ? $_FILES['ums_issue_registration_file'] : array();
+		$file = isset( $_FILES['ums_allocation_file'] ) ? $_FILES['ums_allocation_file'] : array();
 		if ( empty( $file['tmp_name'] ) || ! empty( $file['error'] ) || (int) $file['size'] > 20 * MB_IN_BYTES
 			|| strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
-			self::redirect_to_inventory( array( 'notice' => 'issue_registration_invalid_file' ) );
+			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_invalid_file' ) );
 		}
 		try {
-			$preview = UMS_Issue_Registration_Import::analyze(
+			$preview = UMS_Allocation_Calculation::analyze(
 				$file['tmp_name'], $file['name'],
-				isset( $_POST['issue_year'] ) ? absint( $_POST['issue_year'] ) : current_time( 'Y' ),
-				isset( $_POST['issue_month'] ) ? absint( $_POST['issue_month'] ) : 9
+				isset( $_POST['allocation_year'] ) ? absint( $_POST['allocation_year'] ) : current_time( 'Y' ),
+				isset( $_POST['allocation_month'] ) ? absint( $_POST['allocation_month'] ) : 9
 			);
-			$token = UMS_Issue_Registration_Import::store_preview( $preview );
+			$token = UMS_Allocation_Calculation::store_preview( $preview );
 			self::redirect_to_inventory( array(
-				'notice' => empty( $preview['errors'] ) ? 'issue_registration_preview_ready' : 'issue_registration_preview_error',
-				'issue_preview_token' => $token,
+				'notice' => empty( $preview['errors'] ) ? 'allocation_calculation_ready' : 'allocation_calculation_error',
+				'allocation_preview_token' => $token,
 			) );
 		} catch ( Throwable $error ) {
-			self::redirect_to_inventory( array( 'notice' => 'issue_registration_invalid_file', 'notice_extra' => $error->getMessage() ) );
+			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_invalid_file', 'notice_extra' => $error->getMessage() ) );
 		}
 	}
 
-	public static function handle_confirm_issue_registration_import() {
+	public static function handle_save_allocation_calculation() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
 		}
-		check_admin_referer( 'ums_confirm_issue_registration_import' );
+		check_admin_referer( 'ums_save_allocation_calculation' );
 		@set_time_limit( 300 );
-		$token = isset( $_POST['issue_preview_token'] ) ? sanitize_key( wp_unslash( $_POST['issue_preview_token'] ) ) : '';
-		$preview = UMS_Issue_Registration_Import::get_preview( $token );
+		$token = isset( $_POST['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_POST['allocation_preview_token'] ) ) : '';
+		$preview = UMS_Allocation_Calculation::get_preview( $token );
 		if ( ! is_array( $preview ) ) {
-			self::redirect_to_inventory( array( 'notice' => 'issue_registration_preview_expired' ) );
+			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_expired' ) );
 		}
 		if ( ! empty( $preview['errors'] ) ) {
-			self::redirect_to_inventory( array( 'notice' => 'issue_registration_preview_error', 'issue_preview_token' => $token ) );
+			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_error', 'allocation_preview_token' => $token ) );
 		}
-		$result = UMS_Issue_Registration_Import::import( $preview, get_current_user_id() );
+		$result = UMS_Allocation_Calculation::save_calculation( $preview, get_current_user_id() );
 		if ( empty( $result['success'] ) ) {
-			self::redirect_to_inventory( array( 'notice' => 'issue_registration_import_failed', 'issue_preview_token' => $token, 'notice_extra' => implode( ' ', $result['errors'] ) ) );
+			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_save_failed', 'allocation_preview_token' => $token, 'notice_extra' => implode( ' ', $result['errors'] ) ) );
 		}
-		UMS_Issue_Registration_Import::delete_preview( $token );
+		UMS_Allocation_Calculation::delete_preview( $token );
 		self::redirect_to_inventory( array(
-			'notice' => 'issue_registration_import_completed',
-			'notice_extra' => sprintf( 'Đã xuất %s sản phẩm qua %d dòng chi tiết.', number_format_i18n( $result['total'] ), $result['imported'] ),
+			'notice' => 'allocation_calculation_saved',
+			'notice_extra' => sprintf( 'Đã chốt %s sản phẩm qua %d dòng chi tiết.', number_format_i18n( $result['total'] ), $result['detail_count'] ),
 		) );
 	}
 
@@ -3129,12 +3130,12 @@ class UMS_Admin {
 			'inventory_prices_repaired' => array( 'success', 'Đã chuẩn hóa đơn giá dùng chung theo sản phẩm.' ),
 			'inventory_import_failed' => array( 'error', 'Import nhập kho không thành công.' ),
 			'inventory_import_completed' => array( 'success', 'Import nhập kho hoàn tất.' ),
-			'issue_registration_preview_ready' => array( 'success', 'File đăng ký hợp lệ. Hãy kiểm tra tổng hợp trước khi xác nhận xuất kho.' ),
-			'issue_registration_preview_error' => array( 'error', 'File đăng ký còn lỗi; hệ thống chưa xuất bất kỳ sản phẩm nào.' ),
-			'issue_registration_invalid_file' => array( 'error', 'File đăng ký cấp phát không hợp lệ hoặc không đọc được.' ),
-			'issue_registration_preview_expired' => array( 'error', 'Dữ liệu xem trước đăng ký đã hết hạn. Hãy tải lại file.' ),
-			'issue_registration_import_failed' => array( 'error', 'Import đăng ký và xuất kho không thành công.' ),
-			'issue_registration_import_completed' => array( 'success', 'Đã import đăng ký và ghi nhận xuất kho.' ),
+			'allocation_calculation_ready' => array( 'success', 'Đã tính số lượng cấp phát. Hãy kiểm tra kết quả trước khi chốt làm dữ liệu PR.' ),
+			'allocation_calculation_error' => array( 'error', 'Không thể hoàn tất phép tính vì file hoặc dữ liệu nguồn còn lỗi.' ),
+			'allocation_calculation_invalid_file' => array( 'error', 'File đăng ký cấp phát không hợp lệ hoặc không đọc được.' ),
+			'allocation_calculation_expired' => array( 'error', 'Kết quả tính tạm thời đã hết hạn. Hãy tải lại file.' ),
+			'allocation_calculation_save_failed' => array( 'error', 'Không chốt được kết quả tính số lượng cấp phát.' ),
+			'allocation_calculation_saved' => array( 'success', 'Đã chốt kết quả tính số lượng cấp phát để sử dụng khi lập PR.' ),
 			'uniform_material_preview_ready' => array( 'success', 'Đã đọc sheet Mã đồng phục. Hãy kiểm tra dữ liệu trước khi xác nhận.' ),
 			'uniform_material_preview_error' => array( 'error', 'File GA có lỗi dữ liệu và chưa thể import.' ),
 			'uniform_material_invalid_file' => array( 'error', 'File GA không hợp lệ hoặc không đọc được sheet Mã đồng phục.' ),

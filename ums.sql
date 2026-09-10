@@ -271,6 +271,43 @@ CREATE TABLE `wp_uniform_inventory_import_batches` (
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 10A. KET QUA TINH SO LUONG CAP PHAT DUNG CHO PR
+CREATE TABLE IF NOT EXISTS `wp_uniform_allocation_calculation_batches` (
+    `batch_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+    `calculation_year` SMALLINT UNSIGNED NOT NULL,
+    `period_month` TINYINT UNSIGNED NOT NULL COMMENT '4 hoac 9',
+    `file_name` VARCHAR(255) NOT NULL,
+    `file_hash` CHAR(64) NOT NULL,
+    `employee_count` INT NOT NULL DEFAULT 0,
+    `detail_count` INT NOT NULL DEFAULT 0,
+    `requested_qty` INT NOT NULL DEFAULT 0,
+    `allocated_qty` INT NOT NULL DEFAULT 0,
+    `warning_count` INT NOT NULL DEFAULT 0,
+    `warnings_log` LONGTEXT DEFAULT NULL,
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `calculated_by` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`batch_id`),
+    KEY `idx_period_active` (`calculation_year`, `period_month`, `is_active`),
+    KEY `idx_file_hash` (`file_hash`),
+    KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `wp_uniform_allocation_calculation_details` (
+    `detail_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+    `batch_id` BIGINT(20) UNSIGNED NOT NULL,
+    `source_row` INT NOT NULL DEFAULT 0,
+    `employee_no` VARCHAR(50) NOT NULL,
+    `item_id` INT NOT NULL,
+    `requested_quantity` INT NOT NULL DEFAULT 0,
+    `allocated_quantity` INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (`detail_id`),
+    KEY `idx_batch_id` (`batch_id`),
+    KEY `idx_employee_no` (`employee_no`),
+    KEY `idx_item_id` (`item_id`),
+    KEY `idx_batch_item` (`batch_id`, `item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `wp_uniform_inventory_movements` (
     `movement_id` INT AUTO_INCREMENT NOT NULL,
     `item_id` INT NOT NULL,

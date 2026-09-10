@@ -48,6 +48,10 @@ class UMS_Inventory_Import {
 	}
 
 	public static function analyze( $file_path, $file_name ) {
+		if ( ! UMS_DB_Uniform_Material::is_ready() ) {
+			throw new RuntimeException( 'Database chưa có cấu trúc master Mã SAP.' );
+		}
+
 		$reader = new UMS_XLSX_Reader( $file_path );
 		if ( ! $reader->has_sheet( self::SHEET_NAME ) ) {
 			throw new RuntimeException( 'Không tìm thấy sheet Template.' );
@@ -62,13 +66,18 @@ class UMS_Inventory_Import {
 			$errors[] = 'Template phải có dạng STT, Loại sản phẩm, Số lượng, Ghi chú; hoặc dạng cũ có thêm cột Size riêng.';
 		}
 
-		$catalog      = self::build_catalog_index( UMS_DB_Inventory::get_all() );
+		$inventory    = UMS_DB_Inventory::get_all();
+		$catalog      = self::build_catalog_index( $inventory );
+		$materials    = UMS_DB_Uniform_Material::get_all( array( 'status' => 'active', 'limit' => 10000 ) );
+		$master_index = self::build_material_index( $materials );
 		$seen_products = array();
+		$projected_stock = array();
 		foreach ( $sheet as $row_number => $row ) {
 			if ( $row_number < 2 || false === $layout ) {
 				continue;
 			}
 			$product      = sanitize_text_field( isset( $row[ $layout['product'] ] ) ? $row[ $layout['product'] ] : '' );
+			$source_product = $product;
 			$size         = $layout['size'] !== '' ? sanitize_text_field( isset( $row[ $layout['size'] ] ) ? $row[ $layout['size'] ] : '' ) : '';
 			$quantity_raw = trim( (string) ( isset( $row[ $layout['quantity'] ] ) ? $row[ $layout['quantity'] ] : '' ) );
 			$note         = sanitize_textarea_field( isset( $row[ $layout['note'] ] ) ? $row[ $layout['note'] ] : '' );
@@ -92,70 +101,54 @@ class UMS_Inventory_Import {
 				continue;
 			}
 
-			if ( $size !== '' ) {
-				$catalog_key = self::catalog_key( $product, $size );
-				$matches     = isset( $catalog['by_product_size'][ $catalog_key ] ) ? $catalog['by_product_size'][ $catalog_key ] : array();
-			} else {
-				$product_key = self::normalize( $product );
-				$matches     = isset( $catalog['by_product'][ $product_key ] ) ? $catalog['by_product'][ $product_key ] : array();
-				if ( empty( $matches ) ) {
-					$size = '0';
-				}
-			}
-			if ( count( $matches ) > 1 ) {
-				$errors[] = $size === ''
-					? sprintf( 'Dòng %d: Loại sản phẩm "%s" có nhiều size. Hãy thêm hậu tố "Size ..." vào tên.', $row_number, $product )
-					: sprintf( 'Dòng %d: Loại sản phẩm "%s" với size "%s" đang bị trùng trong kho UMS.', $row_number, $product, $size );
+			$resolved = self::resolve_material_mapping( $master_index, $source_product, $product, $size );
+			if ( is_wp_error( $resolved ) ) {
+				$errors[] = sprintf( 'Dòng %d: %s', $row_number, $resolved->get_error_message() );
 				continue;
 			}
 
-			$is_new = empty( $matches );
-			$item    = $is_new ? null : reset( $matches );
-			$product_key   = self::normalize( $product );
-			$product_items = isset( $catalog['by_product'][ $product_key ] ) ? $catalog['by_product'][ $product_key ] : array();
-			$price_result  = self::resolve_product_price( $product_items );
-			$current_price = $is_new ? 0.0 : (float) $item['base_price'];
-			if ( $price_result['ambiguous'] ) {
+			$item_id = absint( $resolved['inventory_item_id'] );
+			$item    = isset( $catalog['by_id'][ $item_id ] ) ? $catalog['by_id'][ $item_id ] : null;
+			if ( ! $item ) {
+				$errors[] = sprintf( 'Dòng %d: ánh xạ Mã SAP của "%s" trỏ tới sản phẩm kho #%d không tồn tại.', $row_number, $source_product, $item_id );
+				continue;
+			}
+
+			$product = self::product_label( $item );
+			$size    = trim( (string) $item['size'] );
+			if ( self::normalize( $resolved['product_name'] ) !== self::normalize( $product )
+				|| self::normalize_size( $resolved['size'] ) !== self::normalize_size( $size ) ) {
 				$errors[] = sprintf(
-					'Dòng %d: Sản phẩm "%s" đang có nhiều đơn giá theo size, không thể tự xác định giá cho size "%s".',
-					$row_number,
-					$product,
-					$size
+					'Dòng %d: ánh xạ Mã SAP của "%s" không còn khớp sản phẩm UMS "%s" size "%s". Hãy import lại master Mã SAP.',
+					$row_number, $source_product, $product, $size
 				);
 				continue;
 			}
-			$unit_price = $current_price > 0 ? $current_price : $price_result['price'];
-			if ( $is_new && ! empty( $product_items ) ) {
-				// Dùng tên chuẩn đang có để các size không bị tách thành sản phẩm khác
-				// chỉ vì khác cách viết dấu hoặc chữ hoa/thường.
-				$product = self::product_label( reset( $product_items ) );
-			}
-			if ( ! $is_new ) {
-				$product = self::product_label( $item );
-				$size    = trim( (string) $item['size'] );
-			}
-			$dedupe_key = self::catalog_key( $product, $size );
+			$before_qty = isset( $projected_stock[ $item_id ] ) ? $projected_stock[ $item_id ] : (int) $item['stock_qty'];
+			$after_qty  = $before_qty + (int) $quantity;
+			$projected_stock[ $item_id ] = $after_qty;
+
+			$dedupe_key = self::catalog_key( $source_product, $size );
 			if ( isset( $seen_products[ $dedupe_key ] ) ) {
 				$errors[] = sprintf(
-					'Dòng %d: Sản phẩm "%s" size "%s" đã được nhập tại dòng %d.',
-					$row_number, $product, $size, $seen_products[ $dedupe_key ]
+					'Dòng %d: Loại trong file "%s" size "%s" đã được nhập tại dòng %d.',
+					$row_number, $source_product, $size, $seen_products[ $dedupe_key ]
 				);
 				continue;
 			}
 			$seen_products[ $dedupe_key ] = (int) $row_number;
 			$rows[] = array(
 				'source_row'  => (int) $row_number,
-				'item_id'     => $is_new ? 0 : (int) $item['item_id'],
+				'item_id'     => (int) $item['item_id'],
+				'material_id' => absint( $resolved['material_id'] ),
+				'source_product' => $source_product,
 				'product'     => $product,
 				'size'        => $size,
-				'category_name' => self::category_name_from_product( $product ),
-				'is_new'      => $is_new ? 1 : 0,
 				'quantity'    => (int) $quantity,
 				'note'        => $note,
-				'before_qty'  => $is_new ? 0 : (int) $item['stock_qty'],
-				'after_qty'   => ( $is_new ? 0 : (int) $item['stock_qty'] ) + (int) $quantity,
-				'unit_price'  => (float) $unit_price,
-				'inherit_price' => $current_price <= 0 && $unit_price > 0 ? 1 : 0,
+				'before_qty'  => $before_qty,
+				'after_qty'   => $after_qty,
+				'unit_price'  => (float) $item['base_price'],
 			);
 		}
 
@@ -169,7 +162,7 @@ class UMS_Inventory_Import {
 			'rows'      => $rows,
 			'errors'    => array_values( array_unique( $errors ) ),
 			'total_quantity' => array_sum( array_column( $rows, 'quantity' ) ),
-			'new_rows' => count( array_filter( $rows, function( $row ) { return ! empty( $row['is_new'] ); } ) ),
+			'new_rows' => 0,
 		);
 	}
 
@@ -237,6 +230,9 @@ class UMS_Inventory_Import {
 		if ( UMS_DB_Inventory_Import::completed_hash_exists( $preview['file_hash'] ) ) {
 			return array( 'success' => false, 'errors' => array( 'File này đã được import thành công trước đó.' ) );
 		}
+		if ( ! UMS_DB_Uniform_Material::is_ready() ) {
+			return array( 'success' => false, 'errors' => array( 'Database chưa có cấu trúc master Mã SAP.' ) );
+		}
 
 		$batch_id = UMS_DB_Inventory_Import::insert(
 			array(
@@ -255,60 +251,15 @@ class UMS_Inventory_Import {
 		$errors   = array();
 		$imported = 0;
 		$total    = 0;
-		$live_catalog = self::build_catalog_index( UMS_DB_Inventory::get_all() );
 		$wpdb->query( 'START TRANSACTION' );
 
 		foreach ( $preview['rows'] as $row ) {
-			if ( (float) $row['unit_price'] <= 0 ) {
-				$product_key  = self::normalize( $row['product'] );
-				$price_result = self::resolve_product_price(
-					isset( $live_catalog['by_product'][ $product_key ] ) ? $live_catalog['by_product'][ $product_key ] : array()
-				);
-				if ( $price_result['ambiguous'] ) {
-					$errors[] = sprintf( 'Dòng %d: Sản phẩm "%s" có nhiều đơn giá, không thể tự kế thừa.', $row['source_row'], $row['product'] );
-					break;
-				}
-				if ( $price_result['price'] > 0 ) {
-					$row['unit_price']   = $price_result['price'];
-					$row['inherit_price'] = 1;
-				}
+			$material = UMS_DB_Uniform_Material::get_by_id( $row['material_id'] );
+			if ( ! $material || empty( $material['is_active'] ) || absint( $material['inventory_item_id'] ) !== absint( $row['item_id'] ) ) {
+				$errors[] = sprintf( 'Dòng %d: ánh xạ master Mã SAP đã thay đổi sau bước xem trước. Hãy tải lại file.', $row['source_row'] );
+				break;
 			}
-			$is_new      = ! empty( $row['is_new'] );
-			$created_now = false;
-			$item        = $is_new ? null : UMS_DB_Inventory::get_by_id_for_update( $row['item_id'] );
-			if ( $is_new ) {
-				$matches = UMS_DB_Inventory::get_by_name_and_size( $row['product'], $row['size'] );
-				if ( count( $matches ) > 1 ) {
-					$errors[] = sprintf( 'Dòng %d: Sản phẩm vừa được tạo trùng trong kho. Hãy kiểm tra lại.', $row['source_row'] );
-					break;
-				}
-				if ( count( $matches ) === 1 ) {
-					$item = UMS_DB_Inventory::get_by_id_for_update( $matches[0]['item_id'] );
-				} else {
-					$category_id = self::ensure_parent_category( $row['category_name'] );
-					if ( $category_id <= 0 ) {
-						$errors[] = sprintf( 'Dòng %d: Không tạo được danh mục cha "%s".', $row['source_row'], $row['category_name'] );
-						break;
-					}
-					$inserted = UMS_DB_Inventory::insert(
-						array(
-							'category_id' => $category_id, 'item_type' => $row['category_name'],
-							'item_variant' => $row['product'], 'size' => $row['size'], 'color_code' => '',
-							'stock_qty' => (int) $row['quantity'], 'base_price' => (float) $row['unit_price'],
-						)
-					);
-					if ( false === $inserted ) {
-						$errors[] = sprintf( 'Dòng %d: Không tạo được sản phẩm mới: %s', $row['source_row'], UMS_DB_Inventory::get_last_error() );
-						break;
-					}
-					$item = array(
-						'item_id' => UMS_DB_Inventory::get_last_insert_id(), 'item_variant' => $row['product'],
-						'item_type' => $row['category_name'], 'size' => $row['size'],
-						'stock_qty' => (int) $row['quantity'], 'base_price' => (float) $row['unit_price'],
-					);
-					$created_now = true;
-				}
-			}
+			$item = UMS_DB_Inventory::get_by_id_for_update( $row['item_id'] );
 
 			if ( ! $item ) {
 				$errors[] = sprintf( 'Dòng %d: Sản phẩm không còn tồn tại.', $row['source_row'] );
@@ -319,19 +270,24 @@ class UMS_Inventory_Import {
 				break;
 			}
 
-			$before = $created_now ? 0 : (int) $item['stock_qty'];
-			$after  = $created_now ? (int) $row['quantity'] : $before + (int) $row['quantity'];
+			$before = (int) $item['stock_qty'];
+			$after  = $before + (int) $row['quantity'];
 			$inventory_update = array( 'stock_qty' => $after );
-			if ( ! empty( $row['inherit_price'] ) && (float) $item['base_price'] <= 0 && (float) $row['unit_price'] > 0 ) {
-				$inventory_update['base_price'] = (float) $row['unit_price'];
-				$item['base_price']             = (float) $row['unit_price'];
-			}
-			if ( ! $created_now && false === UMS_DB_Inventory::update( $item['item_id'], $inventory_update ) ) {
+			if ( false === UMS_DB_Inventory::update( $item['item_id'], $inventory_update ) ) {
 				$errors[] = sprintf( 'Dòng %d: Không cập nhật được tồn kho.', $row['source_row'] );
 				break;
 			}
 
 			$note = trim( (string) $row['note'] );
+			$movement_note = sprintf(
+				'Import nhập kho: %s -> %s, size %s.',
+				$row['source_product'],
+				$row['product'],
+				$row['size']
+			);
+			if ( $note !== '' ) {
+				$movement_note .= ' Ghi chú: ' . $note;
+			}
 			$movement = UMS_DB_Inventory_Movement::insert(
 				array(
 					'item_id' => $item['item_id'], 'request_id' => null, 'movement_type' => 'in',
@@ -339,7 +295,7 @@ class UMS_Inventory_Import {
 					'unit_price' => (float) $item['base_price'],
 					'total_price' => (float) $item['base_price'] * (int) $row['quantity'],
 					'actor_user_id' => absint( $user_id ), 'target_user_id' => null,
-					'target_employee_no' => '', 'note' => $note !== '' ? $note : 'Import nhập kho từ Excel.',
+					'target_employee_no' => '', 'note' => $movement_note,
 					'import_batch_id' => $batch_id, 'source_row' => $row['source_row'],
 				)
 			);
@@ -373,42 +329,15 @@ class UMS_Inventory_Import {
 		return array( 'success' => empty( $errors ), 'batch_id' => $batch_id, 'imported' => $imported, 'total' => $total, 'errors' => $errors );
 	}
 
-	private static function ensure_parent_category( $category_name ) {
-		$category = UMS_DB_Product_Category::get_parent_by_name( $category_name );
-		if ( $category ) {
-			if ( (int) $category['is_active'] !== 1
-				&& false === UMS_DB_Product_Category::update( $category['category_id'], array( 'is_active' => 1 ) ) ) {
-				return 0;
-			}
-
-			return (int) $category['category_id'];
-		}
-
-		$inserted = UMS_DB_Product_Category::insert(
-			array( 'parent_id' => 0, 'category_name' => $category_name, 'is_active' => 1 )
-		);
-
-		return false === $inserted ? 0 : UMS_DB_Product_Category::get_last_insert_id();
-	}
-
-	private static function category_name_from_product( $product ) {
-		$parts = preg_split( '/\s+/u', trim( (string) $product ) );
-		$name  = isset( $parts[0] ) ? preg_replace( '/[^\p{L}\p{N}_-]/u', '', $parts[0] ) : '';
-		if ( $name === '' ) {
-			return 'Khác';
-		}
-
-		return function_exists( 'mb_convert_case' ) ? mb_convert_case( $name, MB_CASE_TITLE, 'UTF-8' ) : ucfirst( strtolower( $name ) );
-	}
-
 	private static function product_label( $item ) {
 		$label = trim( (string) $item['item_variant'] );
 		return $label !== '' ? $label : trim( (string) $item['item_type'] );
 	}
 
 	private static function build_catalog_index( $items ) {
-		$catalog = array( 'by_product_size' => array(), 'by_product' => array() );
+		$catalog = array( 'by_product_size' => array(), 'by_product' => array(), 'by_id' => array() );
 		foreach ( $items as $item ) {
+			$catalog['by_id'][ absint( $item['item_id'] ) ] = $item;
 			$product = self::product_label( $item );
 			$key     = self::catalog_key( $product, $item['size'] );
 			if ( ! isset( $catalog['by_product_size'][ $key ] ) ) {
@@ -424,6 +353,61 @@ class UMS_Inventory_Import {
 		}
 
 		return $catalog;
+	}
+
+	private static function build_material_index( $materials ) {
+		$index = array( 'by_source' => array(), 'by_target' => array() );
+		foreach ( $materials as $material ) {
+			$source_key = self::normalize( $material['item_name'] );
+			$target_key = self::catalog_key( $material['product_name'], self::normalize_size( $material['size'] ) );
+			$index['by_source'][ $source_key ][] = $material;
+			$index['by_target'][ $target_key ][] = $material;
+		}
+		return $index;
+	}
+
+	private static function resolve_material_mapping( $index, $source_product, $product, $size ) {
+		$source_key = self::normalize( $source_product );
+		$candidates = isset( $index['by_source'][ $source_key ] ) ? $index['by_source'][ $source_key ] : array();
+		if ( ! empty( $candidates ) && trim( (string) $size ) !== '' ) {
+			$normalized_size = self::normalize_size( $size );
+			$candidates = array_values( array_filter( $candidates, function( $candidate ) use ( $normalized_size ) {
+				return self::normalize_size( $candidate['size'] ) === $normalized_size;
+			} ) );
+		}
+		if ( empty( $candidates ) ) {
+			$target_key = self::catalog_key( $product, self::normalize_size( $size ) );
+			$candidates = isset( $index['by_target'][ $target_key ] ) ? $index['by_target'][ $target_key ] : array();
+		}
+		if ( empty( $candidates ) ) {
+			return new WP_Error( 'material_not_found', sprintf(
+				'Loại "%s"%s chưa có ánh xạ trong master Mã SAP.',
+				$source_product, $size !== '' ? ' size "' . $size . '"' : ''
+			) );
+		}
+
+		$by_item = array();
+		foreach ( $candidates as $candidate ) {
+			$item_id = absint( $candidate['inventory_item_id'] );
+			if ( $item_id > 0 ) {
+				$by_item[ $item_id ][] = $candidate;
+			}
+		}
+		if ( count( $by_item ) !== 1 ) {
+			return new WP_Error( 'material_ambiguous', sprintf(
+				'Loại "%s"%s phải quy về đúng một sản phẩm UMS qua master Mã SAP, hiện tìm thấy %d.',
+				$source_product, $size !== '' ? ' size "' . $size . '"' : '', count( $by_item )
+			) );
+		}
+
+		$matches = reset( $by_item );
+		return reset( $matches );
+	}
+
+	private static function normalize_size( $size ) {
+		$size = strtoupper( preg_replace( '/\s+/u', '', trim( (string) $size ) ) );
+		$aliases = array( '' => '0', '2XL' => 'XXL', '3XL' => 'XXXL' );
+		return isset( $aliases[ $size ] ) ? $aliases[ $size ] : $size;
 	}
 
 	private static function resolve_product_price( $items ) {

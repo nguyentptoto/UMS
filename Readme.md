@@ -186,7 +186,7 @@ Thứ tự ưu tiên khi kiểm tra cấp phát:
 
 Ô chọn `Kỳ cấp` vẫn chỉ gồm T4 và T9. Đây là mốc thời gian đối chiếu, không phải bộ lọc loại định mức: trong kỳ đã chọn, hệ thống xét toàn bộ rule phù hợp với từng CNV (định kỳ, CNV mới, giày N+1 và công việc đặc thù), sau đó dùng ma trận có ưu tiên cao nhất cho từng sản phẩm để không cộng chồng các định mức thay thế nhau.
 
-Khi import file đăng ký xuất kho, số lượng còn lại là giới hạn cấp tối đa. Nếu CNV đăng ký ít hơn hoặc bằng giới hạn thì cấp theo số đăng ký; nếu đăng ký nhiều hơn thì hệ thống tự giảm xuống đúng số lượng còn lại và ghi cảnh báo. Với sản phẩm không thuộc định mức, size không hợp lệ hoặc CNV không có trong Sơ đồ tổ chức TVN, hệ thống bỏ phần cấp tương ứng và ghi cảnh báo nhưng vẫn cho nhập các dòng hợp lệ khác. Thiếu tồn kho vẫn là lỗi chặn; file đã xuất trước đó cũng bị chặn để tránh trừ kho hai lần. Hệ thống tiếp tục cộng lịch sử đã cấp để ngăn cấp lặp.
+Chức năng `Tính số lượng cấp phát` đọc file đăng ký nhưng không xuất hoặc trừ tồn kho. Số lượng còn lại là giới hạn cấp tối đa: đăng ký ít hơn hoặc bằng giới hạn thì tính theo số đăng ký, đăng ký nhiều hơn thì tự giảm xuống đúng số lượng còn lại và ghi cảnh báo. Sản phẩm không thuộc định mức, size không hợp lệ hoặc CNV không có trong Sơ đồ tổ chức TVN bị loại khỏi kết quả nhưng không làm mất các dòng hợp lệ khác. Kết quả được chốt thành một snapshot theo `Năm + T4/T9`; snapshot mới thay thế snapshot đang hoạt động cùng kỳ và là nguồn nhu cầu cấp phát cho PR.
 
 Marker của hai ma trận giày được gắn theo từng sản phẩm UMS sau bước ánh xạ. Vì vậy loại giày có số lượng `0` không rơi xuống định mức khác, đồng thời scope giày không che định mức áo, quần hoặc mũ trong cùng kỳ cấp phát.
 
@@ -259,9 +259,9 @@ Nguồn dữ liệu nằm ở `wp_uniform_inventory_movements`:
 
 Trang `Sản phẩm & Tổng kho` có chức năng tải template `.xlsx` trống gồm `STT`, `Loại sản phẩm`, `Số lượng` và `Ghi chú`. Admin tự nhập các dòng hàng cần nhập kho; template không sinh trước danh sách sản phẩm. Size được đặt ở cuối tên, ví dụ `Quần CN Size L` hoặc `Giầy KPR O-010 Size 35`. Importer vẫn đọc được template 5 cột cũ có cột `Size` riêng. Hai cách viết `Giầy` và `Giày` được coi là tương đương khi đối chiếu và tổng hợp nhưng dữ liệu nguồn không bị tự ý đổi tên.
 
-Khi đọc file, UMS tách hậu tố `Size ...` rồi đối chiếu chính xác cặp `Loại sản phẩm + Size` với dữ liệu kho. Nếu tên không có hậu tố size và chưa tồn tại, hệ thống dùng size kỹ thuật `0`; nếu sản phẩm đã có nhiều size, hệ thống yêu cầu bổ sung size vào tên. Dòng khớp với nhiều bản ghi hoặc trùng sản phẩm/size với một dòng khác trong cùng file sẽ bị báo lỗi theo số dòng Excel.
+Khi đọc file, UMS ưu tiên đối chiếu nguyên tên `Loại sản phẩm` với cột `Loại` của master Mã SAP. Nếu file nhập theo tên chuẩn, hệ thống tách hậu tố `Size ...` và đối chiếu cặp `Loại đồng phục lên PR + Size`. Nhiều dòng master cùng quy về một `inventory_item_id` được xem là cùng một sản phẩm kho; chỉ trường hợp quy về nhiều `inventory_item_id` khác nhau mới bị báo lỗi ánh xạ.
 
-Sản phẩm/size chưa tồn tại được hiển thị là `Tạo mới` trong bước xem trước. Khi xác nhận, UMS tạo danh mục cha từ từ đầu tiên của tên sản phẩm (`Áo`, `Quần`, `Giày`, `Mũ`...), cộng tồn và ghi lịch sử trong cùng transaction. Đơn giá thuộc về loại sản phẩm và được dùng chung cho mọi size: size mới tự kế thừa giá đang có của sản phẩm; sản phẩm hoàn toàn mới chưa có giá tham chiếu mới dùng giá `0`. Khi Admin sửa giá ở một size, UMS đồng bộ giá đó sang toàn bộ size cùng sản phẩm.
+Import nhập kho đối chiếu `Loại sản phẩm` với cột `Loại` của master Mã SAP; nếu file dùng tên chuẩn thì hệ thống cũng nhận `Loại đồng phục lên PR + Size`. Kết quả ánh xạ phải quy về đúng một `inventory_item_id` đã có, sau đó UMS chỉ cộng tồn và ghi lịch sử trong cùng transaction. Import kho không tự tạo danh mục, sản phẩm hoặc size mới; dữ liệu chưa có ánh xạ phải được bổ sung qua module Mã SAP đồng phục trước.
 
 Luồng xử lý gồm `Tải template nhập kho` -> nhập số lượng -> `Đọc và xem trước` -> kiểm tra tồn trước/sau -> `Xác nhận nhập kho`. Việc cộng tồn và ghi lịch sử chạy trong một transaction; nếu một dòng lỗi, toàn bộ file được rollback. Hash file đã nhập thành công được lưu để ngăn import trùng.
 
@@ -413,9 +413,9 @@ Dữ liệu dự phòng chỉ tồn tại trong file upload và request hiện t
 Công thức áp dụng theo từng dòng master mã SAP và size:
 
 ```text
-SL PR = max(0, SL trên phiếu đã hoàn thành trong năm + SL dự phòng - Tồn kho hiện tại)
+SL PR = max(0, SL cấp phát đã chốt của kỳ + SL dự phòng - Tồn kho hiện tại)
 ```
 
 Tên loại trong file dự phòng phải khớp duy nhất với cột `item_name` của master mã SAP. Master tiếp tục dùng `inventory_item_id` để lấy size, tồn kho và đơn giá từ UMS. Dòng cần lên PR nhưng chưa có đơn giá được cảnh báo trên màn hình và không được xuất file.
 
-Kết quả được hiển thị bằng jqxGrid. Nút `Xuất file PR` tính lại trực tiếp từ file đang chọn rồi ghi vào workbook mẫu tại `assets/templates/ums-pr-template.xlsx`; sheet mapping của mẫu được giữ nguyên. Nguồn nhu cầu định kỳ mặc định là chi tiết các phiếu có trạng thái `completed` trong năm được chọn. Có thể thay nguồn tổng hợp này bằng filter `ums_pr_periodic_demand_by_item` khi UMS có bảng đăng ký định kỳ chuyên biệt.
+Kết quả được hiển thị bằng jqxGrid. Nút `Xuất file PR` tính lại trực tiếp từ file đang chọn rồi ghi vào workbook mẫu tại `assets/templates/ums-pr-template.xlsx`; sheet mapping của mẫu được giữ nguyên. Nhu cầu cấp phát được đọc từ snapshot đang hoạt động đúng năm và kỳ T4/T9. Nếu chưa chốt kết quả cho kỳ đã chọn, hệ thống không cho tính hoặc xuất PR.

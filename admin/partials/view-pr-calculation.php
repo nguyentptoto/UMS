@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<hr class="wp-header-end">
 
 	<?php if ( ! $table_ready ) : ?>
-		<div class="notice notice-error inline"><p>Chưa có master mã SAP. Hãy import đầy đủ cấu trúc trong <code>ums.sql</code> và dữ liệu tại menu Mã SAP đồng phục.</p></div>
+		<div class="notice notice-error inline"><p>Chưa có đầy đủ master mã SAP hoặc bảng kết quả tính số lượng cấp phát. Hãy cập nhật <code>ums.sql</code>, import master SAP và chốt kết quả cấp phát trước khi lập PR.</p></div>
 	<?php endif; ?>
 
 	<div class="ums-panel">

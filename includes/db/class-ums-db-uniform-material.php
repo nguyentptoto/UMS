@@ -63,6 +63,16 @@ class UMS_DB_Uniform_Material extends UMS_DB_Base {
 		);
 	}
 
+	public static function get_by_id( $material_id ) {
+		return self::db()->get_row(
+			self::db()->prepare(
+				'SELECT * FROM ' . self::table() . ' WHERE material_id = %d LIMIT 1',
+				absint( $material_id )
+			),
+			ARRAY_A
+		);
+	}
+
 	public static function completed_hash_exists( $file_hash ) {
 		$sql = self::db()->prepare(
 			"SELECT COUNT(*) FROM " . self::batch_table() . " WHERE file_hash = %s AND import_status = 'completed'",
