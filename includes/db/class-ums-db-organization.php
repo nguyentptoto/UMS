@@ -29,6 +29,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			'per_page'   => 20,
 			'orderby'    => 'employee_no',
 			'order'      => 'ASC',
+			'employment_status' => 'active',
 		);
 		$args = wp_parse_args( $args, $defaults );
 
@@ -52,6 +53,8 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			'factory',
 			'source_updated_at',
 			'synced_at',
+			'employment_status',
+			'left_detected_at',
 		);
 		$orderby = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'employee_no';
 		$order   = strtoupper( (string) $args['order'] ) === 'DESC' ? 'DESC' : 'ASC';
@@ -61,7 +64,8 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		$table   = self::table();
 
 		$sql = "SELECT source_id, sheet_stt, source_version, employee_no, full_name, division, department, section, team,
-			position, cost_center, date_joined, first_contract_date, previous_position, email, factory, source_created_at, source_updated_at, synced_at
+			position, cost_center, date_joined, first_contract_date, previous_position, email, factory, source_created_at, source_updated_at, synced_at,
+			employment_status, last_seen_at, left_detected_at
 			FROM $table
 			WHERE " . implode( ' AND ', $where ) . "
 			ORDER BY $orderby $order, source_id ASC
@@ -90,7 +94,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		}
 
 		$table = self::table();
-		return self::db()->get_col( "SELECT DISTINCT $column FROM $table WHERE $column <> '' ORDER BY $column ASC" );
+		return self::db()->get_col( "SELECT DISTINCT $column FROM $table WHERE $column <> '' AND employment_status = 'active' ORDER BY $column ASC" );
 	}
 
 	/**
@@ -104,7 +108,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		return self::db()->get_results(
 			'SELECT employee_no, full_name, department, team, position, date_joined, first_contract_date
 			FROM ' . self::table() . "
-			WHERE employee_no <> ''
+			WHERE employee_no <> '' AND employment_status = 'active'
 			ORDER BY employee_no ASC",
 			ARRAY_A
 		);
@@ -129,7 +133,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 				'position'    => '',
 			)
 		);
-		$where  = array( "employee_no <> ''" );
+		$where  = array( "employee_no <> ''", "employment_status = 'active'" );
 		$params = array();
 
 		if ( $args['search'] !== '' ) {
@@ -190,7 +194,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 
 		return self::db()->get_row(
 			self::db()->prepare(
-				'SELECT * FROM ' . self::table() . ' WHERE employee_no = %s LIMIT 1',
+				"SELECT * FROM " . self::table() . " WHERE employee_no = %s AND employment_status = 'active' LIMIT 1",
 				$employee_no
 			),
 			ARRAY_A
@@ -212,7 +216,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			$rows = self::db()->get_results(
 				self::db()->prepare(
 					'SELECT employee_no, full_name, department, team, position, cost_center, date_joined, first_contract_date, email, factory
-					FROM ' . self::table() . " WHERE employee_no IN ($placeholders)",
+					FROM ' . self::table() . " WHERE employment_status = 'active' AND employee_no IN ($placeholders)",
 					$batch
 				),
 				ARRAY_A
@@ -255,7 +259,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		$params       = array();
 
 		foreach ( $rows as $row ) {
-			$placeholders[] = '(%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)';
+			$placeholders[] = '(%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)';
 			$params[] = absint( $row['id'] );
 			$params[] = absint( $row['sheet_stt'] );
 			$params[] = (int) $row['version'];
@@ -276,12 +280,15 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			$params[] = $row['time_update'];
 			$params[] = $synced_at;
 			$params[] = $sync_token;
+			$params[] = 'active';
+			$params[] = $synced_at;
 		}
 
 		$table = self::table();
 		$sql = "INSERT INTO $table
 			(source_id, sheet_stt, source_version, employee_no, full_name, division, department, section, team, position,
-			cost_center, date_joined, first_contract_date, previous_position, email, factory, source_created_at, source_updated_at, synced_at, sync_token)
+			cost_center, date_joined, first_contract_date, previous_position, email, factory, source_created_at, source_updated_at, synced_at, sync_token,
+			employment_status, last_seen_at)
 			VALUES " . implode( ',', $placeholders ) . '
 			ON DUPLICATE KEY UPDATE
 			sheet_stt = VALUES(sheet_stt), source_version = VALUES(source_version), employee_no = VALUES(employee_no), full_name = VALUES(full_name),
@@ -289,14 +296,38 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			position = VALUES(position), cost_center = VALUES(cost_center), date_joined = VALUES(date_joined), first_contract_date = VALUES(first_contract_date),
 			previous_position = VALUES(previous_position), email = VALUES(email), factory = VALUES(factory),
 			source_created_at = VALUES(source_created_at), source_updated_at = VALUES(source_updated_at),
-			synced_at = VALUES(synced_at), sync_token = VALUES(sync_token)';
+			synced_at = VALUES(synced_at), sync_token = VALUES(sync_token), employment_status = VALUES(employment_status),
+			last_seen_at = VALUES(last_seen_at), left_detected_at = NULL';
 
 		return self::db()->query( self::db()->prepare( $sql, $params ) );
 	}
 
-	public static function delete_not_in_sync( $sync_token ) {
-		$table = self::table();
-		return self::db()->query( self::db()->prepare( "DELETE FROM $table WHERE sync_token <> %s", $sync_token ) );
+	public static function get_active_not_in_sync( $sync_token ) {
+		return self::db()->get_results(
+			self::db()->prepare(
+				"SELECT * FROM " . self::table() . " WHERE employment_status = 'active' AND sync_token <> %s ORDER BY employee_no ASC",
+				$sync_token
+			),
+			ARRAY_A
+		);
+	}
+
+	public static function mark_not_in_sync_as_left( $sync_token, $detected_at ) {
+		return self::db()->query(
+			self::db()->prepare(
+				"UPDATE " . self::table() . " SET employment_status = 'left', left_detected_at = %s WHERE employment_status = 'active' AND sync_token <> %s",
+				$detected_at,
+				$sync_token
+			)
+		);
+	}
+
+	public static function supports_employment_status() {
+		if ( ! self::table_exists() ) {
+			return false;
+		}
+		$column = self::db()->get_var( "SHOW COLUMNS FROM " . self::table() . " LIKE 'employment_status'" );
+		return $column === 'employment_status';
 	}
 
 	public static function get_last_error() {
@@ -311,10 +342,16 @@ class UMS_DB_Organization extends UMS_DB_Base {
 				'division'   => '',
 				'department' => '',
 				'factory'    => '',
+				'employment_status' => 'active',
 			)
 		);
 		$where  = array( '1=1' );
 		$params = array();
+
+		if ( $args['employment_status'] !== '' && $args['employment_status'] !== 'all' ) {
+			$where[]  = 'employment_status = %s';
+			$params[] = sanitize_key( $args['employment_status'] );
+		}
 
 		if ( $args['search'] !== '' ) {
 			$like = '%' . self::db()->esc_like( sanitize_text_field( $args['search'] ) ) . '%';

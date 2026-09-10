@@ -35,6 +35,14 @@ class UMS_Organization_Sync {
 			);
 		}
 
+		if ( ! UMS_DB_Organization::supports_employment_status() || ! UMS_DB_Employee_Exit::is_ready() ) {
+			return new WP_Error(
+				'employee_exit_schema_missing',
+				'Database chưa có cấu trúc quản lý CNV nghỉ việc. Hãy chạy phần UPDATE trong ums.sql trước khi đồng bộ.',
+				array( 'status' => 503 )
+			);
+		}
+
 		$payload = $request->get_json_params();
 		$rows    = is_array( $payload ) && isset( $payload['rows'] ) && is_array( $payload['rows'] )
 			? $payload['rows']
@@ -88,6 +96,7 @@ class UMS_Organization_Sync {
 		$user_sync = array(
 			'created'          => 0,
 			'updated'          => 0,
+			'skipped'          => 0,
 			'password_synced'  => 0,
 			'password_default' => 0,
 			'errors'           => array(),
@@ -102,20 +111,24 @@ class UMS_Organization_Sync {
 				);
 			}
 
+			UMS_Employee_Exit_Manager::restore_synced_employees( $normalized );
 			$user_sync = self::sync_wp_users_from_organization_rows( $normalized );
 		}
 
 		$finalize = ! empty( $payload['finalize'] );
 		$deleted  = 0;
+		$exit_cases_created = 0;
 		if ( $finalize && ! empty( $normalized ) ) {
-			$deleted = UMS_DB_Organization::delete_not_in_sync( $sync_token );
-			if ( $deleted === false ) {
+			$exit_result = UMS_Employee_Exit_Manager::finalize_organization_sync( $sync_token, $synced_at );
+			if ( is_wp_error( $exit_result ) ) {
 				return new WP_Error(
 					'organization_cleanup_failed',
-					'Không dọn được dữ liệu tổ chức cũ: ' . UMS_DB_Organization::get_last_error(),
+					'Không thể chốt danh sách CNV nghỉ việc: ' . $exit_result->get_error_message(),
 					array( 'status' => 500 )
 				);
 			}
+			$deleted = (int) $exit_result['left'];
+			$exit_cases_created = (int) $exit_result['cases_created'];
 		}
 
 		$failed = count( $rows ) - count( $normalized );
@@ -127,6 +140,7 @@ class UMS_Organization_Sync {
 				'ended_at'   => current_time( 'mysql' ),
 				'total'      => count( $normalized ),
 				'deleted'    => (int) $deleted,
+				'exit_cases_created' => $exit_cases_created,
 				'user_sync'  => $user_sync,
 				'source'     => 'google-sheet-popup-bridge',
 			),
@@ -141,6 +155,8 @@ class UMS_Organization_Sync {
 				'updated' => count( $normalized ),
 				'failed'  => $failed,
 				'deleted' => (int) $deleted,
+				'left_detected' => (int) $deleted,
+				'exit_cases_created' => $exit_cases_created,
 				'users_created' => $user_sync['created'],
 				'users_updated' => $user_sync['updated'],
 				'users_skipped' => $user_sync['skipped'],
@@ -367,10 +383,11 @@ class UMS_Organization_Sync {
 				throw new RuntimeException( 'Bảng nguồn không có dữ liệu; danh sách nội bộ được giữ nguyên.' );
 			}
 
-			$deleted = UMS_DB_Organization::delete_not_in_sync( $sync_token );
-			if ( $deleted === false ) {
-				throw new RuntimeException( UMS_DB_Organization::get_last_error() );
+			$exit_result = UMS_Employee_Exit_Manager::finalize_organization_sync( $sync_token, $synced_at );
+			if ( is_wp_error( $exit_result ) ) {
+				throw new RuntimeException( $exit_result->get_error_message() );
 			}
+			$deleted = (int) $exit_result['left'];
 
 			mysqli_close( $conn );
 			delete_transient( self::LOCK_KEY );
@@ -378,6 +395,7 @@ class UMS_Organization_Sync {
 			return array(
 				'total'          => $total,
 				'deleted'        => (int) $deleted,
+				'exit_cases_created' => (int) $exit_result['cases_created'],
 				'source_version' => $source_version,
 				'synced_at'      => $synced_at,
 			);

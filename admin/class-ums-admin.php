@@ -52,6 +52,8 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_export_employee_allowances', array( __CLASS__, 'handle_export_employee_allowances' ) );
         add_action( 'admin_post_ums_sync_organization', array( __CLASS__, 'handle_sync_organization' ) );
         add_action( 'admin_post_ums_save_sheet_sync_settings', array( __CLASS__, 'handle_save_sheet_sync_settings' ) );
+		add_action( 'admin_post_ums_refresh_employee_exit', array( __CLASS__, 'handle_refresh_employee_exit' ) );
+		add_action( 'admin_post_ums_save_employee_exit_returns', array( __CLASS__, 'handle_save_employee_exit_returns' ) );
 		add_action( 'admin_post_ums_export_pr', array( __CLASS__, 'handle_export_pr' ) );
         add_action( 'wp_ajax_ums_sync_user_password', array( __CLASS__, 'handle_sync_user_password' ) );
         add_action( 'wp_ajax_ums_get_organization_employees', array( __CLASS__, 'handle_get_organization_employees' ) );
@@ -197,12 +199,24 @@ class UMS_Admin {
             'tvn-ums-sheet-sync',
             array( __CLASS__, 'render_sheet_sync_page' )
         );
+
+		add_submenu_page(
+			'tvn-uniform-management',
+			'Quản lý CNV nghỉ việc',
+			'CNV nghỉ việc',
+			'manage_options',
+			'tvn-ums-employee-exits',
+			array( __CLASS__, 'render_employee_exit_page' )
+		);
     }
 
     /**
      * Nạp các file CSS và Javascript bổ trợ cho giao diện Admin
      */
     public static function enqueue_admin_assets( $hook ) {
+		if ( strpos( $hook, 'tvn-ums-employee-exits' ) !== false ) {
+			$hook = 'tvn-uniform-management';
+		}
         // Chỉ nạp CSS/JS khi Admin đang đứng đúng trong trang của plugin UMS
         if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-organization' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
             return;
@@ -612,6 +626,57 @@ class UMS_Admin {
         }
     }
 
+	public static function render_employee_exit_page() {
+		$table_ready = UMS_DB_Employee_Exit::is_ready() && UMS_DB_Organization::supports_employment_status();
+		$filters = array(
+			'search' => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
+			'status' => isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '',
+			'employee_type' => isset( $_GET['employee_type'] ) ? sanitize_key( wp_unslash( $_GET['employee_type'] ) ) : '',
+			'page' => isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1,
+			'per_page' => 50,
+		);
+		$exit_cases = $table_ready ? UMS_DB_Employee_Exit::get_page( $filters ) : array();
+		$exit_count = $table_ready ? UMS_DB_Employee_Exit::get_count( $filters ) : 0;
+		$status_counts = $table_ready ? UMS_DB_Employee_Exit::get_status_counts() : array();
+		$selected_exit_id = isset( $_GET['exit_id'] ) ? absint( $_GET['exit_id'] ) : 0;
+		$selected_exit = $table_ready && $selected_exit_id ? UMS_DB_Employee_Exit::get_by_id( $selected_exit_id ) : null;
+		$selected_exit_items = $selected_exit ? UMS_DB_Employee_Exit::get_items( $selected_exit_id ) : array();
+		$notice = self::get_notice();
+
+		include UMS_PLUGIN_DIR . 'admin/partials/view-employee-exit-list.php';
+	}
+
+	public static function handle_refresh_employee_exit() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền thực hiện thao tác này.', '', array( 'response' => 403 ) );
+		}
+		$exit_id = isset( $_POST['exit_id'] ) ? absint( $_POST['exit_id'] ) : 0;
+		check_admin_referer( 'ums_refresh_employee_exit_' . $exit_id );
+		$result = UMS_Employee_Exit_Manager::refresh_case(
+			$exit_id,
+			isset( $_POST['actual_leave_date'] ) ? wp_unslash( $_POST['actual_leave_date'] ) : ''
+		);
+		if ( is_wp_error( $result ) ) {
+			self::redirect_to_employee_exits( array( 'exit_id' => $exit_id, 'notice' => 'employee_exit_failed', 'notice_extra' => $result->get_error_message() ) );
+		}
+		self::redirect_to_employee_exits( array( 'exit_id' => $exit_id, 'notice' => 'employee_exit_refreshed' ) );
+	}
+
+	public static function handle_save_employee_exit_returns() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền thực hiện thao tác này.', '', array( 'response' => 403 ) );
+		}
+		$exit_id = isset( $_POST['exit_id'] ) ? absint( $_POST['exit_id'] ) : 0;
+		check_admin_referer( 'ums_save_employee_exit_returns_' . $exit_id );
+		$items = isset( $_POST['return_items'] ) && is_array( $_POST['return_items'] ) ? wp_unslash( $_POST['return_items'] ) : array();
+		$notes = isset( $_POST['notes'] ) ? wp_unslash( $_POST['notes'] ) : '';
+		$result = UMS_Employee_Exit_Manager::save_returns( $exit_id, $items, $notes );
+		if ( is_wp_error( $result ) ) {
+			self::redirect_to_employee_exits( array( 'exit_id' => $exit_id, 'notice' => 'employee_exit_failed', 'notice_extra' => $result->get_error_message() ) );
+		}
+		self::redirect_to_employee_exits( array( 'exit_id' => $exit_id, 'notice' => 'employee_exit_saved' ) );
+	}
+
     public static function handle_save_sheet_sync_settings() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
@@ -691,7 +756,7 @@ class UMS_Admin {
             array(
                 'notice'       => 'organization_synced',
                 'notice_extra' => sprintf(
-                    'Đã nhận %s nhân sự từ version %s; loại bỏ %s bản ghi không còn ở snapshot hiện hành.',
+					'Đã nhận %s nhân sự từ version %s; ghi nhận %s CNV không còn trong sơ đồ là nghỉ việc.',
                     number_format_i18n( $result['total'] ),
                     number_format_i18n( $result['source_version'] ),
                     number_format_i18n( $result['deleted'] )
@@ -3197,6 +3262,9 @@ class UMS_Admin {
 			'special_work_import_failed' => array( 'error', 'Import danh sách CNV đặc thù không thành công.' ),
 			'special_work_import_completed' => array( 'success', 'Import danh sách CNV đặc thù hoàn tất.' ),
 			'allowance_employee_export_failed' => array( 'error', 'Không thể xuất định mức CNV.' ),
+			'employee_exit_refreshed' => array( 'success', 'Đã cập nhật ngày nghỉ và tính lại danh sách phải hoàn trả.' ),
+			'employee_exit_saved' => array( 'success', 'Đã lưu kết quả thu hồi đồng phục.' ),
+			'employee_exit_failed' => array( 'error', 'Không thể cập nhật hồ sơ CNV nghỉ việc.' ),
             'organization_synced' => array( 'success', 'Đồng bộ sơ đồ tổ chức thành công.' ),
             'organization_sync_failed' => array( 'error', 'Không thể đồng bộ sơ đồ tổ chức.' ),
             'invalid_user'     => array( 'error', 'Không tìm thấy nhân sự cần xử lý.' ),
@@ -3539,4 +3607,16 @@ class UMS_Admin {
         wp_safe_redirect( $url );
         exit;
     }
+
+	private static function redirect_to_employee_exits( $args = array() ) {
+		$url = add_query_arg(
+			array_filter(
+				array_merge( array( 'page' => 'tvn-ums-employee-exits' ), $args ),
+				function ( $value ) { return $value !== null && $value !== ''; }
+			),
+			admin_url( 'admin.php' )
+		);
+		wp_safe_redirect( $url );
+		exit;
+	}
 }

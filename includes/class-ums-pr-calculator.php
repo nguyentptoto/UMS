@@ -69,7 +69,11 @@ class UMS_PR_Calculator {
 		$periodic_by_item = UMS_DB_Allocation_Calculation::get_active_totals( $year, $period_month );
 		foreach ( $periodic_by_item as $item_id => $quantity ) {
 			if ( $quantity > 0 && empty( $materials_by_item[ absint( $item_id ) ] ) ) {
-				$errors[] = sprintf( 'Sản phẩm kho #%d có nhu cầu đã duyệt nhưng chưa được ánh xạ master SAP.', $item_id );
+				$errors[] = sprintf(
+					'Sản phẩm kho #%d (%s) có nhu cầu đã duyệt nhưng chưa được ánh xạ master SAP.',
+					$item_id,
+					self::get_inventory_item_label( $item_id )
+				);
 			}
 		}
 		$relevant_item_ids = array_keys( array_filter( $periodic_by_item ) );
@@ -109,8 +113,9 @@ class UMS_PR_Calculator {
 					$selected[ absint( $material['material_id'] ) ] = $material;
 				} else {
 					$errors[] = sprintf(
-						'Sản phẩm kho #%d có nhu cầu định kỳ nhưng liên kết với %d Loại/mã SAP. Phiếu hiện chưa lưu Loại master nên chưa thể xác định mã SAP.',
+						'Sản phẩm kho #%d (%s) có nhu cầu định kỳ nhưng liên kết với %d Loại/mã SAP. Phiếu hiện chưa lưu Loại master nên chưa thể xác định mã SAP.',
 						$item_id,
+						self::get_inventory_item_label( $item_id ),
 						count( $matches )
 					);
 					continue;
@@ -309,5 +314,28 @@ class UMS_PR_Calculator {
 		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
 		$value = remove_accents( $value );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+	}
+
+	private static function get_inventory_item_label( $item_id ) {
+		static $labels = array();
+		$item_id = absint( $item_id );
+		if ( isset( $labels[ $item_id ] ) ) {
+			return $labels[ $item_id ];
+		}
+
+		$item = UMS_DB_Inventory::get_by_id( $item_id );
+		if ( ! $item ) {
+			$labels[ $item_id ] = 'không còn tồn tại trong kho';
+			return $labels[ $item_id ];
+		}
+
+		$name = trim( (string) ( $item['item_variant'] ?: $item['item_type'] ) );
+		$size = trim( (string) $item['size'] );
+		$labels[ $item_id ] = sprintf(
+			'"%s"%s',
+			$name !== '' ? $name : 'Chưa có tên sản phẩm',
+			$size !== '' ? ' - size "' . $size . '"' : ''
+		);
+		return $labels[ $item_id ];
 	}
 }

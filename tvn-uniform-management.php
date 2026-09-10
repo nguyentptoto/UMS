@@ -89,6 +89,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-request.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-user.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-organization.php';
+	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-employee-exit.php';
 	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-special-work-assignment.php';
 
     // Sau này thêm kho hay phiếu chỉ cần require thêm tại đây:
@@ -105,6 +106,7 @@ function run_tvn_uniform_management() {
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-annual-allowance-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-special-work-assignment-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-employee-allowance-report.php';
+	require_once UMS_PLUGIN_DIR . 'includes/class-ums-employee-exit-manager.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-inventory-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-issue-registration-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-uniform-material-import.php';
@@ -136,15 +138,15 @@ function ums_block_inactive_wp_user( $user, $username, $password ) {
 
     global $wpdb;
     $profile_table = $wpdb->prefix . 'uniform_user_profiles';
-    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $profile_table ) ) !== $profile_table ) {
-        return $user;
-    }
+	$profile_count = 0;
+	if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $profile_table ) ) === $profile_table ) {
+		$profile_count = (int) $wpdb->get_var(
+			$wpdb->prepare( "SELECT COUNT(*) FROM $profile_table WHERE user_id = %d", $user->ID )
+		);
+	}
 
-    $profile_count = (int) $wpdb->get_var(
-        $wpdb->prepare( "SELECT COUNT(*) FROM $profile_table WHERE user_id = %d", $user->ID )
-    );
-
-    if ( $profile_count > 0 && (int) $user->user_status > 0 ) {
+	$is_organization_user = trim( (string) get_user_meta( $user->ID, 'ums_employee_code', true ) ) !== '';
+    if ( ( $profile_count > 0 || $is_organization_user ) && (int) $user->user_status > 0 ) {
         return new WP_Error(
             'ums_inactive_account',
             'Tài khoản của bạn đang bị khóa. Vui lòng liên hệ quản trị viên.'

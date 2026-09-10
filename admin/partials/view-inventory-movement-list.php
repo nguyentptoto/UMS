@@ -10,6 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $page_url = admin_url( 'admin.php?page=tvn-ums-inventory-movements' );
 $type_labels = array(
+	'return_in'   => 'Thu hồi nghỉ việc',
     'in'          => 'Nhập kho',
     'out'         => 'Xuất kho',
     'adjust'      => 'Điều chỉnh',

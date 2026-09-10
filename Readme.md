@@ -421,3 +421,11 @@ SL PR = max(0, SL cấp phát đã chốt của kỳ + SL dự phòng - Tồn kh
 Tên loại trong file dự phòng phải khớp duy nhất với cột `item_name` của master mã SAP. Master tiếp tục dùng `inventory_item_id` để lấy size, tồn kho và đơn giá từ UMS. Dòng cần lên PR nhưng chưa có đơn giá được cảnh báo trên màn hình và không được xuất file.
 
 Kết quả được hiển thị bằng jqxGrid. Nút `Xuất file PR` tính lại trực tiếp từ file đang chọn rồi ghi vào workbook mẫu tại `assets/templates/ums-pr-template.xlsx`; sheet mapping của mẫu được giữ nguyên. Nhu cầu cấp phát được đọc từ snapshot đang hoạt động đúng năm và kỳ T4/T9. Nếu chưa chốt kết quả cho kỳ đã chọn, hệ thống không cho tính hoặc xuất PR.
+
+## Quản Lý CNV Nghỉ Việc
+
+Sau một lần đồng bộ đầy đủ, CNV không còn trên Google Sheet được chuyển sang trạng thái `left` thay vì bị xóa. Hệ thống tạo hồ sơ thu hồi từ các movement xuất kho thực tế (`movement_type = out`); dữ liệu tính SL cấp phát hoặc PR không được coi là đã cấp.
+
+Thứ tự phân loại: mã bắt đầu bằng `M1`/`F1` là lao động cho thuê lại; các mã khác có ngày ký hợp đồng đầu tiên là HĐLĐ chính thức; còn lại là tập nghề/thử việc. Hàng thu hồi đủ điều kiện tái sử dụng được cộng kho bằng movement `return_in`.
+
+Với database đã tồn tại, chạy `update-employee-exit.sql` trước lần đồng bộ Google Sheet tiếp theo.
