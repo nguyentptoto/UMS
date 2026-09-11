@@ -644,6 +644,10 @@ class UMS_Admin {
 		$status_counts = $table_ready ? UMS_DB_Employee_Exit::get_status_counts() : array();
 		$selected_exit_id = isset( $_GET['exit_id'] ) ? absint( $_GET['exit_id'] ) : 0;
 		$selected_exit = $table_ready && $selected_exit_id ? UMS_DB_Employee_Exit::get_by_id( $selected_exit_id ) : null;
+		if ( $selected_exit ) {
+			UMS_Employee_Exit_Manager::ensure_case_uniform_items( $selected_exit_id );
+			$selected_exit = UMS_DB_Employee_Exit::get_by_id( $selected_exit_id );
+		}
 		$selected_exit_items = $selected_exit ? UMS_DB_Employee_Exit::get_items( $selected_exit_id ) : array();
 		$notice = self::get_notice();
 

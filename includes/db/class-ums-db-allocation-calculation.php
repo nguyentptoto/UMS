@@ -108,6 +108,44 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 		return $totals;
 	}
 
+	public static function get_employee_allocated_items( $employee_no, $until_date = '' ) {
+		if ( ! self::is_ready() ) {
+			return array();
+		}
+
+		$employee_no = trim( sanitize_text_field( (string) $employee_no ) );
+		if ( $employee_no === '' ) {
+			return array();
+		}
+
+		$params = array( $employee_no );
+		$where  = array(
+			'details.employee_no = %s',
+			'batches.is_active = 1',
+			'details.allocated_quantity > 0',
+		);
+		$until_date = trim( sanitize_text_field( (string) $until_date ) );
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $until_date ) ) {
+			$where[]  = 'batches.created_at <= %s';
+			$params[] = $until_date . ' 23:59:59';
+		}
+
+		$sql = 'SELECT details.item_id, SUM(details.allocated_quantity) AS issued_quantity,
+			MAX(batches.created_at) AS latest_issued_at,
+			inventory.item_variant, inventory.size, child.category_name,
+			parent.category_name AS parent_category_name
+			FROM ' . self::detail_table() . ' details
+			INNER JOIN ' . self::table() . ' batches ON batches.batch_id = details.batch_id
+			INNER JOIN ' . UMS_DB_Inventory::table() . ' inventory ON inventory.item_id = details.item_id
+			LEFT JOIN ' . UMS_DB_Product_Category::table() . ' child ON child.category_id = inventory.category_id
+			LEFT JOIN ' . UMS_DB_Product_Category::table() . ' parent ON parent.category_id = child.parent_id
+			WHERE ' . implode( ' AND ', $where ) . '
+			GROUP BY details.item_id, inventory.item_variant, inventory.size, child.category_name, parent.category_name
+			HAVING SUM(details.allocated_quantity) > 0';
+
+		return self::db()->get_results( self::db()->prepare( $sql, $params ), ARRAY_A );
+	}
+
 	public static function get_active_batch( $year, $period_month ) {
 		if ( ! self::is_ready() ) {
 			return null;

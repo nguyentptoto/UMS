@@ -180,6 +180,33 @@ class UMS_Employee_Exit_Manager {
 		return $status;
 	}
 
+	public static function ensure_case_uniform_items( $exit_id ) {
+		$case = UMS_DB_Employee_Exit::get_by_id( $exit_id );
+		if ( ! $case || $case['status'] === 'cancelled' ) {
+			return false;
+		}
+
+		$existing_by_item = array();
+		foreach ( UMS_DB_Employee_Exit::get_items( $exit_id ) as $item ) {
+			if ( (int) $item['item_id'] > 0 ) {
+				$existing_by_item[ (int) $item['item_id'] ] = (int) $item['issued_quantity'];
+			}
+		}
+
+		$issued = self::get_issued_items( $case['employee_no'], $case['actual_leave_date'] );
+		if ( empty( $issued ) ) {
+			return false;
+		}
+		foreach ( $issued as $issued_item ) {
+			$item_id = (int) $issued_item['item_id'];
+			if ( ! isset( $existing_by_item[ $item_id ] ) || $existing_by_item[ $item_id ] !== (int) $issued_item['issued_quantity'] ) {
+				return self::refresh_case( $exit_id, $case['actual_leave_date'] );
+			}
+		}
+
+		return false;
+	}
+
 	private static function create_case( $employee, $detected_at ) {
 		if ( UMS_DB_Employee_Exit::get_open_by_employee_no( $employee['employee_no'] ) ) {
 			return 0;
@@ -209,7 +236,7 @@ class UMS_Employee_Exit_Manager {
 				$existing[ self::item_key( $item['item_id'], $item['item_group'], $item['item_name'], $item['size'] ) ] = $item;
 			}
 		}
-		$issued = self::get_issued_items( $case['employee_no'] );
+		$issued = self::get_issued_items( $case['employee_no'], $case['actual_leave_date'] );
 		$type   = $case['employee_type'];
 		$caps   = array( 'pants' => 2, 'shirt' => 2, 'jacket' => 1, 'hat' => 1, 'shoes' => 1 );
 		$remaining = $caps;
@@ -280,7 +307,7 @@ class UMS_Employee_Exit_Manager {
 		);
 	}
 
-	private static function get_issued_items( $employee_no ) {
+	private static function get_issued_items( $employee_no, $until_date = '' ) {
 		global $wpdb;
 		$user_ids = array();
 		$user = get_user_by( 'login', $employee_no );
@@ -304,7 +331,14 @@ class UMS_Employee_Exit_Manager {
 			WHERE m.movement_type = 'out' AND ($where)
 			GROUP BY m.item_id, i.item_variant, i.size, child.category_name, parent.category_name
 			HAVING SUM(m.quantity) > 0";
-		return $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A );
+		$issued = $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A );
+		if ( ! empty( $issued ) ) {
+			return $issued;
+		}
+
+		// Imported allocation snapshots contain exact products and sizes even when
+		// the corresponding physical stock-out movement has not yet been recorded.
+		return UMS_DB_Allocation_Calculation::get_employee_allocated_items( $employee_no, $until_date );
 	}
 
 	private static function item_key( $item_id, $group, $name, $size ) {

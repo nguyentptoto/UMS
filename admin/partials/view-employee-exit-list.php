@@ -91,13 +91,31 @@ $group_labels = array(
 		</section>
 
 		<?php if ( $selected_exit ) : ?>
+			<?php
+			$has_uniform_return_item = false;
+			$first_contract_date = trim( (string) $selected_exit['first_contract_date'] );
+			$first_contract_parts = array_map( 'intval', explode( '-', $first_contract_date ) );
+			$has_valid_contract_date = preg_match( '/^\d{4}-\d{2}-\d{2}$/', $first_contract_date )
+				&& count( $first_contract_parts ) === 3
+				&& $first_contract_parts[0] >= 1900
+				&& checkdate( $first_contract_parts[1], $first_contract_parts[2], $first_contract_parts[0] );
+			$first_contract_label = $has_valid_contract_date
+				? mysql2date( 'd/m/Y', $first_contract_date )
+				: '-';
+			foreach ( $selected_exit_items as $selected_exit_item ) {
+				if ( (int) $selected_exit_item['item_id'] > 0 ) {
+					$has_uniform_return_item = true;
+					break;
+				}
+			}
+			?>
 			<section class="ums-panel ums-exit-detail">
 				<h2>Thu hồi đồng phục: <?php echo esc_html( $selected_exit['employee_no'] . ' - ' . $selected_exit['full_name'] ); ?></h2>
 				<div class="ums-exit-meta">
 					<span><strong>Loại:</strong> <?php echo esc_html( $type_labels[ $selected_exit['employee_type'] ] ?? $selected_exit['employee_type'] ); ?></span>
 					<span><strong>Trạng thái:</strong> <?php echo esc_html( $status_labels[ $selected_exit['status'] ] ?? $selected_exit['status'] ); ?></span>
 					<span><strong>Ngày vào:</strong> <?php echo esc_html( $selected_exit['date_joined'] ? mysql2date( 'd/m/Y', $selected_exit['date_joined'] ) : '-' ); ?></span>
-					<span><strong>Ngày ký HĐ đầu tiên:</strong> <?php echo esc_html( $selected_exit['first_contract_date'] ? mysql2date( 'd/m/Y', $selected_exit['first_contract_date'] ) : '-' ); ?></span>
+					<span><strong>Ngày ký HĐ đầu tiên:</strong> <?php echo esc_html( $first_contract_label ); ?></span>
 					<span><strong>Vị trí:</strong> <?php echo esc_html( $selected_exit['position'] ?: '-' ); ?></span>
 				</div>
 
@@ -113,6 +131,9 @@ $group_labels = array(
 					<input type="hidden" name="action" value="ums_save_employee_exit_returns">
 					<input type="hidden" name="exit_id" value="<?php echo absint( $selected_exit['exit_id'] ); ?>">
 					<?php wp_nonce_field( 'ums_save_employee_exit_returns_' . $selected_exit['exit_id'] ); ?>
+					<?php if ( ! $has_uniform_return_item ) : ?>
+						<div class="notice notice-warning inline"><p>Không tìm thấy đồng phục đã xuất kho hoặc SL cấp phát đã chốt cho CNV này. Hệ thống chỉ hiển thị thẻ nhân viên và dây đeo thẻ.</p></div>
+					<?php endif; ?>
 					<div class="ums-table-scroll"><table class="widefat striped ums-exit-items">
 						<thead><tr><th>Nhóm</th><th>Sản phẩm</th><th>Size</th><th>Đã cấp</th><th>Phải trả</th><th>Miễn trả</th><th>Thực trả</th><th>SL nhập lại kho</th><th>Lần cấp gần nhất / ghi chú</th></tr></thead>
 						<tbody>
