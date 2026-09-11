@@ -628,9 +628,13 @@ class UMS_Admin {
 
 	public static function render_employee_exit_page() {
 		$table_ready = UMS_DB_Employee_Exit::is_ready() && UMS_DB_Organization::supports_employment_status();
+		$requested_status = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '';
+		if ( ! in_array( $requested_status, array( 'pending', 'in_progress', 'completed' ), true ) ) {
+			$requested_status = '';
+		}
 		$filters = array(
 			'search' => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
-			'status' => isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '',
+			'status' => $requested_status,
 			'employee_type' => isset( $_GET['employee_type'] ) ? sanitize_key( wp_unslash( $_GET['employee_type'] ) ) : '',
 			'page' => isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1,
 			'per_page' => 50,

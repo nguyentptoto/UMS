@@ -10,10 +10,9 @@ $type_labels = array(
 	'labor_leasing' => 'Cho thuê lại lao động',
 );
 $status_labels = array(
-	'pending' => 'Chưa thu hồi',
-	'in_progress' => 'Đang thu hồi',
-	'completed' => 'Đã hoàn tất',
-	'cancelled' => 'Đã hủy',
+	'pending' => 'Nhắc trả',
+	'in_progress' => 'Thông báo trả còn thiếu',
+	'completed' => 'Xác nhận đã trả',
 );
 $group_labels = array(
 	'pants' => 'Quần', 'shirt' => 'Áo', 'jacket' => 'Áo khoác', 'coat' => 'Áo phao',
@@ -32,9 +31,9 @@ $group_labels = array(
 		<div class="notice notice-error inline"><p>Database chưa có cấu trúc quản lý CNV nghỉ việc. Hãy chạy khối UPDATE tương ứng trong <code>ums.sql</code>.</p></div>
 	<?php else : ?>
 		<div class="ums-summary-strip">
-			<span><strong><?php echo number_format_i18n( $status_counts['pending'] ?? 0 ); ?></strong> chưa thu hồi</span>
-			<span><strong><?php echo number_format_i18n( $status_counts['in_progress'] ?? 0 ); ?></strong> đang thu hồi</span>
-			<span><strong><?php echo number_format_i18n( $status_counts['completed'] ?? 0 ); ?></strong> đã hoàn tất</span>
+			<span><strong><?php echo number_format_i18n( $status_counts['pending'] ?? 0 ); ?></strong> nhắc trả</span>
+			<span><strong><?php echo number_format_i18n( $status_counts['in_progress'] ?? 0 ); ?></strong> thông báo trả còn thiếu</span>
+			<span><strong><?php echo number_format_i18n( $status_counts['completed'] ?? 0 ); ?></strong> xác nhận đã trả</span>
 		</div>
 
 		<section class="ums-panel">
@@ -96,6 +95,7 @@ $group_labels = array(
 				<h2>Thu hồi đồng phục: <?php echo esc_html( $selected_exit['employee_no'] . ' - ' . $selected_exit['full_name'] ); ?></h2>
 				<div class="ums-exit-meta">
 					<span><strong>Loại:</strong> <?php echo esc_html( $type_labels[ $selected_exit['employee_type'] ] ?? $selected_exit['employee_type'] ); ?></span>
+					<span><strong>Trạng thái:</strong> <?php echo esc_html( $status_labels[ $selected_exit['status'] ] ?? $selected_exit['status'] ); ?></span>
 					<span><strong>Ngày vào:</strong> <?php echo esc_html( $selected_exit['date_joined'] ? mysql2date( 'd/m/Y', $selected_exit['date_joined'] ) : '-' ); ?></span>
 					<span><strong>Ngày ký HĐ đầu tiên:</strong> <?php echo esc_html( $selected_exit['first_contract_date'] ? mysql2date( 'd/m/Y', $selected_exit['first_contract_date'] ) : '-' ); ?></span>
 					<span><strong>Vị trí:</strong> <?php echo esc_html( $selected_exit['position'] ?: '-' ); ?></span>
@@ -134,7 +134,7 @@ $group_labels = array(
 						</tbody>
 					</table></div>
 					<p><label for="ums-exit-notes"><strong>Ghi chú xử lý</strong></label><br><textarea id="ums-exit-notes" name="notes" rows="3" class="large-text"><?php echo esc_textarea( $selected_exit['notes'] ); ?></textarea></p>
-					<?php if ( $selected_exit['status'] !== 'cancelled' ) : ?><button type="submit" class="button button-primary">Lưu kết quả thu hồi</button><?php endif; ?>
+					<?php if ( $selected_exit['status'] !== 'cancelled' ) : ?><button type="submit" class="button button-primary">Cập nhật tình trạng hoàn trả</button><?php endif; ?>
 				</form>
 			</section>
 		<?php endif; ?>

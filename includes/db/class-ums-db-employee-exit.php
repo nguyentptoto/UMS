@@ -164,6 +164,9 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 		if ( $args['status'] !== '' ) {
 			$where[] = 'status = %s';
 			$params[] = sanitize_key( $args['status'] );
+		} else {
+			// Cancelled cases are retained for sync history, not as a return workflow status.
+			$where[] = "status <> 'cancelled'";
 		}
 		if ( $args['employee_type'] !== '' ) {
 			$where[] = 'employee_type = %s';
