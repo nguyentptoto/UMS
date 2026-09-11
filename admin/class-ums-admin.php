@@ -36,6 +36,8 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_download_inventory_import_template', array( __CLASS__, 'handle_download_inventory_import_template' ) );
 		add_action( 'admin_post_ums_preview_inventory_import', array( __CLASS__, 'handle_preview_inventory_import' ) );
 		add_action( 'admin_post_ums_confirm_inventory_import', array( __CLASS__, 'handle_confirm_inventory_import' ) );
+		add_action( 'admin_post_ums_preview_newcomer_inventory_out', array( __CLASS__, 'handle_preview_newcomer_inventory_out' ) );
+		add_action( 'admin_post_ums_confirm_newcomer_inventory_out', array( __CLASS__, 'handle_confirm_newcomer_inventory_out' ) );
 		add_action( 'admin_post_ums_preview_allocation_calculation', array( __CLASS__, 'handle_preview_allocation_calculation' ) );
 		add_action( 'admin_post_ums_save_allocation_calculation', array( __CLASS__, 'handle_save_allocation_calculation' ) );
 		add_action( 'admin_post_ums_repair_inventory_prices', array( __CLASS__, 'handle_repair_inventory_prices' ) );
@@ -453,6 +455,9 @@ class UMS_Admin {
 		$inventory_import_ready = UMS_DB_Inventory_Import::is_ready() && UMS_DB_Uniform_Material::is_ready();
 		$inventory_preview_token = isset( $_GET['inventory_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['inventory_preview_token'] ) ) : '';
 		$inventory_import_preview = $inventory_preview_token !== '' ? UMS_Inventory_Import::get_preview( $inventory_preview_token ) : null;
+		$newcomer_out_ready = UMS_DB_Inventory_Import::is_ready() && UMS_DB_Uniform_Material::is_ready();
+		$newcomer_out_preview_token = isset( $_GET['newcomer_out_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['newcomer_out_preview_token'] ) ) : '';
+		$newcomer_out_preview = $newcomer_out_preview_token !== '' ? UMS_Newcomer_Inventory_Out_Import::get_preview( $newcomer_out_preview_token ) : null;
 		$allocation_calculation_ready = UMS_DB_Allocation_Calculation::is_ready();
 		$allocation_preview_token = isset( $_GET['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['allocation_preview_token'] ) ) : '';
 		$allocation_preview = $allocation_preview_token !== '' ? UMS_Allocation_Calculation::get_preview( $allocation_preview_token ) : null;
@@ -1688,7 +1693,7 @@ class UMS_Admin {
 		}
 
 		check_admin_referer( 'ums_preview_inventory_import' );
-		if ( ! UMS_DB_Inventory_Import::is_ready() ) {
+		if ( ! UMS_DB_Inventory_Import::is_ready() || ! UMS_DB_Uniform_Material::is_ready() ) {
 			self::redirect_to_inventory( array( 'notice' => 'inventory_import_schema_missing' ) );
 		}
 
@@ -1748,6 +1753,85 @@ class UMS_Admin {
 			array(
 				'notice' => 'inventory_import_completed',
 				'notice_extra' => sprintf( 'Đã nhập %d dòng, cộng tổng %s sản phẩm.', $result['imported'], number_format_i18n( $result['total'] ) ),
+			)
+		);
+	}
+
+	public static function handle_preview_newcomer_inventory_out() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+
+		check_admin_referer( 'ums_preview_newcomer_inventory_out' );
+		@set_time_limit( 300 );
+		if ( ! UMS_DB_Inventory_Import::is_ready() || ! UMS_DB_Uniform_Material::is_ready() ) {
+			self::redirect_to_inventory( array( 'notice' => 'newcomer_out_schema_missing' ) );
+		}
+
+		$file = isset( $_FILES['ums_newcomer_out_file'] ) ? $_FILES['ums_newcomer_out_file'] : array();
+		if ( empty( $file['tmp_name'] ) || ! empty( $file['error'] )
+			|| (int) $file['size'] > 20 * MB_IN_BYTES
+			|| strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
+			self::redirect_to_inventory( array( 'notice' => 'newcomer_out_invalid_file' ) );
+		}
+
+		try {
+			$preview = UMS_Newcomer_Inventory_Out_Import::analyze(
+				$file['tmp_name'],
+				$file['name']
+			);
+			$token = UMS_Newcomer_Inventory_Out_Import::store_preview( $preview );
+			self::redirect_to_inventory(
+				array(
+					'notice' => empty( $preview['errors'] ) ? 'newcomer_out_preview_ready' : 'newcomer_out_preview_warning',
+					'newcomer_out_preview_token' => $token,
+				)
+			);
+		} catch ( Throwable $error ) {
+			self::redirect_to_inventory(
+				array( 'notice' => 'newcomer_out_invalid_file', 'notice_extra' => $error->getMessage() )
+			);
+		}
+	}
+
+	public static function handle_confirm_newcomer_inventory_out() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+
+		check_admin_referer( 'ums_confirm_newcomer_inventory_out' );
+		@set_time_limit( 300 );
+		$token = isset( $_POST['newcomer_out_preview_token'] ) ? sanitize_key( wp_unslash( $_POST['newcomer_out_preview_token'] ) ) : '';
+		$preview = UMS_Newcomer_Inventory_Out_Import::get_preview( $token );
+		if ( ! is_array( $preview ) ) {
+			self::redirect_to_inventory( array( 'notice' => 'newcomer_out_preview_expired' ) );
+		}
+		if ( ! empty( $preview['errors'] ) ) {
+			self::redirect_to_inventory(
+				array( 'notice' => 'newcomer_out_preview_warning', 'newcomer_out_preview_token' => $token )
+			);
+		}
+
+		$result = UMS_Newcomer_Inventory_Out_Import::import( $preview, get_current_user_id() );
+		if ( empty( $result['success'] ) ) {
+			self::redirect_to_inventory(
+				array(
+					'notice' => 'newcomer_out_failed',
+					'newcomer_out_preview_token' => $token,
+					'notice_extra' => implode( ' ', array_slice( $result['errors'], 0, 5 ) ),
+				)
+			);
+		}
+
+		UMS_Newcomer_Inventory_Out_Import::delete_preview( $token );
+		self::redirect_to_inventory(
+			array(
+				'notice' => 'newcomer_out_completed',
+				'notice_extra' => sprintf(
+					'Đã cấp phát ngày đầu %s sản phẩm qua %d dòng chi tiết.',
+					number_format_i18n( $result['total'] ),
+					$result['imported']
+				),
 			)
 		);
 	}
@@ -3201,6 +3285,13 @@ class UMS_Admin {
         }
 
         $messages = array(
+			'newcomer_out_preview_ready' => array( 'success', 'Đã kiểm tra file cấp phát ngày đầu làm việc. Hãy xem lại chi tiết trước khi xác nhận.' ),
+			'newcomer_out_preview_warning' => array( 'warning', 'File cấp phát ngày đầu còn lỗi và chưa thể xác nhận.' ),
+			'newcomer_out_invalid_file' => array( 'error', 'File cấp phát ngày đầu không hợp lệ hoặc không đọc được.' ),
+			'newcomer_out_schema_missing' => array( 'error', 'Database chưa có cấu trúc ghi nhận phiên xuất kho.' ),
+			'newcomer_out_preview_expired' => array( 'error', 'Dữ liệu xem trước cấp phát ngày đầu đã hết hạn. Vui lòng tải lại file.' ),
+			'newcomer_out_failed' => array( 'error', 'Cấp phát ngày đầu không thành công; tồn kho chưa bị thay đổi.' ),
+			'newcomer_out_completed' => array( 'success', 'Đã cấp phát ngày đầu làm việc và ghi nhận lịch sử kho.' ),
             'sheet_sync_settings_saved' => array( 'success', 'Đã lưu cấu hình đồng bộ Google Sheet.' ),
             'created'          => array( 'success', 'Đã thêm hồ sơ nhân sự mới.' ),
             'updated'          => array( 'success', 'Đã cập nhật hồ sơ nhân sự.' ),

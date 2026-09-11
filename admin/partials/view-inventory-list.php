@@ -254,6 +254,83 @@ unset( $section );
 		<?php endif; ?>
 	</div>
 
+	<div class="ums-panel" id="ums-newcomer-inventory-out">
+		<h2>Import cấp phát ngày đầu làm việc</h2>
+		<p>Đọc sheet <strong>Template_NewCommer</strong> để ghi nhận số lượng cấp phát thực tế. Chức năng này không kiểm tra hoặc giới hạn theo định mức CNV mới.</p>
+		<?php if ( ! $newcomer_out_ready ) : ?>
+			<div class="notice notice-error inline"><p>Database chưa có cấu trúc lịch sử import kho. Hãy cập nhật <code>ums.sql</code> trước khi sử dụng.</p></div>
+		<?php endif; ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
+			<?php wp_nonce_field( 'ums_preview_newcomer_inventory_out' ); ?>
+			<input type="hidden" name="action" value="ums_preview_newcomer_inventory_out">
+			<input type="file" name="ums_newcomer_out_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+			<button type="submit" class="button button-primary" <?php disabled( ! $newcomer_out_ready ); ?>>Kiểm tra cấp phát ngày đầu</button>
+		</form>
+	</div>
+
+	<?php if ( is_array( $newcomer_out_preview ) ) : ?>
+		<div class="ums-panel ums-newcomer-out-preview">
+			<h2>Xem trước cấp phát ngày đầu: <?php echo esc_html( $newcomer_out_preview['file_name'] ); ?></h2>
+			<p><?php echo esc_html( sprintf(
+				'%d CNV, %d dòng cấp phát, tổng số lượng %s; %d lỗi và %d cảnh báo.',
+				$newcomer_out_preview['employee_count'],
+				count( $newcomer_out_preview['rows'] ), number_format_i18n( $newcomer_out_preview['total_quantity'] ),
+				count( $newcomer_out_preview['errors'] ), count( $newcomer_out_preview['warnings'] )
+			) ); ?></p>
+
+			<?php if ( ! empty( $newcomer_out_preview['errors'] ) ) : ?>
+				<div class="notice notice-error inline"><p><strong>Chưa thể xác nhận cấp phát:</strong></p></div>
+				<div class="ums-table-scroll" style="max-height:420px">
+					<table class="widefat striped"><thead><tr><th>STT</th><th>Nội dung lỗi</th></tr></thead><tbody>
+					<?php foreach ( $newcomer_out_preview['errors'] as $index => $error ) : ?>
+						<tr><td><?php echo esc_html( $index + 1 ); ?></td><td><?php echo esc_html( $error ); ?></td></tr>
+					<?php endforeach; ?>
+					</tbody></table>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( ! empty( $newcomer_out_preview['warnings'] ) ) : ?>
+				<div class="notice notice-warning inline"><p><strong>Cảnh báo đối chiếu thông tin:</strong></p></div>
+				<div class="ums-table-scroll" style="max-height:320px">
+					<table class="widefat striped"><thead><tr><th>STT</th><th>Nội dung cảnh báo</th></tr></thead><tbody>
+					<?php foreach ( $newcomer_out_preview['warnings'] as $index => $warning ) : ?>
+						<tr><td><?php echo esc_html( $index + 1 ); ?></td><td><?php echo esc_html( $warning ); ?></td></tr>
+					<?php endforeach; ?>
+					</tbody></table>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( ! empty( $newcomer_out_preview['rows'] ) ) : ?>
+				<div class="ums-table-scroll" style="max-height:520px">
+					<table class="widefat striped">
+						<thead><tr><th>Dòng Excel</th><th>Mã CNV</th><th>Họ tên</th><th>Nhóm</th><th>Sản phẩm UMS</th><th>Size</th><th>SL cấp</th><th>Tồn trước</th><th>Tồn sau</th></tr></thead>
+						<tbody>
+						<?php foreach ( $newcomer_out_preview['rows'] as $row ) : ?>
+							<tr>
+								<td><?php echo esc_html( $row['source_row'] ); ?></td><td><?php echo esc_html( $row['employee_no'] ); ?></td>
+								<td><?php echo esc_html( $row['full_name'] ); ?></td><td><?php echo esc_html( $row['group_label'] ?? $row['group'] ); ?></td>
+								<td><?php echo esc_html( $row['product'] ); ?></td><td><?php echo esc_html( $row['size'] ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $row['quantity'] ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $row['before_qty'] ) ); ?></td>
+								<td><?php echo esc_html( number_format_i18n( $row['after_qty'] ) ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( empty( $newcomer_out_preview['errors'] ) && ! empty( $newcomer_out_preview['rows'] ) ) : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<?php wp_nonce_field( 'ums_confirm_newcomer_inventory_out' ); ?>
+					<input type="hidden" name="action" value="ums_confirm_newcomer_inventory_out">
+					<input type="hidden" name="newcomer_out_preview_token" value="<?php echo esc_attr( $newcomer_out_preview_token ); ?>">
+					<p class="submit"><button type="submit" class="button button-primary">Xác nhận cấp phát ngày đầu</button></p>
+				</form>
+			<?php endif; ?>
+		</div>
+	<?php endif; ?>
+
 	<div class="ums-panel" id="ums-allocation-calculation">
 		<h2>Tính số lượng cấp phát</h2>
 		<p>File đăng ký phải giữ nguyên cấu trúc Google Form. Hệ thống áp dụng toàn bộ định mức phù hợp, tự giới hạn số đăng ký vượt mức và tổng hợp nhu cầu cho PR; thao tác này không xuất hoặc trừ tồn kho.</p>
