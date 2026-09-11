@@ -112,6 +112,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<span>Using section / Cost center</span>
 					<input type="text" name="using_cost_center" maxlength="100">
 				</label>
+				<label>
+					<span>Nhóm xuất PR *</span>
+					<select name="export_group" id="ums-pr-export-group" required>
+						<option value="apparel">Quần, Áo, Mũ</option>
+						<option value="kpr">Giày KPR</option>
+						<option value="simon">Giày Simon</option>
+					</select>
+				</label>
 			</div>
 
 			<div class="ums-pr-actions">

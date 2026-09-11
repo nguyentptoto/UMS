@@ -3331,6 +3331,10 @@ class UMS_Admin {
 		try {
 			$file          = self::validate_pr_upload();
 			$delivery_date = isset( $_POST['delivery_date'] ) ? sanitize_text_field( wp_unslash( $_POST['delivery_date'] ) ) : '';
+			$export_group  = isset( $_POST['export_group'] ) ? sanitize_key( wp_unslash( $_POST['export_group'] ) ) : '';
+			if ( ! array_key_exists( $export_group, UMS_PR_Export::get_group_labels() ) ) {
+				throw new InvalidArgumentException( 'Nhóm xuất PR không hợp lệ.' );
+			}
 			$date_parts    = array_map( 'intval', explode( '-', $delivery_date ) );
 			if ( count( $date_parts ) !== 3 || ! checkdate( $date_parts[1], $date_parts[2], $date_parts[0] ) ) {
 				throw new InvalidArgumentException( 'Ngày giao hàng không hợp lệ.' );
@@ -3351,6 +3355,7 @@ class UMS_Admin {
 					'delivery_date'      => $delivery_date,
 					'requesting_section' => isset( $_POST['requesting_section'] ) ? sanitize_text_field( wp_unslash( $_POST['requesting_section'] ) ) : '',
 					'using_cost_center'  => isset( $_POST['using_cost_center'] ) ? sanitize_text_field( wp_unslash( $_POST['using_cost_center'] ) ) : '',
+					'export_group'       => $export_group,
 				)
 			);
 		} catch ( Throwable $exception ) {

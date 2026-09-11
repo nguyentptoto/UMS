@@ -7,6 +7,17 @@ class UMS_PR_Export {
 	const SHEET_ENTRY   = 'xl/worksheets/sheet1.xml';
 	const WORKBOOK_ENTRY = 'xl/workbook.xml';
 	const XML_NS        = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+	const GROUP_APPAREL = 'apparel';
+	const GROUP_KPR     = 'kpr';
+	const GROUP_SIMON   = 'simon';
+
+	public static function get_group_labels() {
+		return array(
+			self::GROUP_APPAREL => 'Quần, Áo, Mũ',
+			self::GROUP_KPR     => 'Giày KPR',
+			self::GROUP_SIMON   => 'Giày Simon',
+		);
+	}
 
 	public static function stream( $calculation, $options = array() ) {
 		$options = wp_parse_args(
@@ -15,19 +26,25 @@ class UMS_PR_Export {
 				'delivery_date'       => '',
 				'requesting_section'  => '',
 				'using_cost_center'   => '',
+				'export_group'        => '',
 			)
 		);
+		$group_labels = self::get_group_labels();
+		$export_group = sanitize_key( $options['export_group'] );
+		if ( ! isset( $group_labels[ $export_group ] ) ) {
+			throw new InvalidArgumentException( 'Nhóm xuất PR không hợp lệ.' );
+		}
 		$rows = array_values(
 			array_filter(
 				$calculation['rows'],
-				function ( $row ) {
-					return (int) $row['final_pr_qty'] > 0;
+				function ( $row ) use ( $export_group ) {
+					return (int) $row['final_pr_qty'] > 0 && self::row_matches_group( $row, $export_group );
 				}
 			)
 		);
 
 		if ( empty( $rows ) ) {
-			throw new RuntimeException( 'Không có sản phẩm nào cần lên PR.' );
+			throw new RuntimeException( sprintf( 'Nhóm "%s" không có sản phẩm nào cần lên PR.', $group_labels[ $export_group ] ) );
 		}
 		foreach ( $rows as $row ) {
 			if ( (float) $row['base_price'] <= 0 ) {
@@ -51,7 +68,8 @@ class UMS_PR_Export {
 		try {
 			self::write_rows( $temp_file, $rows, $options );
 			$filename = sprintf(
-				'UMS-PR-T%02d-%d-%s.xlsx',
+				'UMS-PR-%s-T%02d-%d-%s.xlsx',
+				strtoupper( $export_group ),
 				absint( $calculation['period_month'] ),
 				absint( $calculation['year'] ),
 				gmdate( 'Ymd-His' )
@@ -68,6 +86,25 @@ class UMS_PR_Export {
 			}
 		}
 		exit;
+	}
+
+	public static function row_matches_group( $row, $export_group ) {
+		$name = ! empty( $row['product_name'] ) ? $row['product_name'] : ( $row['item_name'] ?? '' );
+		$name = strtolower( remove_accents( trim( (string) $name ) ) );
+		$name = preg_replace( '/[^a-z0-9]+/', ' ', $name );
+		$name = trim( $name );
+
+		if ( self::GROUP_KPR === $export_group ) {
+			return 1 === preg_match( '/^giay\s+kpr(?:\s|$)/', $name );
+		}
+		if ( self::GROUP_SIMON === $export_group ) {
+			return 1 === preg_match( '/^giay\s+simon(?:\s|$)/', $name );
+		}
+		if ( self::GROUP_APPAREL === $export_group ) {
+			return 1 === preg_match( '/^(quan|ao|mu)(?:\s|$)/', $name );
+		}
+
+		return false;
 	}
 
 	private static function write_rows( $file_path, $rows, $options ) {

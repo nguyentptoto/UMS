@@ -15,6 +15,8 @@
         var $messages = $('#ums-pr-messages');
         var $summary = $('#ums-pr-summary');
         var $grid = $('#ums-pr-result-grid');
+		var $exportGroup = $('#ums-pr-export-group');
+		var calculationResult = null;
         var numberFormat = window.Intl ? new Intl.NumberFormat('vi-VN') : null;
 
         function formatNumber(value) {
@@ -26,6 +28,70 @@
         function showPanel() {
             $panel.prop('hidden', false).show();
         }
+
+		function normalizeProductName(value) {
+			var normalized = String(value || '').toLowerCase();
+
+			if (typeof normalized.normalize === 'function') {
+				normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+			}
+
+			return normalized.replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, ' ').trim();
+		}
+
+		function rowMatchesGroup(row, group) {
+			var name = normalizeProductName(row.product_name || row.item_name);
+
+			if (group === 'kpr') {
+				return /^giay kpr(?: |$)/.test(name);
+			}
+			if (group === 'simon') {
+				return /^giay simon(?: |$)/.test(name);
+			}
+
+			return group === 'apparel' && /^(quan|ao|mu)(?: |$)/.test(name);
+		}
+
+		function summarizeRows(rows) {
+			return rows.reduce(function (summary, row) {
+				summary.row_count += 1;
+				summary.periodic_qty += Number(row.periodic_qty) || 0;
+				summary.reserve_qty += Number(row.reserve_qty) || 0;
+				summary.stock_qty += Number(row.stock_qty) || 0;
+				summary.final_pr_qty += Number(row.final_pr_qty) || 0;
+				summary.estimated_amount += Number(row.estimated_amount) || 0;
+				return summary;
+			}, {row_count: 0, periodic_qty: 0, reserve_qty: 0, stock_qty: 0, final_pr_qty: 0, estimated_amount: 0});
+		}
+
+		function renderSelectedGroup() {
+			if (!calculationResult) {
+				return;
+			}
+
+			var group = $exportGroup.val();
+			var rows = (calculationResult.rows || []).filter(function (row) {
+				return rowMatchesGroup(row, group);
+			});
+			var resultSummary = summarizeRows(rows);
+			var exportRows = rows.filter(function (row) {
+				return (Number(row.final_pr_qty) || 0) > 0;
+			});
+			var hasMissingPrice = exportRows.some(function (row) {
+				return (Number(row.base_price) || 0) <= 0;
+			});
+
+			$summary.text(
+				'Cấp phát: ' + formatNumber(resultSummary.periodic_qty) +
+				' | Dự phòng: ' + formatNumber(resultSummary.reserve_qty) +
+				' | Tồn kho: ' + formatNumber(resultSummary.stock_qty) +
+				' | Số lượng PR: ' + formatNumber(resultSummary.final_pr_qty) +
+				' | Giá trị dự kiến: ' + formatNumber(resultSummary.estimated_amount) + ' VND'
+			);
+			renderGrid(rows);
+			$exportButton.prop('disabled', !exportRows.length || hasMissingPrice);
+			$status.text('Đã lọc ' + formatNumber(resultSummary.row_count) + ' dòng theo nhóm xuất PR.');
+		}
 
         function renderMessages(errors, warnings) {
             $messages.empty();
@@ -168,7 +234,12 @@
             return errors;
         }
 
-        $form.off('change.umsPr input.umsPr').on('change.umsPr input.umsPr', 'input, select', function () {
+		$exportGroup.on('change.umsPr', function () {
+			renderSelectedGroup();
+		});
+
+        $form.off('change.umsPr input.umsPr').on('change.umsPr input.umsPr', 'input:not(#ums-pr-export-group), select:not(#ums-pr-export-group)', function () {
+			calculationResult = null;
             $exportButton.prop('disabled', true);
             if ($panel.is(':visible')) {
                 $status.text('Dữ liệu đầu vào đã thay đổi. Hãy tính lại trước khi xuất.');
@@ -217,19 +288,10 @@
                 }
 
                 var data = response.data;
-                var resultSummary = data.summary || {};
+				calculationResult = data;
 
                 renderMessages([], data.warnings || []);
-                $summary.text(
-					'Cấp phát: ' + formatNumber(resultSummary.periodic_qty) +
-                    ' | Dự phòng: ' + formatNumber(resultSummary.reserve_qty) +
-                    ' | Tồn kho: ' + formatNumber(resultSummary.stock_qty) +
-                    ' | Số lượng PR: ' + formatNumber(resultSummary.final_pr_qty) +
-                    ' | Giá trị dự kiến: ' + formatNumber(resultSummary.estimated_amount) + ' VND'
-                );
-                renderGrid(data.rows || []);
-                $exportButton.prop('disabled', !data.can_export);
-                $status.text('Đã tính xong ' + formatNumber(resultSummary.row_count) + ' dòng.');
+				renderSelectedGroup();
             }).fail(function (xhr) {
                 renderMessages(responseErrors(xhr), []);
                 $status.text('Tính PR thất bại.');
