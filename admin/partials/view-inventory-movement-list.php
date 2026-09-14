@@ -50,6 +50,16 @@ foreach ( $movements as $movement ) {
         'target_login'   => ! empty( $movement['target_name'] )
             ? trim( (string) $movement['target_login'] . ' - ' . (string) $movement['target_name'], ' -' )
             : ( $movement['target_login'] ?: '-' ),
+		'target_profile' => implode(
+			' | ',
+			array_filter(
+				array(
+					$movement['target_department'] ?? '',
+					$movement['target_position'] ?? '',
+					! empty( $movement['target_date_joined'] ) ? mysql2date( 'd/m/Y', $movement['target_date_joined'] ) : '',
+				)
+			)
+		) ?: '-',
         'note'           => $movement['note'] ?: '-',
     );
 }
@@ -74,6 +84,7 @@ $grid_columns = array(
     array( 'text' => 'Thành tiền', 'datafield' => 'total_price', 'width' => '9%', 'cellsalign' => 'right' ),
     array( 'text' => 'Người thao tác', 'datafield' => 'actor_login', 'width' => '10%' ),
     array( 'text' => 'Người nhận', 'datafield' => 'target_login', 'width' => '10%' ),
+	array( 'text' => 'Thông tin lúc cấp', 'datafield' => 'target_profile', 'width' => '18%' ),
     array( 'text' => 'Ghi chú', 'datafield' => 'note', 'width' => '20%' ),
 );
 ?>

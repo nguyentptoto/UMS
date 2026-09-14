@@ -455,7 +455,9 @@ class UMS_Admin {
 		$inventory_import_ready = UMS_DB_Inventory_Import::is_ready() && UMS_DB_Uniform_Material::is_ready();
 		$inventory_preview_token = isset( $_GET['inventory_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['inventory_preview_token'] ) ) : '';
 		$inventory_import_preview = $inventory_preview_token !== '' ? UMS_Inventory_Import::get_preview( $inventory_preview_token ) : null;
-		$newcomer_out_ready = UMS_DB_Inventory_Import::is_ready() && UMS_DB_Uniform_Material::is_ready();
+		$newcomer_out_ready = UMS_DB_Inventory_Import::is_ready()
+			&& UMS_DB_Uniform_Material::is_ready()
+			&& UMS_DB_Inventory_Movement::has_target_snapshot_columns();
 		$newcomer_out_preview_token = isset( $_GET['newcomer_out_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['newcomer_out_preview_token'] ) ) : '';
 		$newcomer_out_preview = $newcomer_out_preview_token !== '' ? UMS_Newcomer_Inventory_Out_Import::get_preview( $newcomer_out_preview_token ) : null;
 		$allocation_calculation_ready = UMS_DB_Allocation_Calculation::is_ready();
@@ -1764,7 +1766,8 @@ class UMS_Admin {
 
 		check_admin_referer( 'ums_preview_newcomer_inventory_out' );
 		@set_time_limit( 300 );
-		if ( ! UMS_DB_Inventory_Import::is_ready() || ! UMS_DB_Uniform_Material::is_ready() ) {
+		if ( ! UMS_DB_Inventory_Import::is_ready() || ! UMS_DB_Uniform_Material::is_ready()
+			|| ! UMS_DB_Inventory_Movement::has_target_snapshot_columns() ) {
 			self::redirect_to_inventory( array( 'notice' => 'newcomer_out_schema_missing' ) );
 		}
 

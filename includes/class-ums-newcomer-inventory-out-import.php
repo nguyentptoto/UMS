@@ -29,12 +29,22 @@ class UMS_Newcomer_Inventory_Out_Import {
 				continue;
 			}
 			$employee_rows[ $employee_no ][] = $row_number;
+			$raw_date_joined = trim( (string) ( $row['E'] ?? '' ) );
+			$date_joined     = self::parse_date( $raw_date_joined );
+			if ( $raw_date_joined !== '' && $date_joined === '' ) {
+				$warnings[] = sprintf(
+					'Dòng %d, CNV %s: ngày vào "%s" không đọc được; hệ thống vẫn tiếp tục import và để trống ngày vào trong lịch sử.',
+					$row_number,
+					$employee_no,
+					$raw_date_joined
+				);
+			}
 			$entries[] = array(
 				'source_row' => (int) $row_number,
 				'employee_no' => $employee_no,
 				'full_name' => trim( sanitize_text_field( (string) ( $row['C'] ?? '' ) ) ),
 				'department' => trim( sanitize_text_field( (string) ( $row['D'] ?? '' ) ) ),
-				'date_joined' => self::parse_date( $row['E'] ?? '' ),
+				'date_joined' => $date_joined,
 				'position' => trim( sanitize_text_field( (string) ( $row['F'] ?? '' ) ) ),
 				'requests' => self::parse_requests( $row_number, $row, $errors ),
 			);
@@ -91,7 +101,11 @@ class UMS_Newcomer_Inventory_Out_Import {
 				$projected_stock[ $item_id ] = $after;
 				$details[] = array(
 					'source_row' => $entry['source_row'], 'employee_no' => $employee_no,
-					'full_name' => (string) ( $employee['full_name'] ?? $entry['full_name'] ), 'item_id' => $item_id,
+					'full_name' => $entry['full_name'] !== '' ? $entry['full_name'] : (string) ( $employee['full_name'] ?? '' ),
+					'department' => $entry['department'] !== '' ? $entry['department'] : (string) ( $employee['department'] ?? '' ),
+					'date_joined' => $entry['date_joined'] !== '' ? $entry['date_joined'] : (string) ( $employee['date_joined'] ?? '' ),
+					'position' => $entry['position'] !== '' ? $entry['position'] : (string) ( $employee['position'] ?? '' ),
+					'item_id' => $item_id,
 					'product' => (string) $item['item_variant'], 'size' => (string) $item['size'],
 					'group' => $request['group'], 'group_label' => self::group_label( $request['group'] ),
 					'quantity' => $request['quantity'],
@@ -177,6 +191,10 @@ class UMS_Newcomer_Inventory_Out_Import {
 					'actor_user_id' => absint( $actor_user_id ),
 					'target_user_id' => $user_ids[ $employee_no ] > 0 ? $user_ids[ $employee_no ] : null,
 					'target_employee_no' => $employee_no,
+					'target_name_snapshot' => $row['full_name'],
+					'target_department_snapshot' => $row['department'],
+					'target_date_joined_snapshot' => $row['date_joined'] !== '' ? $row['date_joined'] : null,
+					'target_position_snapshot' => $row['position'],
 					'note' => sprintf( 'Import cấp phát ngày đầu làm việc từ %s, dòng %d.', $preview['file_name'], $row['source_row'] ),
 					'import_batch_id' => $batch_id, 'source_row' => (int) $row['source_row'],
 				)
@@ -352,7 +370,7 @@ class UMS_Newcomer_Inventory_Out_Import {
 				return $date->format( 'Y-m-d' );
 			}
 		}
-		return $value;
+		return '';
 	}
 
 	private static function product_identity( $value, $group ) {

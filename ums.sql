@@ -321,6 +321,10 @@ CREATE TABLE `wp_uniform_inventory_movements` (
     `actor_user_id` BIGINT(20) UNSIGNED DEFAULT NULL,
     `target_user_id` BIGINT(20) UNSIGNED DEFAULT NULL,
     `target_employee_no` VARCHAR(100) DEFAULT NULL,
+	`target_name_snapshot` VARCHAR(255) DEFAULT NULL,
+	`target_department_snapshot` VARCHAR(255) DEFAULT NULL,
+	`target_date_joined_snapshot` DATE DEFAULT NULL,
+	`target_position_snapshot` VARCHAR(100) DEFAULT NULL,
     `note` TEXT DEFAULT NULL,
     `import_batch_id` BIGINT(20) UNSIGNED DEFAULT NULL,
     `source_row` INT DEFAULT NULL,
@@ -538,3 +542,10 @@ ALTER TABLE `wp_uniform_organization_employees`
 UPDATE `wp_uniform_organization_employees`
 SET `last_seen_at` = COALESCE(`last_seen_at`, `synced_at`)
 WHERE `employment_status` = 'active';
+
+-- UPDATE CHO DATABASE DA TON TAI: LUU THONG TIN CNV KHI CAP PHAT NGAY DAU
+ALTER TABLE `wp_uniform_inventory_movements`
+	ADD COLUMN IF NOT EXISTS `target_name_snapshot` VARCHAR(255) DEFAULT NULL AFTER `target_employee_no`,
+	ADD COLUMN IF NOT EXISTS `target_department_snapshot` VARCHAR(255) DEFAULT NULL AFTER `target_name_snapshot`,
+	ADD COLUMN IF NOT EXISTS `target_date_joined_snapshot` DATE DEFAULT NULL AFTER `target_department_snapshot`,
+	ADD COLUMN IF NOT EXISTS `target_position_snapshot` VARCHAR(100) DEFAULT NULL AFTER `target_date_joined_snapshot`;

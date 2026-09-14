@@ -8,6 +8,19 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         return self::prefix() . 'uniform_inventory_movements';
     }
 
+	public static function has_target_snapshot_columns() {
+		$table   = self::table();
+		$columns = self::db()->get_col( "SHOW COLUMNS FROM $table", 0 );
+		$required = array(
+			'target_name_snapshot',
+			'target_department_snapshot',
+			'target_date_joined_snapshot',
+			'target_position_snapshot',
+		);
+
+		return empty( array_diff( $required, $columns ) );
+	}
+
     public static function insert( $data ) {
         $defaults = array(
             'item_id'        => 0,
@@ -36,6 +49,8 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
 			'item_id' => '%d', 'request_id' => '%d', 'movement_type' => '%s', 'quantity' => '%d',
 			'before_qty' => '%d', 'after_qty' => '%d', 'unit_price' => '%f', 'total_price' => '%f',
 			'actor_user_id' => '%d', 'target_user_id' => '%d', 'target_employee_no' => '%s', 'note' => '%s',
+			'target_name_snapshot' => '%s', 'target_department_snapshot' => '%s',
+			'target_date_joined_snapshot' => '%s', 'target_position_snapshot' => '%s',
 			'import_batch_id' => '%d', 'source_row' => '%d',
 		);
 		$formats = array();
@@ -52,6 +67,7 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         $category_table = UMS_DB_Product_Category::table();
         $users_table    = self::db()->users;
         $organization   = UMS_DB_Organization::table();
+		$has_target_snapshot = self::has_target_snapshot_columns();
 
         $defaults = array(
             'search'        => '',
@@ -82,9 +98,15 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
 
         if ( $args['search'] !== '' ) {
             $like    = '%' . self::db()->esc_like( $args['search'] ) . '%';
-            $where[] = '(inventory.item_variant LIKE %s OR inventory.size LIKE %s OR child.category_name LIKE %s OR parent.category_name LIKE %s OR actor.user_login LIKE %s OR target.user_login LIKE %s OR movement.target_employee_no LIKE %s OR organization.full_name LIKE %s OR movement.note LIKE %s)';
+			$where[] = $has_target_snapshot
+				? '(inventory.item_variant LIKE %s OR inventory.size LIKE %s OR child.category_name LIKE %s OR parent.category_name LIKE %s OR actor.user_login LIKE %s OR target.user_login LIKE %s OR movement.target_employee_no LIKE %s OR organization.full_name LIKE %s OR movement.target_name_snapshot LIKE %s OR movement.target_department_snapshot LIKE %s OR movement.note LIKE %s)'
+				: '(inventory.item_variant LIKE %s OR inventory.size LIKE %s OR child.category_name LIKE %s OR parent.category_name LIKE %s OR actor.user_login LIKE %s OR target.user_login LIKE %s OR movement.target_employee_no LIKE %s OR organization.full_name LIKE %s OR movement.note LIKE %s)';
             $params[] = $like;
             $params[] = $like;
+			if ( $has_target_snapshot ) {
+				$params[] = $like;
+				$params[] = $like;
+			}
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -95,11 +117,20 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         }
 
         $limit = max( 1, min( 1000, absint( $args['limit'] ) ) );
+		$target_profile_select = $has_target_snapshot
+			? "COALESCE(NULLIF(organization.full_name, ''), NULLIF(movement.target_name_snapshot, ''), target.display_name) AS target_name,
+				COALESCE(NULLIF(organization.department, ''), NULLIF(movement.target_department_snapshot, '')) AS target_department,
+				COALESCE(organization.date_joined, movement.target_date_joined_snapshot) AS target_date_joined,
+				COALESCE(NULLIF(organization.position, ''), NULLIF(movement.target_position_snapshot, '')) AS target_position"
+			: "COALESCE(NULLIF(organization.full_name, ''), target.display_name) AS target_name,
+				organization.department AS target_department, organization.date_joined AS target_date_joined,
+				organization.position AS target_position";
+
         $sql = "SELECT movement.*, inventory.item_variant, inventory.size, child.category_name,
                 parent.category_id AS parent_category_id, parent.category_name AS parent_category_name,
                 actor.user_login AS actor_login,
-                COALESCE(NULLIF(movement.target_employee_no, ''), organization.employee_no, target.user_login) AS target_login,
-                organization.full_name AS target_name
+				COALESCE(NULLIF(movement.target_employee_no, ''), organization.employee_no, target.user_login) AS target_login,
+				$target_profile_select
             FROM $table movement
             LEFT JOIN $inventory inventory ON inventory.item_id = movement.item_id
             LEFT JOIN $category_table child ON child.category_id = inventory.category_id

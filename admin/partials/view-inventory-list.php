@@ -258,7 +258,7 @@ unset( $section );
 		<h2>Import cấp phát ngày đầu làm việc</h2>
 		<p>Đọc sheet <strong>Template_NewCommer</strong> để ghi nhận số lượng cấp phát thực tế. Chức năng này không kiểm tra hoặc giới hạn theo định mức CNV mới.</p>
 		<?php if ( ! $newcomer_out_ready ) : ?>
-			<div class="notice notice-error inline"><p>Database chưa có cấu trúc lịch sử import kho. Hãy cập nhật <code>ums.sql</code> trước khi sử dụng.</p></div>
+			<div class="notice notice-error inline"><p>Database chưa có cấu trúc lưu thông tin CNV tại thời điểm cấp phát. Hãy chạy khối SQL cập nhật trong <code>ums.sql</code> trước khi sử dụng.</p></div>
 		<?php endif; ?>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
 			<?php wp_nonce_field( 'ums_preview_newcomer_inventory_out' ); ?>
