@@ -119,44 +119,11 @@ class UMS_Employee_Exit_Manager {
 			$returned = max( 0, absint( $input['returned_quantity'] ?? $item['returned_quantity'] ) );
 			$max_return = max( (int) $item['required_quantity'], (int) $item['issued_quantity'] );
 			$returned = min( $returned, $max_return );
-			$reusable = max( 0, absint( $input['reusable_quantity'] ?? $item['reusable_quantity'] ) );
-			$reusable = min( $reusable, $returned );
-			$restocked = (int) $item['restocked_quantity'];
-			if ( $reusable < $restocked ) {
-				$wpdb->query( 'ROLLBACK' );
-				return new WP_Error( 'employee_exit_restock_reversal', 'SL nhập lại kho không thể nhỏ hơn số lượng đã được cộng kho trước đó.' );
-			}
-
-			$delta = $reusable - $restocked;
-			if ( $delta > 0 && (int) $item['item_id'] > 0 ) {
-				$inventory = UMS_DB_Inventory::get_by_id_for_update( $item['item_id'] );
-				if ( ! $inventory ) {
-					$wpdb->query( 'ROLLBACK' );
-					return new WP_Error( 'employee_exit_inventory_missing', 'Sản phẩm hoàn trả không còn tồn tại trong kho.' );
-				}
-				$before = (int) $inventory['stock_qty'];
-				$after  = $before + $delta;
-				if ( UMS_DB_Inventory::update( $item['item_id'], array( 'stock_qty' => $after ) ) === false ) {
-					$wpdb->query( 'ROLLBACK' );
-					return new WP_Error( 'employee_exit_restock_failed', UMS_DB_Inventory::get_last_error() );
-				}
-				if ( ! UMS_DB_Inventory_Movement::insert( array(
-					'item_id' => (int) $item['item_id'], 'movement_type' => 'return_in', 'quantity' => $delta,
-					'before_qty' => $before, 'after_qty' => $after, 'unit_price' => (float) $inventory['base_price'],
-					'total_price' => (float) $inventory['base_price'] * $delta, 'actor_user_id' => get_current_user_id(),
-					'target_employee_no' => $case['employee_no'],
-					'note' => sprintf( 'Thu hồi đồng phục khi nghỉ việc, hồ sơ #%d.', $exit_id ),
-				) ) ) {
-					$wpdb->query( 'ROLLBACK' );
-					return new WP_Error( 'employee_exit_movement_failed', UMS_DB_Inventory_Movement::get_last_error() );
-				}
-				$restocked += $delta;
-			}
 
 			if ( UMS_DB_Employee_Exit::update_item(
 				$id,
-				array( 'returned_quantity' => $returned, 'reusable_quantity' => $reusable, 'restocked_quantity' => $restocked, 'updated_at' => current_time( 'mysql' ) ),
-				array( '%d', '%d', '%d', '%s' )
+				array( 'returned_quantity' => $returned, 'updated_at' => current_time( 'mysql' ) ),
+				array( '%d', '%s' )
 			) === false ) {
 				$wpdb->query( 'ROLLBACK' );
 				return new WP_Error( 'employee_exit_item_update_failed', UMS_DB_Employee_Exit::get_last_error() );

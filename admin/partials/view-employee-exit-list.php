@@ -135,7 +135,7 @@ $group_labels = array(
 						<div class="notice notice-warning inline"><p>Không tìm thấy đồng phục đã xuất kho hoặc SL cấp phát đã chốt cho CNV này. Hệ thống chỉ hiển thị thẻ nhân viên và dây đeo thẻ.</p></div>
 					<?php endif; ?>
 					<div class="ums-table-scroll"><table class="widefat striped ums-exit-items">
-						<thead><tr><th>Nhóm</th><th>Sản phẩm</th><th>Size</th><th>Đã cấp</th><th>Phải trả</th><th>Miễn trả</th><th>Thực trả</th><th>SL nhập lại kho</th><th>Lần cấp gần nhất / ghi chú</th></tr></thead>
+						<thead><tr><th>Nhóm</th><th>Sản phẩm</th><th>Size</th><th>Đã cấp</th><th>Phải trả</th><th>Miễn trả</th><th>Thực trả</th><th>Lần cấp gần nhất / ghi chú</th></tr></thead>
 						<tbody>
 						<?php foreach ( $selected_exit_items as $item ) :
 							$disabled = (int) $item['required_quantity'] <= (int) $item['exempt_quantity'] || $selected_exit['status'] === 'cancelled';
@@ -148,7 +148,6 @@ $group_labels = array(
 								<td><strong><?php echo absint( $item['required_quantity'] ); ?></strong></td>
 								<td><?php echo absint( $item['exempt_quantity'] ); ?></td>
 								<td><input type="number" min="0" max="<?php echo esc_attr( max( $item['issued_quantity'], $item['required_quantity'] ) ); ?>" name="return_items[<?php echo absint( $item['return_item_id'] ); ?>][returned_quantity]" value="<?php echo absint( $item['returned_quantity'] ); ?>" <?php disabled( $disabled ); ?>></td>
-								<td><input type="number" min="<?php echo absint( $item['restocked_quantity'] ); ?>" max="<?php echo esc_attr( max( $item['issued_quantity'], $item['required_quantity'] ) ); ?>" name="return_items[<?php echo absint( $item['return_item_id'] ); ?>][reusable_quantity]" value="<?php echo absint( $item['reusable_quantity'] ); ?>" <?php disabled( $disabled || ! $item['item_id'] ); ?>></td>
 								<td><?php echo esc_html( $item['exemption_reason'] ?: ( $item['latest_issued_at'] ? mysql2date( 'd/m/Y', $item['latest_issued_at'] ) : '-' ) ); ?></td>
 							</tr>
 						<?php endforeach; ?>
