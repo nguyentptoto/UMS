@@ -115,6 +115,53 @@ class UMS_DB_Organization extends UMS_DB_Base {
 	}
 
 	/**
+	 * Active organization employees that can participate in the existing approval engine.
+	 * The profile id remains the persisted permission key; names and organization data come
+	 * from the latest organization snapshot.
+	 */
+	public static function get_approval_options() {
+		static $options = null;
+		if ( null !== $options ) {
+			return $options;
+		}
+		if ( ! self::table_exists() || ! UMS_DB_User::table_exists() ) {
+			return array();
+		}
+
+		$profile_table = UMS_DB_User::table();
+		$users_table   = self::db()->users;
+		$options = self::db()->get_results(
+			"SELECT profiles.profile_id, profiles.user_id, org.employee_no AS employee_code,
+				org.full_name, org.department, org.team,
+				org.position AS job_position, org.cost_center,
+				org.email, org.factory
+			FROM " . self::table() . " org
+			INNER JOIN $profile_table profiles ON profiles.employee_code = org.employee_no
+			INNER JOIN $users_table users ON users.ID = profiles.user_id
+			WHERE org.employment_status = 'active'
+				AND org.employee_no <> ''
+				AND profiles.resignation_date IS NULL
+				AND users.user_status = 0
+			ORDER BY org.department ASC, org.full_name ASC, org.employee_no ASC",
+			ARRAY_A
+		);
+		return $options;
+	}
+
+	public static function get_approval_option_by_profile_id( $profile_id ) {
+		$profile_id = absint( $profile_id );
+		if ( $profile_id <= 0 ) {
+			return null;
+		}
+		foreach ( self::get_approval_options() as $employee ) {
+			if ( (int) $employee['profile_id'] === $profile_id ) {
+				return $employee;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Lấy nhân sự phục vụ báo cáo định mức, không áp dụng phân trang giao diện.
 	 */
 	public static function get_for_allowance_export( $args = array() ) {

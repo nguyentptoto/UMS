@@ -56,6 +56,8 @@ class UMS_Admin {
         add_action( 'admin_post_ums_save_sheet_sync_settings', array( __CLASS__, 'handle_save_sheet_sync_settings' ) );
 		add_action( 'admin_post_ums_refresh_employee_exit', array( __CLASS__, 'handle_refresh_employee_exit' ) );
 		add_action( 'admin_post_ums_save_employee_exit_returns', array( __CLASS__, 'handle_save_employee_exit_returns' ) );
+		add_action( 'admin_post_ums_preview_employee_exit_returns', array( __CLASS__, 'handle_preview_employee_exit_returns' ) );
+		add_action( 'admin_post_ums_confirm_employee_exit_returns', array( __CLASS__, 'handle_confirm_employee_exit_returns' ) );
 		add_action( 'admin_post_ums_export_pr', array( __CLASS__, 'handle_export_pr' ) );
         add_action( 'wp_ajax_ums_sync_user_password', array( __CLASS__, 'handle_sync_user_password' ) );
         add_action( 'wp_ajax_ums_get_organization_employees', array( __CLASS__, 'handle_get_organization_employees' ) );
@@ -420,8 +422,8 @@ class UMS_Admin {
         $edit_flow_id   = isset( $_GET['edit_flow_id'] ) ? absint( $_GET['edit_flow_id'] ) : 0;
         $editing_flow   = $edit_flow_id ? UMS_DB_Approval_Flow::get_by_id( $edit_flow_id ) : null;
         $approval_flows = UMS_DB_Approval_Flow::get_all( $filters );
-        $departments    = UMS_DB_Department::get_active();
-        $approvers      = UMS_DB_User::get_all( array( 'status' => 'active' ) );
+		$departments    = UMS_DB_Department::get_active_from_organization();
+		$approvers      = UMS_DB_Organization::get_approval_options();
         $notice         = self::get_notice();
         $form_values    = self::get_default_approval_flow_values( $editing_flow );
 
@@ -643,6 +645,11 @@ class UMS_Admin {
 
 	public static function render_employee_exit_page() {
 		$table_ready = UMS_DB_Employee_Exit::is_ready() && UMS_DB_Organization::supports_employment_status();
+		$factories = UMS_DB_Inventory::get_factory_options();
+		$requested_factory = isset( $_GET['factory_code'] ) ? strtoupper( sanitize_key( wp_unslash( $_GET['factory_code'] ) ) ) : '';
+		if ( ! array_key_exists( $requested_factory, $factories ) ) {
+			$requested_factory = '';
+		}
 		$requested_status = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : '';
 		if ( ! in_array( $requested_status, array( 'pending', 'in_progress', 'completed' ), true ) ) {
 			$requested_status = '';
@@ -651,12 +658,11 @@ class UMS_Admin {
 			'search' => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
 			'status' => $requested_status,
 			'employee_type' => isset( $_GET['employee_type'] ) ? sanitize_key( wp_unslash( $_GET['employee_type'] ) ) : '',
-			'page' => isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1,
-			'per_page' => 50,
+			'factory_code' => $requested_factory,
 		);
-		$exit_cases = $table_ready ? UMS_DB_Employee_Exit::get_page( $filters ) : array();
+		$exit_cases = $table_ready ? UMS_DB_Employee_Exit::get_all( $filters ) : array();
 		$exit_count = $table_ready ? UMS_DB_Employee_Exit::get_count( $filters ) : 0;
-		$status_counts = $table_ready ? UMS_DB_Employee_Exit::get_status_counts() : array();
+		$status_counts = $table_ready ? UMS_DB_Employee_Exit::get_status_counts( $filters ) : array();
 		$selected_exit_id = isset( $_GET['exit_id'] ) ? absint( $_GET['exit_id'] ) : 0;
 		$selected_exit = $table_ready && $selected_exit_id ? UMS_DB_Employee_Exit::get_by_id( $selected_exit_id ) : null;
 		if ( $selected_exit ) {
@@ -664,6 +670,8 @@ class UMS_Admin {
 			$selected_exit = UMS_DB_Employee_Exit::get_by_id( $selected_exit_id );
 		}
 		$selected_exit_items = $selected_exit ? UMS_DB_Employee_Exit::get_items( $selected_exit_id ) : array();
+		$return_preview_token = isset( $_GET['return_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['return_preview_token'] ) ) : '';
+		$return_import_preview = $return_preview_token !== '' ? UMS_Employee_Exit_Return_Import::get_preview( $return_preview_token ) : null;
 		$notice = self::get_notice();
 
 		include UMS_PLUGIN_DIR . 'admin/partials/view-employee-exit-list.php';
@@ -698,6 +706,67 @@ class UMS_Admin {
 			self::redirect_to_employee_exits( array( 'exit_id' => $exit_id, 'notice' => 'employee_exit_failed', 'notice_extra' => $result->get_error_message() ) );
 		}
 		self::redirect_to_employee_exits( array( 'exit_id' => $exit_id, 'notice' => 'employee_exit_saved' ) );
+	}
+
+	public static function handle_preview_employee_exit_returns() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền thực hiện thao tác này.', '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'ums_preview_employee_exit_returns' );
+		$file = isset( $_FILES['ums_employee_exit_return_file'] ) ? $_FILES['ums_employee_exit_return_file'] : array();
+		if ( empty( $file['tmp_name'] ) || ! isset( $file['error'] ) || UPLOAD_ERR_OK !== (int) $file['error']
+			|| (int) ( $file['size'] ?? 0 ) > 10 * MB_IN_BYTES
+			|| strtolower( pathinfo( (string) ( $file['name'] ?? '' ), PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
+			self::redirect_to_employee_exits( array( 'notice' => 'employee_exit_return_import_invalid_file' ) );
+		}
+		try {
+			$preview = UMS_Employee_Exit_Return_Import::analyze( $file['tmp_name'], $file['name'] );
+			$token = UMS_Employee_Exit_Return_Import::store_preview( $preview );
+			self::redirect_to_employee_exits(
+				array(
+					'notice' => empty( $preview['errors'] ) ? 'employee_exit_return_preview_ready' : 'employee_exit_return_preview_warning',
+					'return_preview_token' => $token,
+				)
+			);
+		} catch ( Throwable $error ) {
+			self::redirect_to_employee_exits(
+				array( 'notice' => 'employee_exit_return_import_invalid_file', 'notice_extra' => $error->getMessage() )
+			);
+		}
+	}
+
+	public static function handle_confirm_employee_exit_returns() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền thực hiện thao tác này.', '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'ums_confirm_employee_exit_returns' );
+		$token = isset( $_POST['return_preview_token'] ) ? sanitize_key( wp_unslash( $_POST['return_preview_token'] ) ) : '';
+		$preview = UMS_Employee_Exit_Return_Import::get_preview( $token );
+		if ( ! is_array( $preview ) ) {
+			self::redirect_to_employee_exits( array( 'notice' => 'employee_exit_return_preview_expired' ) );
+		}
+		if ( ! empty( $preview['errors'] ) ) {
+			self::redirect_to_employee_exits(
+				array( 'notice' => 'employee_exit_return_preview_warning', 'return_preview_token' => $token )
+			);
+		}
+		$result = UMS_Employee_Exit_Return_Import::import( $preview, get_current_user_id() );
+		if ( empty( $result['success'] ) ) {
+			self::redirect_to_employee_exits(
+				array(
+					'notice' => 'employee_exit_return_import_failed',
+					'return_preview_token' => $token,
+					'notice_extra' => implode( ' ', array_slice( $result['errors'] ?? array(), 0, 5 ) ),
+				)
+			);
+		}
+		UMS_Employee_Exit_Return_Import::delete_preview( $token );
+		self::redirect_to_employee_exits(
+			array(
+				'notice' => 'employee_exit_return_import_completed',
+				'notice_extra' => sprintf( 'Đã cập nhật %d CNV, tổng thực trả %s sản phẩm.', $result['imported'], number_format_i18n( $result['total_quantity'] ) ),
+			)
+		);
 	}
 
     public static function handle_save_sheet_sync_settings() {
@@ -2619,7 +2688,8 @@ class UMS_Admin {
             $errors[] = 'Không tìm thấy bước duyệt cần cập nhật.';
         }
 
-        if ( $data['department_id'] <= 0 || ! UMS_DB_Department::get_by_id( $data['department_id'] ) ) {
+		$organization_department_ids = array_map( 'absint', array_column( UMS_DB_Department::get_active_from_organization(), 'department_id' ) );
+		if ( $data['department_id'] <= 0 || ! in_array( $data['department_id'], $organization_department_ids, true ) ) {
             $errors[] = 'Vui lòng chọn phòng ban hợp lệ.';
         }
 
@@ -2636,8 +2706,8 @@ class UMS_Admin {
         }
 
         foreach ( $data['approver_profile_ids'] as $approver_profile_id ) {
-            if ( $approver_profile_id <= 0 || ! UMS_DB_User::get_by_id( $approver_profile_id ) ) {
-                $errors[] = 'Danh sách người duyệt có hồ sơ không hợp lệ.';
+			if ( $approver_profile_id <= 0 || ! UMS_DB_Organization::get_approval_option_by_profile_id( $approver_profile_id ) ) {
+				$errors[] = 'Người duyệt không còn hoạt động trên Sơ đồ tổ chức hoặc chưa có tài khoản UMS hợp lệ.';
                 break;
             }
         }
@@ -3398,6 +3468,12 @@ class UMS_Admin {
 			'employee_exit_refreshed' => array( 'success', 'Đã cập nhật ngày nghỉ và tính lại danh sách phải hoàn trả.' ),
 			'employee_exit_saved' => array( 'success', 'Đã lưu kết quả thu hồi đồng phục.' ),
 			'employee_exit_failed' => array( 'error', 'Không thể cập nhật hồ sơ CNV nghỉ việc.' ),
+			'employee_exit_return_preview_ready' => array( 'success', 'Đã đọc file hoàn trả. Hãy kiểm tra dữ liệu trước khi xác nhận.' ),
+			'employee_exit_return_preview_warning' => array( 'warning', 'File hoàn trả còn lỗi và chưa thể xác nhận.' ),
+			'employee_exit_return_import_invalid_file' => array( 'error', 'File hoàn trả không hợp lệ hoặc không đọc được.' ),
+			'employee_exit_return_preview_expired' => array( 'error', 'Dữ liệu xem trước hoàn trả đã hết hạn. Vui lòng tải lại file.' ),
+			'employee_exit_return_import_failed' => array( 'error', 'Import dữ liệu hoàn trả không thành công.' ),
+			'employee_exit_return_import_completed' => array( 'success', 'Import dữ liệu hoàn trả hoàn tất.' ),
             'organization_synced' => array( 'success', 'Đồng bộ sơ đồ tổ chức thành công.' ),
             'organization_sync_failed' => array( 'error', 'Không thể đồng bộ sơ đồ tổ chức.' ),
             'invalid_user'     => array( 'error', 'Không tìm thấy nhân sự cần xử lý.' ),
@@ -3761,6 +3837,12 @@ class UMS_Admin {
     }
 
 	private static function redirect_to_employee_exits( $args = array() ) {
+		if ( empty( $args['factory_code'] ) && ! empty( $_POST['factory_code'] ) ) {
+			$factory_code = strtoupper( sanitize_key( wp_unslash( $_POST['factory_code'] ) ) );
+			if ( array_key_exists( $factory_code, UMS_DB_Inventory::get_factory_options() ) ) {
+				$args['factory_code'] = $factory_code;
+			}
+		}
 		$url = add_query_arg(
 			array_filter(
 				array_merge( array( 'page' => 'tvn-ums-employee-exits' ), $args ),

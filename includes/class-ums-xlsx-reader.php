@@ -31,6 +31,10 @@ class UMS_XLSX_Reader {
 		return isset( $this->sheets[ $sheet_name ] );
 	}
 
+	public function get_sheet_names() {
+		return array_keys( $this->sheets );
+	}
+
 	public function read_sheet( $sheet_name ) {
 		if ( ! $this->has_sheet( $sheet_name ) ) {
 			throw new RuntimeException( 'Không tìm thấy sheet "' . $sheet_name . '".' );

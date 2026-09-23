@@ -181,6 +181,87 @@ class UMS_Employee_Exit_Manager {
 		return $status;
 	}
 
+	/**
+	 * Apply aggregate quantities from the bulk-return template without changing stock.
+	 * The template quantity is the employee's total actual return, not an increment.
+	 */
+	public static function apply_group_returns( $exit_id, $group_quantities, $return_date, $actor_user_id, $source_label = '' ) {
+		$case = UMS_DB_Employee_Exit::get_by_id( $exit_id );
+		if ( ! $case || $case['status'] === 'cancelled' ) {
+			return new WP_Error( 'employee_exit_invalid', 'Không tìm thấy hồ sơ nghỉ việc đang hiệu lực.' );
+		}
+
+		$return_date = self::sanitize_date( $return_date );
+		if ( $return_date === '' ) {
+			return new WP_Error( 'employee_exit_return_date_invalid', 'Ngày trả không hợp lệ.' );
+		}
+		$allowed_groups = array( 'pants', 'shirt', 'jacket', 'shoes', 'hat', 'id_card' );
+		$items_by_group = array();
+		foreach ( UMS_DB_Employee_Exit::get_items( $exit_id ) as $item ) {
+			$group = sanitize_key( (string) $item['item_group'] );
+			// The supplied return template combines winter coats into the "Áo khoác" column.
+			if ( $group === 'coat' ) {
+				$group = 'jacket';
+			}
+			if ( in_array( $group, $allowed_groups, true ) ) {
+				$items_by_group[ $group ][] = $item;
+			}
+		}
+
+		foreach ( $allowed_groups as $group ) {
+			$quantity = max( 0, absint( $group_quantities[ $group ] ?? 0 ) );
+			$group_items = $items_by_group[ $group ] ?? array();
+			$capacity = 0;
+			foreach ( $group_items as $item ) {
+				$capacity += max( 0, (int) $item['required_quantity'] - (int) $item['exempt_quantity'] );
+			}
+			if ( $quantity > $capacity ) {
+				return new WP_Error(
+					'employee_exit_return_exceeded',
+					sprintf( 'Nhóm %s thực trả %d vượt số lượng phải trả %d.', $group, $quantity, $capacity )
+				);
+			}
+
+			$remaining = $quantity;
+			foreach ( $group_items as $item ) {
+				$item_capacity = max( 0, (int) $item['required_quantity'] - (int) $item['exempt_quantity'] );
+				$item_returned = min( $remaining, $item_capacity );
+				$remaining -= $item_returned;
+				if ( UMS_DB_Employee_Exit::update_item(
+					$item['return_item_id'],
+					array( 'returned_quantity' => $item_returned, 'updated_at' => current_time( 'mysql' ) ),
+					array( '%d', '%s' )
+				) === false ) {
+					return new WP_Error( 'employee_exit_item_update_failed', UMS_DB_Employee_Exit::get_last_error() );
+				}
+			}
+		}
+
+		$status = self::calculate_status( UMS_DB_Employee_Exit::get_items( $exit_id ) );
+		$source_label = sanitize_text_field( $source_label );
+		$import_note = sprintf( 'Import hoàn trả ngày %s%s.', mysql2date( 'd/m/Y', $return_date ), $source_label !== '' ? ' từ ' . $source_label : '' );
+		$notes = trim( (string) $case['notes'] );
+		if ( strpos( $notes, $import_note ) === false ) {
+			$notes = trim( $notes . ( $notes !== '' ? "\n" : '' ) . $import_note );
+		}
+		$completed_at = $status === 'completed' ? $return_date . ' ' . current_time( 'H:i:s' ) : null;
+		if ( UMS_DB_Employee_Exit::update_case(
+			$exit_id,
+			array(
+				'status' => $status,
+				'notes' => $notes,
+				'updated_at' => current_time( 'mysql' ),
+				'updated_by' => absint( $actor_user_id ),
+				'completed_at' => $completed_at,
+			),
+			array( '%s', '%s', '%s', '%d', '%s' )
+		) === false ) {
+			return new WP_Error( 'employee_exit_update_failed', UMS_DB_Employee_Exit::get_last_error() );
+		}
+
+		return $status;
+	}
+
 	public static function ensure_case_uniform_items( $exit_id ) {
 		$case = UMS_DB_Employee_Exit::get_by_id( $exit_id );
 		if ( ! $case || $case['status'] === 'cancelled' ) {

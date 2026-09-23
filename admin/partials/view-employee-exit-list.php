@@ -22,6 +22,49 @@ $group_labels = array(
 	'pants' => 'Quần', 'shirt' => 'Áo', 'jacket' => 'Áo khoác', 'coat' => 'Áo phao',
 	'hat' => 'Mũ', 'shoes' => 'Giày', 'id_card' => 'Thẻ nhân viên', 'other' => 'Khác',
 );
+$grid_rows = array();
+foreach ( $exit_cases as $case ) {
+	$factory_code = UMS_DB_Inventory::resolve_factory_code_for_employee( $case );
+	$detail_url = add_query_arg(
+		array_filter(
+			array(
+				'exit_id' => absint( $case['exit_id'] ),
+				's' => $filters['search'],
+				'employee_type' => $filters['employee_type'],
+				'status' => $filters['status'],
+				'factory_code' => $filters['factory_code'],
+			),
+			function ( $value ) { return $value !== ''; }
+		),
+		$page_url
+	);
+	$grid_rows[] = array(
+		'employee_no' => $case['employee_no'],
+		'full_name' => $case['full_name'],
+		'factory_name' => $factories[ $factory_code ] ?? $factory_code,
+		'department' => $case['department'] ?: '-',
+		'cost_center' => $case['cost_center'] ?: '-',
+		'employee_type' => $type_labels[ $case['employee_type'] ] ?? $case['employee_type'],
+		'detected_at' => mysql2date( 'd/m/Y H:i', $case['detected_at'] ),
+		'status' => $status_labels[ $case['status'] ] ?? $case['status'],
+		'notification_status' => '<span title="' . esc_attr( $case['notification_error'] ?? '' ) . '">' . esc_html( $notification_labels[ $case['notification_status'] ?? 'legacy' ] ?? ( $case['notification_status'] ?? '-' ) ) . '</span>',
+		'reminder_status' => '<span title="' . esc_attr( $case['reminder_error'] ?? '' ) . '">' . esc_html( $notification_labels[ $case['reminder_status'] ?? 'pending' ] ?? ( $case['reminder_status'] ?? '-' ) ) . '</span>',
+		'actions' => '<a class="button button-small" href="' . esc_url( $detail_url ) . '">Xử lý</a>',
+	);
+}
+$grid_columns = array(
+	array( 'text' => 'Mã CNV', 'datafield' => 'employee_no', 'width' => '7%' ),
+	array( 'text' => 'Họ tên', 'datafield' => 'full_name', 'width' => '10%' ),
+	array( 'text' => 'Nhà máy', 'datafield' => 'factory_name', 'width' => '7%' ),
+	array( 'text' => 'Bộ phận', 'datafield' => 'department', 'width' => '14%' ),
+	array( 'text' => 'Cost center', 'datafield' => 'cost_center', 'width' => '8%' ),
+	array( 'text' => 'Phân loại', 'datafield' => 'employee_type', 'width' => '11%' ),
+	array( 'text' => 'Ngày phát hiện', 'datafield' => 'detected_at', 'width' => '10%' ),
+	array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '10%' ),
+	array( 'text' => 'Email lần đầu', 'datafield' => 'notification_status', 'width' => '8%', 'cellsrenderer' => 'html' ),
+	array( 'text' => 'Nhắc cuối tháng', 'datafield' => 'reminder_status', 'width' => '9%', 'cellsrenderer' => 'html' ),
+	array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '6%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
+);
 ?>
 <div class="wrap ums-admin-wrap ums-exit-wrap">
 	<h1 class="wp-heading-inline">UMS - Quản lý CNV nghỉ việc</h1>
@@ -41,11 +84,78 @@ $group_labels = array(
 		</div>
 
 		<section class="ums-panel">
-			<h2>Danh sách phát hiện nghỉ việc</h2>
+			<h2>Import CNV đã trả đồng phục</h2>
+			<p class="description">Dùng template gồm Ngày trả, Mã NV, Họ tên, Áo, Quần, Áo khoác, Giày, Mũ và Thẻ nhân viên. Số lượng trong file thay thế giá trị Thực trả hiện tại và không nhập lại tồn kho.</p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
+				<input type="hidden" name="action" value="ums_preview_employee_exit_returns">
+				<input type="hidden" name="factory_code" value="<?php echo esc_attr( $filters['factory_code'] ); ?>">
+				<?php wp_nonce_field( 'ums_preview_employee_exit_returns' ); ?>
+				<input type="file" name="ums_employee_exit_return_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+				<button type="submit" class="button button-primary">Đọc và xem trước</button>
+			</form>
+		</section>
+
+		<?php if ( is_array( $return_import_preview ) ) : ?>
+			<section class="ums-panel">
+				<h2>Xem trước: <?php echo esc_html( $return_import_preview['file_name'] ); ?></h2>
+				<p>
+					Sheet <?php echo esc_html( $return_import_preview['sheet_name'] ); ?>:
+					<strong><?php echo number_format_i18n( count( $return_import_preview['rows'] ) ); ?></strong> CNV hợp lệ,
+					tổng thực trả <strong><?php echo number_format_i18n( $return_import_preview['total_quantity'] ); ?></strong> sản phẩm.
+				</p>
+				<?php if ( ! empty( $return_import_preview['errors'] ) ) : ?>
+					<div class="notice notice-error inline"><p><?php echo esc_html( implode( ' ', array_slice( $return_import_preview['errors'], 0, 20 ) ) ); ?></p></div>
+				<?php endif; ?>
+				<?php if ( ! empty( $return_import_preview['warnings'] ) ) : ?>
+					<div class="notice notice-warning inline"><p><?php echo esc_html( implode( ' ', array_slice( $return_import_preview['warnings'], 0, 20 ) ) ); ?></p></div>
+				<?php endif; ?>
+				<?php if ( ! empty( $return_import_preview['rows'] ) ) : ?>
+					<div class="ums-table-scroll"><table class="widefat striped">
+						<thead><tr><th>Dòng</th><th>Ngày trả</th><th>Mã CNV</th><th>Họ tên</th><th>Nhà máy</th><th>Áo</th><th>Quần</th><th>Áo khoác</th><th>Giày</th><th>Mũ</th><th>Thẻ NV</th><th>Tổng</th></tr></thead>
+						<tbody>
+						<?php foreach ( $return_import_preview['rows'] as $preview_row ) : ?>
+							<tr>
+								<td><?php echo absint( $preview_row['source_row'] ); ?></td>
+								<td><?php echo esc_html( mysql2date( 'd/m/Y', $preview_row['return_date'] ) ); ?></td>
+								<td><?php echo esc_html( $preview_row['employee_no'] ); ?></td>
+								<td><?php echo esc_html( $preview_row['full_name'] ); ?></td>
+								<td><?php echo esc_html( $factories[ $preview_row['factory_code'] ] ?? $preview_row['factory_code'] ); ?></td>
+								<td><?php echo absint( $preview_row['quantities']['shirt'] ); ?></td>
+								<td><?php echo absint( $preview_row['quantities']['pants'] ); ?></td>
+								<td><?php echo absint( $preview_row['quantities']['jacket'] ); ?></td>
+								<td><?php echo absint( $preview_row['quantities']['shoes'] ); ?></td>
+								<td><?php echo absint( $preview_row['quantities']['hat'] ); ?></td>
+								<td><?php echo absint( $preview_row['quantities']['id_card'] ); ?></td>
+								<td><strong><?php echo absint( $preview_row['total_returned'] ); ?></strong></td>
+							</tr>
+						<?php endforeach; ?>
+						</tbody>
+					</table></div>
+				<?php endif; ?>
+				<?php if ( empty( $return_import_preview['errors'] ) && ! empty( $return_import_preview['rows'] ) ) : ?>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<input type="hidden" name="action" value="ums_confirm_employee_exit_returns">
+						<input type="hidden" name="return_preview_token" value="<?php echo esc_attr( $return_preview_token ); ?>">
+						<input type="hidden" name="factory_code" value="<?php echo esc_attr( $filters['factory_code'] ); ?>">
+						<?php wp_nonce_field( 'ums_confirm_employee_exit_returns' ); ?>
+						<button type="submit" class="button button-primary">Xác nhận cập nhật thực trả</button>
+					</form>
+				<?php endif; ?>
+			</section>
+		<?php endif; ?>
+
+		<section class="ums-panel">
+			<h2>Danh sách phát hiện nghỉ việc (<?php echo number_format_i18n( $exit_count ); ?>)</h2>
 			<p class="description">CNV được tạo hồ sơ khi mã nhân viên không còn trong lần đồng bộ đầy đủ mới nhất của Sơ đồ tổ chức TVN.</p>
 			<form method="get" class="ums-filter-bar">
 				<input type="hidden" name="page" value="tvn-ums-employee-exits">
 				<input type="search" name="s" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Mã CNV, họ tên, bộ phận, cost center">
+				<select name="factory_code">
+					<option value="">Tất cả nhà máy</option>
+					<?php foreach ( $factories as $factory_code => $factory_name ) : ?>
+						<option value="<?php echo esc_attr( $factory_code ); ?>" <?php selected( $filters['factory_code'], $factory_code ); ?>><?php echo esc_html( $factory_name ); ?></option>
+					<?php endforeach; ?>
+				</select>
 				<select name="employee_type">
 					<option value="">Tất cả loại hợp đồng</option>
 					<?php foreach ( $type_labels as $value => $label ) : ?>
@@ -62,38 +172,12 @@ $group_labels = array(
 				<a class="button button-link" href="<?php echo esc_url( $page_url ); ?>">Xóa lọc</a>
 			</form>
 
-			<div class="ums-table-scroll">
-				<table class="widefat striped">
-					<thead><tr><th>Mã CNV</th><th>Họ tên</th><th>Bộ phận</th><th>Cost center</th><th>Phân loại</th><th>Ngày phát hiện</th><th>Trạng thái</th><th>Email lần đầu</th><th>Nhắc cuối tháng</th><th></th></tr></thead>
-					<tbody>
-					<?php if ( empty( $exit_cases ) ) : ?>
-						<tr><td colspan="10" class="ums-empty-state">Chưa có CNV nghỉ việc phù hợp với bộ lọc.</td></tr>
-					<?php else : foreach ( $exit_cases as $case ) : ?>
-						<tr>
-							<td><strong><?php echo esc_html( $case['employee_no'] ); ?></strong></td>
-							<td><?php echo esc_html( $case['full_name'] ); ?></td>
-							<td><?php echo esc_html( $case['department'] ?: '-' ); ?></td>
-							<td><?php echo esc_html( $case['cost_center'] ?: '-' ); ?></td>
-							<td><?php echo esc_html( $type_labels[ $case['employee_type'] ] ?? $case['employee_type'] ); ?></td>
-							<td><?php echo esc_html( mysql2date( 'd/m/Y H:i', $case['detected_at'] ) ); ?></td>
-							<td><?php echo esc_html( $status_labels[ $case['status'] ] ?? $case['status'] ); ?></td>
-							<td title="<?php echo esc_attr( $case['notification_error'] ?? '' ); ?>"><?php echo esc_html( $notification_labels[ $case['notification_status'] ?? 'legacy' ] ?? ( $case['notification_status'] ?? '-' ) ); ?></td>
-							<td title="<?php echo esc_attr( $case['reminder_error'] ?? '' ); ?>"><?php echo esc_html( $notification_labels[ $case['reminder_status'] ?? 'pending' ] ?? ( $case['reminder_status'] ?? '-' ) ); ?></td>
-							<td><a class="button button-small" href="<?php echo esc_url( add_query_arg( 'exit_id', $case['exit_id'], $page_url ) ); ?>">Xử lý</a></td>
-						</tr>
-					<?php endforeach; endif; ?>
-					</tbody>
-				</table>
-			</div>
-			<?php
-			$total_pages = max( 1, (int) ceil( $exit_count / 50 ) );
-			if ( $total_pages > 1 ) {
-				echo '<div class="tablenav"><div class="tablenav-pages">' . wp_kses_post( paginate_links( array(
-					'base' => add_query_arg( 'paged', '%#%', remove_query_arg( 'exit_id' ) ), 'format' => '',
-					'current' => $filters['page'], 'total' => $total_pages,
-				) ) ) . '</div></div>';
-			}
-			?>
+			<div
+				id="ums-employee-exit-grid"
+				class="ums-jqx-grid"
+				data-rows="<?php echo esc_attr( wp_json_encode( $grid_rows ) ); ?>"
+				data-columns="<?php echo esc_attr( wp_json_encode( $grid_columns ) ); ?>"
+			></div>
 		</section>
 
 		<?php if ( $selected_exit ) : ?>
@@ -108,6 +192,7 @@ $group_labels = array(
 			$first_contract_label = $has_valid_contract_date
 				? mysql2date( 'd/m/Y', $first_contract_date )
 				: '-';
+			$selected_factory_code = UMS_DB_Inventory::resolve_factory_code_for_employee( $selected_exit );
 			foreach ( $selected_exit_items as $selected_exit_item ) {
 				if ( ! in_array( $selected_exit_item['item_group'], array( 'id_card', 'lanyard' ), true )
 					&& (int) $selected_exit_item['required_quantity'] > (int) $selected_exit_item['exempt_quantity'] ) {
@@ -119,6 +204,7 @@ $group_labels = array(
 			<section class="ums-panel ums-exit-detail">
 				<h2>Thu hồi đồng phục: <?php echo esc_html( $selected_exit['employee_no'] . ' - ' . $selected_exit['full_name'] ); ?></h2>
 				<div class="ums-exit-meta">
+					<span><strong>Nhà máy:</strong> <?php echo esc_html( $factories[ $selected_factory_code ] ?? $selected_factory_code ); ?></span>
 					<span><strong>Loại:</strong> <?php echo esc_html( $type_labels[ $selected_exit['employee_type'] ] ?? $selected_exit['employee_type'] ); ?></span>
 					<span><strong>Trạng thái:</strong> <?php echo esc_html( $status_labels[ $selected_exit['status'] ] ?? $selected_exit['status'] ); ?></span>
 					<span><strong>Ngày vào:</strong> <?php echo esc_html( $selected_exit['date_joined'] ? mysql2date( 'd/m/Y', $selected_exit['date_joined'] ) : '-' ); ?></span>
@@ -129,6 +215,7 @@ $group_labels = array(
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ums-inline-form ums-exit-date-form">
 					<input type="hidden" name="action" value="ums_refresh_employee_exit">
 					<input type="hidden" name="exit_id" value="<?php echo absint( $selected_exit['exit_id'] ); ?>">
+					<input type="hidden" name="factory_code" value="<?php echo esc_attr( $filters['factory_code'] ); ?>">
 					<?php wp_nonce_field( 'ums_refresh_employee_exit_' . $selected_exit['exit_id'] ); ?>
 					<label><strong>Ngày nghỉ thực tế</strong> <input type="date" name="actual_leave_date" required value="<?php echo esc_attr( $selected_exit['actual_leave_date'] ); ?>"></label>
 					<button type="submit" class="button">Tính lại nghĩa vụ hoàn trả</button>
@@ -137,6 +224,7 @@ $group_labels = array(
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 					<input type="hidden" name="action" value="ums_save_employee_exit_returns">
 					<input type="hidden" name="exit_id" value="<?php echo absint( $selected_exit['exit_id'] ); ?>">
+					<input type="hidden" name="factory_code" value="<?php echo esc_attr( $filters['factory_code'] ); ?>">
 					<?php wp_nonce_field( 'ums_save_employee_exit_returns_' . $selected_exit['exit_id'] ); ?>
 					<?php if ( ! $has_uniform_return_item ) : ?>
 						<div class="notice notice-warning inline"><p>Không tìm thấy đồng phục đã xuất kho, SL cấp phát đã chốt hoặc định mức phù hợp cho CNV này. Hệ thống chỉ hiển thị thẻ nhân viên.</p></div>

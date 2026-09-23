@@ -50,6 +50,16 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 		return self::db()->get_results( self::db()->prepare( $sql, $params ), ARRAY_A );
 	}
 
+	public static function get_all( $args = array() ) {
+		list( $where, $params ) = self::build_where( $args );
+		$sql = 'SELECT * FROM ' . self::case_table() . ' WHERE ' . implode( ' AND ', $where ) .
+			' ORDER BY detected_at DESC, exit_id DESC';
+		if ( $params ) {
+			$sql = self::db()->prepare( $sql, $params );
+		}
+		return self::db()->get_results( $sql, ARRAY_A );
+	}
+
 	public static function get_count( $args = array() ) {
 		list( $where, $params ) = self::build_where( $args );
 		$sql = 'SELECT COUNT(*) FROM ' . self::case_table() . ' WHERE ' . implode( ' AND ', $where );
@@ -59,9 +69,20 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 		return (int) self::db()->get_var( $sql );
 	}
 
-	public static function get_status_counts() {
+	public static function get_status_counts( $args = array() ) {
+		$args['status'] = '';
+		list( $where, $params ) = self::build_where( $args );
+		$where = array_values( array_filter( $where, function ( $condition ) {
+			return $condition !== "status <> 'cancelled'";
+		} ) );
+		$where[] = "status <> 'cancelled'";
+		$sql = 'SELECT status, COUNT(*) AS total FROM ' . self::case_table() .
+			' WHERE ' . implode( ' AND ', $where ) . ' GROUP BY status';
+		if ( $params ) {
+			$sql = self::db()->prepare( $sql, $params );
+		}
 		$rows = self::db()->get_results(
-			'SELECT status, COUNT(*) AS total FROM ' . self::case_table() . ' GROUP BY status',
+			$sql,
 			ARRAY_A
 		);
 		$result = array( 'pending' => 0, 'in_progress' => 0, 'completed' => 0, 'cancelled' => 0 );
@@ -82,6 +103,16 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 		return self::db()->get_row(
 			self::db()->prepare(
 				"SELECT * FROM " . self::case_table() . " WHERE employee_no = %s AND status IN ('pending','in_progress') ORDER BY exit_id DESC LIMIT 1",
+				trim( (string) $employee_no )
+			),
+			ARRAY_A
+		);
+	}
+
+	public static function get_latest_by_employee_no( $employee_no ) {
+		return self::db()->get_row(
+			self::db()->prepare(
+				"SELECT * FROM " . self::case_table() . " WHERE employee_no = %s AND status <> 'cancelled' ORDER BY exit_id DESC LIMIT 1",
 				trim( (string) $employee_no )
 			),
 			ARRAY_A
@@ -189,7 +220,7 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 	}
 
 	private static function build_where( $args ) {
-		$args = wp_parse_args( $args, array( 'search' => '', 'status' => '', 'employee_type' => '' ) );
+		$args = wp_parse_args( $args, array( 'search' => '', 'status' => '', 'employee_type' => '', 'factory_code' => '' ) );
 		$where = array( '1=1' );
 		$params = array();
 		if ( trim( (string) $args['search'] ) !== '' ) {
@@ -207,6 +238,22 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 		if ( $args['employee_type'] !== '' ) {
 			$where[] = 'employee_type = %s';
 			$params[] = sanitize_key( $args['employee_type'] );
+		}
+		$factory_code = strtoupper( sanitize_key( (string) $args['factory_code'] ) );
+		$da_condition = "(COALESCE(factory, '') LIKE %s OR COALESCE(factory, '') LIKE %s OR COALESCE(department, '') LIKE %s OR COALESCE(cost_center, '') LIKE %s)";
+		$vp_condition = "(COALESCE(factory, '') LIKE %s OR COALESCE(factory, '') LIKE %s OR COALESCE(department, '') LIKE %s OR COALESCE(cost_center, '') LIKE %s)";
+		$da_params = array( '%Đông Anh%', '%Dong Anh%', '%(DA)%', '1300%' );
+		$vp_params = array( '%Vĩnh Phúc%', '%Vinh Phuc%', '%(VP)%', '4900%' );
+		if ( $factory_code === 'DA' ) {
+			$where[] = $da_condition;
+			$params = array_merge( $params, $da_params );
+		} elseif ( $factory_code === 'VP' ) {
+			$where[] = 'NOT ' . $da_condition . ' AND ' . $vp_condition;
+			$params = array_merge( $params, $da_params, $vp_params );
+		} elseif ( $factory_code === 'HY' ) {
+			// Keep the same fallback as inventory routing: records not identified as DA/VP belong to HY.
+			$where[] = 'NOT ' . $da_condition . ' AND NOT ' . $vp_condition;
+			$params = array_merge( $params, $da_params, $vp_params );
 		}
 		return array( $where, $params );
 	}

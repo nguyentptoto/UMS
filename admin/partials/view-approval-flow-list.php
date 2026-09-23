@@ -20,6 +20,9 @@ $format_department_label = function( $department ) {
     $name = isset( $department['department_name'] ) ? trim( (string) $department['department_name'] ) : '';
 
     if ( $code !== '' && $name !== '' ) {
+		if ( strpos( $code, 'org-' ) === 0 ) {
+			return $name;
+		}
         return $code . ' - ' . $name;
     }
 
@@ -52,6 +55,8 @@ foreach ( $approval_flows as $flow ) {
         if ( isset( $approver_map[ $approver_id ] ) ) {
             $approver = $approver_map[ $approver_id ];
             $approver_labels[] = trim( $approver['employee_code'] . ' - ' . $approver['full_name'] );
+		} else {
+			$approver_labels[] = 'Hồ sơ #' . $approver_id . ' (không còn trên Sơ đồ tổ chức)';
         }
     }
 
@@ -160,11 +165,19 @@ $grid_groups = array( 'department_name', 'step_group' );
                 </label>
 
                 <label>
-                    <span>Người duyệt <b>*</b></span>
+					<span>Người duyệt từ Sơ đồ tổ chức TVN <b>*</b></span>
                     <select name="ums_approval_flow[approver_profile_ids][]" multiple size="8" required>
                         <?php foreach ( $approvers as $approver ) : ?>
                             <option value="<?php echo esc_attr( $approver['profile_id'] ); ?>" <?php selected( in_array( (int) $approver['profile_id'], $form_values['approver_profile_ids'], true ) ); ?>>
-                                <?php echo esc_html( $approver['employee_code'] . ' - ' . $approver['full_name'] . ' (' . $approver['department'] . ')' ); ?>
+								<?php
+								echo esc_html(
+									$approver['employee_code'] . ' - ' . $approver['full_name']
+									. ' | ' . $approver['department']
+									. ( $approver['job_position'] !== '' ? ' | ' . $approver['job_position'] : '' )
+									. ( $approver['cost_center'] !== '' ? ' | ' . $approver['cost_center'] : '' )
+									. ( $approver['factory'] !== '' ? ' | ' . $approver['factory'] : '' )
+								);
+								?>
                             </option>
                         <?php endforeach; ?>
                     </select>

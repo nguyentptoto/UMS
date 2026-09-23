@@ -68,6 +68,63 @@ class UMS_DB_Department extends UMS_DB_Base {
         return $active_departments;
     }
 
+	/**
+	 * Ensure organization departments have stable ids for approval-flow storage.
+	 */
+	public static function get_active_from_organization() {
+		if ( ! UMS_DB_Organization::table_exists() ) {
+			return self::get_active();
+		}
+
+		$organization_departments = UMS_DB_Organization::get_distinct_values( 'department' );
+		$existing = self::get_all();
+		$by_name  = array();
+		foreach ( $existing as $department ) {
+			$key = self::normalize_name( $department['department_name'] );
+			if ( $key !== '' ) {
+				$by_name[ $key ] = $department;
+			}
+		}
+
+		foreach ( $organization_departments as $department_name ) {
+			$department_name = trim( sanitize_text_field( (string) $department_name ) );
+			$key = self::normalize_name( $department_name );
+			if ( $key === '' || isset( $by_name[ $key ] ) ) {
+				continue;
+			}
+			$department_code = 'org-' . substr( md5( $key ), 0, 16 );
+			$inserted = self::insert(
+				array(
+					'department_code' => $department_code,
+					'department_name' => $department_name,
+					'department_group' => 'Sơ đồ tổ chức TVN',
+					'is_active' => 1,
+				)
+			);
+			if ( false !== $inserted ) {
+				$by_name[ $key ] = self::get_by_code( $department_code );
+			}
+		}
+
+		$result = array();
+		foreach ( $organization_departments as $department_name ) {
+			$key = self::normalize_name( $department_name );
+			if ( isset( $by_name[ $key ] ) && (int) $by_name[ $key ]['is_active'] === 1 ) {
+				$result[] = $by_name[ $key ];
+			}
+		}
+		usort( $result, function ( $left, $right ) {
+			return strnatcasecmp( $left['department_name'], $right['department_name'] );
+		} );
+		return $result;
+	}
+
+	private static function normalize_name( $value ) {
+		$value = preg_replace( '/\s+/u', ' ', trim( (string) $value ) );
+		$value = remove_accents( $value );
+		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+	}
+
     /**
      * Lấy danh sách nhóm phòng ban để dùng cho bộ lọc và gợi ý nhập liệu.
      */

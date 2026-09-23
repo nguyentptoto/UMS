@@ -150,7 +150,7 @@ class UMS_User {
             self::redirect_with_notice( $redirect_url, 'request_invalid_profile' );
         }
 
-        $department    = self::get_department_by_name( $profile['department'] );
+		$department    = self::get_department_for_profile( $profile );
         $department_id = $department ? (int) $department['department_id'] : 0;
         $flows         = $department_id ? UMS_DB_Approval_Flow::get_all(
             array(
@@ -292,7 +292,7 @@ class UMS_User {
         }
 
         $target_profile = UMS_DB_User::get_by_wp_user_id( (int) $request['target_user_id'] );
-        $department     = $target_profile ? self::get_department_by_name( $target_profile['department'] ) : null;
+		$department     = $target_profile ? self::get_department_for_profile( $target_profile ) : null;
         $flows          = $department ? UMS_DB_Approval_Flow::get_all(
             array(
                 'department_id' => (int) $department['department_id'],
@@ -380,7 +380,7 @@ class UMS_User {
             return self::render_inactive_account();
         }
 
-        $department     = ! empty( $profile['department'] ) ? self::get_department_by_name( $profile['department'] ) : null;
+		$department     = self::get_department_for_profile( $profile );
         $department_id  = $department ? (int) $department['department_id'] : 0;
         $approval_flows = $department_id ? UMS_DB_Approval_Flow::get_all(
             array(
@@ -721,7 +721,7 @@ class UMS_User {
         }
 
         $target_profile = UMS_DB_User::get_by_wp_user_id( (int) $request['target_user_id'] );
-        $department     = $target_profile ? self::get_department_by_name( $target_profile['department'] ) : null;
+		$department     = $target_profile ? self::get_department_for_profile( $target_profile ) : null;
         $flows          = $department ? UMS_DB_Approval_Flow::get_all(
             array(
                 'department_id' => (int) $department['department_id'],
@@ -1003,7 +1003,7 @@ class UMS_User {
             return false;
         }
 
-        $department = self::get_department_by_name( $target_profile['department'] );
+		$department = self::get_department_for_profile( $target_profile );
         if ( ! $department ) {
             return false;
         }
@@ -1204,6 +1204,20 @@ class UMS_User {
 
         return $compatible_match;
     }
+
+	private static function get_department_for_profile( $profile ) {
+		if ( ! is_array( $profile ) ) {
+			return null;
+		}
+		$organization = UMS_DB_Organization::get_by_wp_user_id(
+			absint( $profile['user_id'] ?? 0 ),
+			(string) ( $profile['employee_code'] ?? '' )
+		);
+		$department_name = ! empty( $organization['department'] )
+			? $organization['department']
+			: (string) ( $profile['department'] ?? '' );
+		return self::get_department_by_name( $department_name );
+	}
 
     private static function normalize_department_identifier( $value ) {
         return trim( sanitize_title( remove_accents( (string) $value ) ), '-' );
