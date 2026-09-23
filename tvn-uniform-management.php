@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'UMS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'UMS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'UMS_ORGANIZATION_SYNC_CRON_HOOK', 'ums_daily_organization_sync' );
+define( 'UMS_EMPLOYEE_EXIT_REMINDER_CRON_HOOK', 'ums_daily_employee_exit_reminder' );
 
 /**
  * Đăng ký tác vụ đồng bộ sơ đồ tổ chức một lần mỗi ngày.
@@ -24,6 +25,15 @@ function ums_schedule_daily_organization_sync() {
     }
     ums_ensure_sheet_sync_token();
     ums_ensure_auto_sync_bridge_token();
+
+	if ( ! wp_next_scheduled( UMS_EMPLOYEE_EXIT_REMINDER_CRON_HOOK ) ) {
+		$now      = current_datetime();
+		$next_run = $now->setTime( 17, 0 );
+		if ( $next_run <= $now ) {
+			$next_run = $next_run->modify( '+1 day' );
+		}
+		wp_schedule_event( $next_run->getTimestamp(), 'daily', UMS_EMPLOYEE_EXIT_REMINDER_CRON_HOOK );
+	}
 }
 
 /**
@@ -61,6 +71,7 @@ function ums_ensure_auto_sync_bridge_token() {
  */
 function ums_clear_daily_organization_sync() {
     wp_clear_scheduled_hook( UMS_ORGANIZATION_SYNC_CRON_HOOK );
+	wp_clear_scheduled_hook( UMS_EMPLOYEE_EXIT_REMINDER_CRON_HOOK );
 }
 
 register_activation_hook( __FILE__, 'ums_schedule_daily_organization_sync' );
@@ -113,6 +124,7 @@ function run_tvn_uniform_management() {
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-uniform-material-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-calculator.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-export.php';
+	UMS_Employee_Exit_Manager::init();
     UMS_Sheet_User_Sync::init();
     UMS_Organization_Sync::init();
     UMS_Auto_Sync_Bridge::init();

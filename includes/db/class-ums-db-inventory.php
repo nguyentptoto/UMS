@@ -3,6 +3,43 @@
  * Lớp chuyên trách xử lý dữ liệu danh mục sản phẩm và tổng kho.
  */
 class UMS_DB_Inventory extends UMS_DB_Base {
+	const DEFAULT_FACTORY = 'HY';
+
+	public static function stock_table() {
+		return self::prefix() . 'uniform_inventory_stocks';
+	}
+
+	public static function get_factory_options() {
+		return array( 'HY' => 'Hưng Yên', 'DA' => 'Đông Anh', 'VP' => 'Vĩnh Phúc' );
+	}
+
+	public static function normalize_factory_code( $factory_code ) {
+		$factory_code = strtoupper( sanitize_key( (string) $factory_code ) );
+		return array_key_exists( $factory_code, self::get_factory_options() ) ? $factory_code : self::DEFAULT_FACTORY;
+	}
+
+	public static function supports_factory_stock() {
+		static $supported = null;
+		if ( null !== $supported ) {
+			return $supported;
+		}
+		$table = self::stock_table();
+		$supported = self::db()->get_var( self::db()->prepare( 'SHOW TABLES LIKE %s', $table ) ) === $table;
+		return $supported;
+	}
+
+	public static function resolve_factory_code_for_employee( $employee ) {
+		$factory = strtolower( remove_accents( trim( (string) ( $employee['factory'] ?? '' ) ) ) );
+		$department = strtolower( remove_accents( trim( (string) ( $employee['department'] ?? '' ) ) ) );
+		$prefix = substr( preg_replace( '/[^0-9]/', '', (string) ( $employee['cost_center'] ?? '' ) ), 0, 4 );
+		if ( strpos( $factory, 'dong anh' ) !== false || strpos( $department, '(da)' ) !== false || $prefix === '1300' ) {
+			return 'DA';
+		}
+		if ( strpos( $factory, 'vinh phuc' ) !== false || strpos( $department, '(vp)' ) !== false || $prefix === '4900' ) {
+			return 'VP';
+		}
+		return 'HY';
+	}
 
 	/**
 	 * Khóa so sánh tên sản phẩm, giữ nguyên tên hiển thị trong database.
@@ -34,8 +71,12 @@ class UMS_DB_Inventory extends UMS_DB_Base {
             'category_id' => '',
             'parent_id'   => '',
             'stock'       => '',
+			'factory_code' => self::DEFAULT_FACTORY,
         );
         $args = wp_parse_args( $args, $defaults );
+		$factory_code = self::normalize_factory_code( $args['factory_code'] );
+		$has_factory_stock = self::supports_factory_stock();
+		$stock_expression = $has_factory_stock ? 'COALESCE(factory_stock.stock_qty, 0)' : ( $factory_code === self::DEFAULT_FACTORY ? 'inventory.stock_qty' : '0' );
 
         $where  = array( '1=1' );
         $params = array();
@@ -62,17 +103,23 @@ class UMS_DB_Inventory extends UMS_DB_Base {
         }
 
         if ( $args['stock'] === 'available' ) {
-            $where[] = 'inventory.stock_qty > 0';
+			$where[] = $stock_expression . ' > 0';
         } elseif ( $args['stock'] === 'out' ) {
-            $where[] = 'inventory.stock_qty <= 0';
+			$where[] = $stock_expression . ' <= 0';
         } elseif ( $args['stock'] === 'low' ) {
-            $where[] = 'inventory.stock_qty > 0 AND inventory.stock_qty <= 10';
+			$where[] = $stock_expression . ' > 0 AND ' . $stock_expression . ' <= 10';
         }
 
         $category_table = UMS_DB_Product_Category::table();
-        $sql = "SELECT inventory.*, child.category_name AS category_name,
+		$stock_join = $has_factory_stock
+			? self::db()->prepare( ' LEFT JOIN ' . self::stock_table() . ' factory_stock ON factory_stock.item_id = inventory.item_id AND factory_stock.factory_code = %s', $factory_code )
+			: '';
+		$sql = "SELECT inventory.item_id, inventory.category_id, inventory.item_type, inventory.item_variant,
+			inventory.size, inventory.color_code, $stock_expression AS stock_qty, inventory.base_price,
+			'$factory_code' AS factory_code, child.category_name AS category_name,
                 parent.category_id AS parent_category_id, parent.category_name AS parent_category_name
             FROM $table inventory
+			$stock_join
             LEFT JOIN $category_table child ON child.category_id = inventory.category_id
             LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
             WHERE " . implode( ' AND ', $where ) . '
@@ -161,13 +208,22 @@ class UMS_DB_Inventory extends UMS_DB_Base {
     /**
      * Lấy chi tiết một dòng tồn kho.
      */
-    public static function get_by_id( $item_id ) {
+	public static function get_by_id( $item_id, $factory_code = self::DEFAULT_FACTORY ) {
         $table = self::table();
         $category_table = UMS_DB_Product_Category::table();
+		$factory_code = self::normalize_factory_code( $factory_code );
+		$has_factory_stock = self::supports_factory_stock();
+		$stock_expression = $has_factory_stock ? 'COALESCE(factory_stock.stock_qty, 0)' : ( $factory_code === self::DEFAULT_FACTORY ? 'inventory.stock_qty' : '0' );
+		$stock_join = $has_factory_stock
+			? self::db()->prepare( ' LEFT JOIN ' . self::stock_table() . ' factory_stock ON factory_stock.item_id = inventory.item_id AND factory_stock.factory_code = %s', $factory_code )
+			: '';
         $sql   = self::db()->prepare(
-            "SELECT inventory.*, child.category_name AS category_name,
+			"SELECT inventory.item_id, inventory.category_id, inventory.item_type, inventory.item_variant,
+					inventory.size, inventory.color_code, $stock_expression AS stock_qty, inventory.base_price,
+					'$factory_code' AS factory_code, child.category_name AS category_name,
                     parent.category_id AS parent_category_id, parent.category_name AS parent_category_name
             FROM $table inventory
+			$stock_join
             LEFT JOIN $category_table child ON child.category_id = inventory.category_id
             LEFT JOIN $category_table parent ON parent.category_id = child.parent_id
             WHERE inventory.item_id = %d",
@@ -179,13 +235,40 @@ class UMS_DB_Inventory extends UMS_DB_Base {
 	/**
 	 * Lock an inventory row while an import transaction is running.
 	 */
-	public static function get_by_id_for_update( $item_id ) {
-		$sql = self::db()->prepare(
-			'SELECT * FROM ' . self::table() . ' WHERE item_id = %d FOR UPDATE',
-			absint( $item_id )
-		);
+	public static function get_by_id_for_update( $item_id, $factory_code = self::DEFAULT_FACTORY ) {
+		$item_id = absint( $item_id );
+		$factory_code = self::normalize_factory_code( $factory_code );
+		if ( self::supports_factory_stock() ) {
+			self::db()->query(
+				self::db()->prepare(
+					'INSERT INTO ' . self::stock_table() . ' (item_id, factory_code, stock_qty) VALUES (%d, %s, 0)
+					ON DUPLICATE KEY UPDATE item_id = VALUES(item_id)',
+					$item_id,
+					$factory_code
+				)
+			);
+			$stock_qty = self::db()->get_var(
+				self::db()->prepare(
+					'SELECT stock_qty FROM ' . self::stock_table() . ' WHERE item_id = %d AND factory_code = %s FOR UPDATE',
+					$item_id,
+					$factory_code
+				)
+			);
+			$item = self::db()->get_row( self::db()->prepare( 'SELECT * FROM ' . self::table() . ' WHERE item_id = %d', $item_id ), ARRAY_A );
+			if ( $item ) {
+				$item['stock_qty'] = (int) $stock_qty;
+				$item['factory_code'] = $factory_code;
+			}
+			return $item;
+		}
+		if ( $factory_code !== self::DEFAULT_FACTORY ) {
+			return false;
+		}
 
-		return self::db()->get_row( $sql, ARRAY_A );
+		return self::db()->get_row(
+			self::db()->prepare( 'SELECT * FROM ' . self::table() . ' WHERE item_id = %d FOR UPDATE', $item_id ),
+			ARRAY_A
+		);
 	}
 
     /**
@@ -207,7 +290,10 @@ class UMS_DB_Inventory extends UMS_DB_Base {
     /**
      * Thêm sản phẩm/tồn kho.
      */
-    public static function insert( $data ) {
+	public static function insert( $data, $factory_code = self::DEFAULT_FACTORY ) {
+		$factory_code = self::normalize_factory_code( $factory_code );
+		$stock_qty = max( 0, (int) ( $data['stock_qty'] ?? 0 ) );
+		$data['stock_qty'] = $factory_code === self::DEFAULT_FACTORY ? $stock_qty : 0;
 		$should_sync_price = array_key_exists( 'base_price', $data )
 			&& ! empty( $data['category_id'] )
 			&& ! empty( $data['item_variant'] );
@@ -221,7 +307,14 @@ class UMS_DB_Inventory extends UMS_DB_Base {
 		}
 
 		$result = self::db()->insert( self::table(), $data, self::formats_for( $data ) );
-		if ( false === $result || ! $should_sync_price ) {
+		if ( false === $result ) {
+			return $result;
+		}
+		$item_id = (int) self::db()->insert_id;
+		if ( false === self::set_stock( $item_id, $factory_code, $stock_qty ) ) {
+			return false;
+		}
+		if ( ! $should_sync_price ) {
 			return $result;
 		}
 
@@ -238,12 +331,18 @@ class UMS_DB_Inventory extends UMS_DB_Base {
     /**
      * Cập nhật sản phẩm/tồn kho.
      */
-    public static function update( $item_id, $data ) {
+	public static function update( $item_id, $data, $factory_code = self::DEFAULT_FACTORY ) {
+		$factory_code = self::normalize_factory_code( $factory_code );
+		$has_stock = array_key_exists( 'stock_qty', $data );
+		$stock_qty = $has_stock ? max( 0, (int) $data['stock_qty'] ) : null;
+		if ( $has_stock ) {
+			unset( $data['stock_qty'] );
+		}
 		$old_item = self::db()->get_row(
 			self::db()->prepare( 'SELECT * FROM ' . self::table() . ' WHERE item_id = %d', absint( $item_id ) ),
 			ARRAY_A
 		);
-		$result = self::db()->update(
+		$result = empty( $data ) ? 0 : self::db()->update(
             self::table(),
             $data,
             array( 'item_id' => absint( $item_id ) ),
@@ -251,7 +350,13 @@ class UMS_DB_Inventory extends UMS_DB_Base {
             array( '%d' )
         );
 
-		if ( false === $result || ! array_key_exists( 'base_price', $data ) || ! $old_item ) {
+		if ( false === $result ) {
+			return $result;
+		}
+		if ( $has_stock && false === self::set_stock( $item_id, $factory_code, $stock_qty ) ) {
+			return false;
+		}
+		if ( ! array_key_exists( 'base_price', $data ) || ! $old_item ) {
 			return $result;
 		}
 
@@ -309,9 +414,38 @@ class UMS_DB_Inventory extends UMS_DB_Base {
     /**
      * Xóa sản phẩm/tồn kho.
      */
-    public static function delete( $item_id ) {
+	public static function delete( $item_id ) {
+		if ( self::supports_factory_stock() ) {
+			self::db()->delete( self::stock_table(), array( 'item_id' => absint( $item_id ) ), array( '%d' ) );
+		}
         return self::db()->delete( self::table(), array( 'item_id' => absint( $item_id ) ), array( '%d' ) );
     }
+
+	public static function set_stock( $item_id, $factory_code, $stock_qty ) {
+		$item_id = absint( $item_id );
+		$factory_code = self::normalize_factory_code( $factory_code );
+		$stock_qty = max( 0, (int) $stock_qty );
+		if ( self::supports_factory_stock() ) {
+			$result = self::db()->query(
+				self::db()->prepare(
+					'INSERT INTO ' . self::stock_table() . ' (item_id, factory_code, stock_qty) VALUES (%d, %s, %d)
+					ON DUPLICATE KEY UPDATE stock_qty = VALUES(stock_qty)',
+					$item_id,
+					$factory_code,
+					$stock_qty
+				)
+			);
+			if ( false === $result ) {
+				return false;
+			}
+		} elseif ( $factory_code !== self::DEFAULT_FACTORY ) {
+			return false;
+		}
+		if ( $factory_code === self::DEFAULT_FACTORY ) {
+			return self::db()->update( self::table(), array( 'stock_qty' => $stock_qty ), array( 'item_id' => $item_id ), array( '%d' ), array( '%d' ) );
+		}
+		return true;
+	}
 
     public static function category_has_items( $category_id ) {
         $table = self::table();
@@ -340,6 +474,7 @@ class UMS_DB_Inventory extends UMS_DB_Base {
             'color_code'   => '%s',
             'stock_qty'    => '%d',
             'base_price'   => '%f',
+			'factory_code' => '%s',
         );
     }
 

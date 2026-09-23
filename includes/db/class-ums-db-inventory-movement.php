@@ -8,6 +8,14 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
         return self::prefix() . 'uniform_inventory_movements';
     }
 
+	public static function has_factory_column() {
+		static $has_column = null;
+		if ( null === $has_column ) {
+			$has_column = in_array( 'factory_code', self::db()->get_col( 'SHOW COLUMNS FROM ' . self::table(), 0 ), true );
+		}
+		return $has_column;
+	}
+
 	public static function has_target_snapshot_columns() {
 		$table   = self::table();
 		$columns = self::db()->get_col( "SHOW COLUMNS FROM $table", 0 );
@@ -34,9 +42,14 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
             'actor_user_id'  => null,
             'target_user_id' => null,
             'target_employee_no' => '',
+			'factory_code'    => UMS_DB_Inventory::DEFAULT_FACTORY,
             'note'           => '',
         );
         $data = wp_parse_args( $data, $defaults );
+		$data['factory_code'] = UMS_DB_Inventory::normalize_factory_code( $data['factory_code'] );
+		if ( ! self::has_factory_column() ) {
+			unset( $data['factory_code'] );
+		}
 
         if ( $data['target_employee_no'] === '' && ! empty( $data['target_user_id'] ) ) {
             $organization = UMS_DB_Organization::get_by_wp_user_id( $data['target_user_id'] );
@@ -52,6 +65,7 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
 			'target_name_snapshot' => '%s', 'target_department_snapshot' => '%s',
 			'target_date_joined_snapshot' => '%s', 'target_position_snapshot' => '%s',
 			'import_batch_id' => '%d', 'source_row' => '%d',
+			'factory_code' => '%s',
 		);
 		$formats = array();
 		foreach ( array_keys( $data ) as $field ) {
@@ -75,11 +89,16 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
             'date_from'     => '',
             'date_to'       => '',
             'limit'         => 300,
+			'factory_code'  => '',
         );
         $args = wp_parse_args( $args, $defaults );
 
         $where  = array( '1=1' );
         $params = array();
+		if ( $args['factory_code'] !== '' && self::has_factory_column() ) {
+			$where[] = 'movement.factory_code = %s';
+			$params[] = UMS_DB_Inventory::normalize_factory_code( $args['factory_code'] );
+		}
 
         if ( $args['movement_type'] !== '' ) {
             $where[]  = 'movement.movement_type = %s';

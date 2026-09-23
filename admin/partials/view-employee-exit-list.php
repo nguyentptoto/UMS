@@ -14,6 +14,10 @@ $status_labels = array(
 	'in_progress' => 'Thông báo trả còn thiếu',
 	'completed' => 'Xác nhận đã trả',
 );
+$notification_labels = array(
+	'legacy' => 'Hồ sơ cũ', 'pending' => 'Chờ gửi', 'sending' => 'Đang gửi',
+	'sent' => 'Đã gửi', 'failed' => 'Gửi lỗi', 'skipped' => 'Không gửi',
+);
 $group_labels = array(
 	'pants' => 'Quần', 'shirt' => 'Áo', 'jacket' => 'Áo khoác', 'coat' => 'Áo phao',
 	'hat' => 'Mũ', 'shoes' => 'Giày', 'id_card' => 'Thẻ nhân viên', 'lanyard' => 'Dây đeo thẻ', 'other' => 'Khác',
@@ -60,10 +64,10 @@ $group_labels = array(
 
 			<div class="ums-table-scroll">
 				<table class="widefat striped">
-					<thead><tr><th>Mã CNV</th><th>Họ tên</th><th>Bộ phận</th><th>Cost center</th><th>Phân loại</th><th>Ngày phát hiện</th><th>Trạng thái</th><th></th></tr></thead>
+					<thead><tr><th>Mã CNV</th><th>Họ tên</th><th>Bộ phận</th><th>Cost center</th><th>Phân loại</th><th>Ngày phát hiện</th><th>Trạng thái</th><th>Email lần đầu</th><th>Nhắc cuối tháng</th><th></th></tr></thead>
 					<tbody>
 					<?php if ( empty( $exit_cases ) ) : ?>
-						<tr><td colspan="8" class="ums-empty-state">Chưa có CNV nghỉ việc phù hợp với bộ lọc.</td></tr>
+						<tr><td colspan="10" class="ums-empty-state">Chưa có CNV nghỉ việc phù hợp với bộ lọc.</td></tr>
 					<?php else : foreach ( $exit_cases as $case ) : ?>
 						<tr>
 							<td><strong><?php echo esc_html( $case['employee_no'] ); ?></strong></td>
@@ -73,6 +77,8 @@ $group_labels = array(
 							<td><?php echo esc_html( $type_labels[ $case['employee_type'] ] ?? $case['employee_type'] ); ?></td>
 							<td><?php echo esc_html( mysql2date( 'd/m/Y H:i', $case['detected_at'] ) ); ?></td>
 							<td><?php echo esc_html( $status_labels[ $case['status'] ] ?? $case['status'] ); ?></td>
+							<td title="<?php echo esc_attr( $case['notification_error'] ?? '' ); ?>"><?php echo esc_html( $notification_labels[ $case['notification_status'] ?? 'legacy' ] ?? ( $case['notification_status'] ?? '-' ) ); ?></td>
+							<td title="<?php echo esc_attr( $case['reminder_error'] ?? '' ); ?>"><?php echo esc_html( $notification_labels[ $case['reminder_status'] ?? 'pending' ] ?? ( $case['reminder_status'] ?? '-' ) ); ?></td>
 							<td><a class="button button-small" href="<?php echo esc_url( add_query_arg( 'exit_id', $case['exit_id'], $page_url ) ); ?>">Xử lý</a></td>
 						</tr>
 					<?php endforeach; endif; ?>

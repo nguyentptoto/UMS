@@ -118,6 +118,9 @@ class UMS_Organization_Sync {
 		$finalize = ! empty( $payload['finalize'] );
 		$deleted  = 0;
 		$exit_cases_created = 0;
+		$exit_emails_sent = 0;
+		$exit_emails_failed = 0;
+		$exit_emails_skipped = 0;
 		if ( $finalize && ! empty( $normalized ) ) {
 			$exit_result = UMS_Employee_Exit_Manager::finalize_organization_sync( $sync_token, $synced_at );
 			if ( is_wp_error( $exit_result ) ) {
@@ -129,6 +132,9 @@ class UMS_Organization_Sync {
 			}
 			$deleted = (int) $exit_result['left'];
 			$exit_cases_created = (int) $exit_result['cases_created'];
+			$exit_emails_sent = (int) ( $exit_result['emails_sent'] ?? 0 );
+			$exit_emails_failed = (int) ( $exit_result['emails_failed'] ?? 0 );
+			$exit_emails_skipped = (int) ( $exit_result['emails_skipped'] ?? 0 );
 		}
 
 		$failed = count( $rows ) - count( $normalized );
@@ -141,6 +147,9 @@ class UMS_Organization_Sync {
 				'total'      => count( $normalized ),
 				'deleted'    => (int) $deleted,
 				'exit_cases_created' => $exit_cases_created,
+				'exit_emails_sent' => $exit_emails_sent,
+				'exit_emails_failed' => $exit_emails_failed,
+				'exit_emails_skipped' => $exit_emails_skipped,
 				'user_sync'  => $user_sync,
 				'source'     => 'google-sheet-popup-bridge',
 			),
@@ -157,6 +166,9 @@ class UMS_Organization_Sync {
 				'deleted' => (int) $deleted,
 				'left_detected' => (int) $deleted,
 				'exit_cases_created' => $exit_cases_created,
+				'exit_emails_sent' => $exit_emails_sent,
+				'exit_emails_failed' => $exit_emails_failed,
+				'exit_emails_skipped' => $exit_emails_skipped,
 				'users_created' => $user_sync['created'],
 				'users_updated' => $user_sync['updated'],
 				'users_skipped' => $user_sync['skipped'],
@@ -396,6 +408,9 @@ class UMS_Organization_Sync {
 				'total'          => $total,
 				'deleted'        => (int) $deleted,
 				'exit_cases_created' => (int) $exit_result['cases_created'],
+				'exit_emails_sent' => (int) ( $exit_result['emails_sent'] ?? 0 ),
+				'exit_emails_failed' => (int) ( $exit_result['emails_failed'] ?? 0 ),
+				'exit_emails_skipped' => (int) ( $exit_result['emails_skipped'] ?? 0 ),
 				'source_version' => $source_version,
 				'synced_at'      => $synced_at,
 			);
@@ -478,7 +493,7 @@ class UMS_Organization_Sync {
 			'team'        => sanitize_text_field( self::first_scalar( $row, array( 'team', 'nhom', 'nhóm' ) ) ),
 			'position'    => sanitize_text_field( self::first_scalar( $row, array( 'position', 'chuc_danh', 'chức danh' ) ) ),
 			'email'       => sanitize_email( self::first_scalar( $row, array( 'email', 'e-mail', 'mail' ) ) ),
-			'factory'     => '',
+			'factory'     => sanitize_text_field( self::first_scalar( $row, array( 'factory', 'nha_may', 'nhà máy' ) ) ),
 			'cost_center' => sanitize_text_field( self::first_scalar( $row, array( 'cost_center', 'mã cost center', 'ma cost center' ) ) ),
 			'date_joined' => self::normalize_date( self::first_scalar( $row, array( 'date_joined', 'ngày vào', 'ngay vao' ) ) ),
 			'first_contract_date' => self::normalize_date( self::first_scalar( $row, array( 'first_contract_date', 'ngày ký hợp đồng đầu tiên', 'ngay ky hop dong dau tien' ) ) ),

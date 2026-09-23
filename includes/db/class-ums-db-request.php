@@ -210,6 +210,8 @@ class UMS_DB_Request extends UMS_DB_Base {
 		}
 
 		$request_id = (int) $wpdb->insert_id;
+		$target_organization = UMS_DB_Organization::get_by_wp_user_id( (int) $request['target_user_id'] );
+		$factory_code = UMS_DB_Inventory::resolve_factory_code_for_employee( is_array( $target_organization ) ? $target_organization : array() );
 
 		if ( ! self::replace_details( $request_id, $details ) ) {
 			$wpdb->query( 'ROLLBACK' );
@@ -223,6 +225,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 
 			$movement_inserted = UMS_DB_Inventory_Movement::insert(
 				array(
+					'factory_code'   => $factory_code,
 					'item_id'        => (int) $detail['item_id'],
 					'request_id'     => $request_id,
 					'movement_type'  => 'request_out',
@@ -324,6 +327,8 @@ class UMS_DB_Request extends UMS_DB_Base {
 			$wpdb->query( 'ROLLBACK' );
 			return false;
 		}
+		$target_organization = UMS_DB_Organization::get_by_wp_user_id( (int) $request['target_user_id'] );
+		$factory_code = UMS_DB_Inventory::resolve_factory_code_for_employee( is_array( $target_organization ) ? $target_organization : array() );
 
 		$existing_out = (int) $wpdb->get_var(
 			$wpdb->prepare(
@@ -337,10 +342,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 			foreach ( $details as $detail ) {
 				$item_id   = (int) $detail['item_id'];
 				$quantity  = max( 1, (int) $detail['quantity'] );
-				$inventory = $wpdb->get_row(
-					$wpdb->prepare( 'SELECT * FROM ' . UMS_DB_Inventory::table() . ' WHERE item_id = %d FOR UPDATE', $item_id ),
-					ARRAY_A
-				);
+				$inventory = UMS_DB_Inventory::get_by_id_for_update( $item_id, $factory_code );
 
 				if ( ! $inventory || (int) $inventory['stock_qty'] < $quantity ) {
 					$wpdb->query( 'ROLLBACK' );
@@ -351,13 +353,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 				$after_qty  = $before_qty - $quantity;
 				$unit_price = $quantity > 0 ? (float) $detail['price_at_request'] / $quantity : 0;
 
-				$updated_stock = $wpdb->update(
-					UMS_DB_Inventory::table(),
-					array( 'stock_qty' => $after_qty ),
-					array( 'item_id' => $item_id ),
-					array( '%d' ),
-					array( '%d' )
-				);
+				$updated_stock = UMS_DB_Inventory::update( $item_id, array( 'stock_qty' => $after_qty ), $factory_code );
 
 				if ( $updated_stock === false ) {
 					$wpdb->query( 'ROLLBACK' );
@@ -366,6 +362,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 
 				$movement_inserted = UMS_DB_Inventory_Movement::insert(
 					array(
+						'factory_code'   => $factory_code,
 						'item_id'        => $item_id,
 						'request_id'     => $request_id,
 						'movement_type'  => 'out',

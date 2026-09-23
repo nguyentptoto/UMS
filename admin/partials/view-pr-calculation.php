@@ -86,6 +86,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 			<div class="ums-pr-form-grid">
 				<label>
+					<span>Kho nhà máy *</span>
+					<select name="factory_code" required>
+						<?php foreach ( $factories as $factory_code => $factory_name ) : ?>
+							<option value="<?php echo esc_attr( $factory_code ); ?>">Kho <?php echo esc_html( $factory_name ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+				<label>
 					<span>File số lượng đặt dự phòng *</span>
 					<input type="file" name="reserve_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
 				</label>

@@ -124,6 +124,18 @@ CREATE TABLE `wp_uniform_inventory` (
     KEY `idx_stock_qty` (`stock_qty`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 8.1 SO DU TON KHO RIENG THEO NHA MAY; DANH MUC SAN PHAM VAN DUNG CHUNG
+CREATE TABLE IF NOT EXISTS `wp_uniform_inventory_stocks` (
+    `stock_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+    `item_id` INT NOT NULL,
+    `factory_code` VARCHAR(10) NOT NULL COMMENT 'HY, DA, VP',
+    `stock_qty` INT NOT NULL DEFAULT 0,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`stock_id`),
+    UNIQUE KEY `idx_item_factory` (`item_id`, `factory_code`),
+    KEY `idx_factory_stock` (`factory_code`, `stock_qty`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 8A. MASTER MA SAP DONG PHUC IMPORT TU FILE GA
 CREATE TABLE `wp_uniform_sap_import_batches` (
     `batch_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
@@ -312,6 +324,7 @@ CREATE TABLE `wp_uniform_inventory_movements` (
     `movement_id` INT AUTO_INCREMENT NOT NULL,
     `item_id` INT NOT NULL,
     `request_id` INT DEFAULT NULL,
+	`factory_code` VARCHAR(10) NOT NULL DEFAULT 'HY' COMMENT 'HY, DA, VP',
     `movement_type` VARCHAR(30) NOT NULL COMMENT 'in, out, adjust, request_out, return_in',
     `quantity` INT NOT NULL,
     `before_qty` INT DEFAULT NULL,
@@ -332,6 +345,7 @@ CREATE TABLE `wp_uniform_inventory_movements` (
     PRIMARY KEY (`movement_id`),
     KEY `idx_item_id` (`item_id`),
     KEY `idx_request_id` (`request_id`),
+	KEY `idx_factory_created` (`factory_code`, `created_at`),
     KEY `idx_target_user_id` (`target_user_id`),
     KEY `idx_target_employee_no` (`target_employee_no`),
     KEY `idx_import_batch_id` (`import_batch_id`),
@@ -454,6 +468,8 @@ CREATE TABLE IF NOT EXISTS `wp_uniform_employee_exit_cases` (
 	`position` VARCHAR(50) DEFAULT NULL,
 	`date_joined` DATE DEFAULT NULL,
 	`first_contract_date` DATE DEFAULT NULL,
+	`email` VARCHAR(255) DEFAULT NULL,
+	`factory` VARCHAR(255) DEFAULT NULL,
 	`employee_type` VARCHAR(30) NOT NULL COMMENT 'probation, official, labor_leasing',
 	`detected_at` DATETIME NOT NULL,
 	`actual_leave_date` DATE NOT NULL,
@@ -464,11 +480,21 @@ CREATE TABLE IF NOT EXISTS `wp_uniform_employee_exit_cases` (
 	`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	`updated_by` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
 	`completed_at` DATETIME DEFAULT NULL,
+	`notification_status` VARCHAR(20) NOT NULL DEFAULT 'legacy' COMMENT 'legacy, pending, sending, sent, failed, skipped',
+	`notification_sent_at` DATETIME DEFAULT NULL,
+	`notification_attempted_at` DATETIME DEFAULT NULL,
+	`notification_error` TEXT DEFAULT NULL,
+	`reminder_status` VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending, sending, sent, failed, skipped',
+	`reminder_sent_at` DATETIME DEFAULT NULL,
+	`reminder_attempted_at` DATETIME DEFAULT NULL,
+	`reminder_error` TEXT DEFAULT NULL,
 	PRIMARY KEY (`exit_id`),
 	KEY `idx_exit_employee` (`employee_no`),
 	KEY `idx_exit_status` (`status`),
 	KEY `idx_exit_type` (`employee_type`),
-	KEY `idx_exit_detected` (`detected_at`)
+	KEY `idx_exit_detected` (`detected_at`),
+	KEY `idx_exit_notification` (`notification_status`),
+	KEY `idx_exit_reminder` (`reminder_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `wp_uniform_employee_exit_items` (
@@ -549,3 +575,45 @@ ALTER TABLE `wp_uniform_inventory_movements`
 	ADD COLUMN IF NOT EXISTS `target_department_snapshot` VARCHAR(255) DEFAULT NULL AFTER `target_name_snapshot`,
 	ADD COLUMN IF NOT EXISTS `target_date_joined_snapshot` DATE DEFAULT NULL AFTER `target_department_snapshot`,
 	ADD COLUMN IF NOT EXISTS `target_position_snapshot` VARCHAR(100) DEFAULT NULL AFTER `target_date_joined_snapshot`;
+
+-- UPDATE CHO DATABASE DA TON TAI: TACH TON KHO THEO NHA MAY.
+-- Toan bo ton kho chung hien tai duoc khoi tao vao kho Hung Yen; DA va VP bat dau tu 0.
+CREATE TABLE IF NOT EXISTS `wp_uniform_inventory_stocks` (
+	`stock_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
+	`item_id` INT NOT NULL,
+	`factory_code` VARCHAR(10) NOT NULL COMMENT 'HY, DA, VP',
+	`stock_qty` INT NOT NULL DEFAULT 0,
+	`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	PRIMARY KEY (`stock_id`),
+	UNIQUE KEY `idx_item_factory` (`item_id`, `factory_code`),
+	KEY `idx_factory_stock` (`factory_code`, `stock_qty`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `wp_uniform_inventory_stocks` (`item_id`, `factory_code`, `stock_qty`)
+SELECT `item_id`, 'HY', `stock_qty` FROM `wp_uniform_inventory`
+ON DUPLICATE KEY UPDATE `stock_qty` = VALUES(`stock_qty`);
+
+ALTER TABLE `wp_uniform_inventory_movements`
+	ADD COLUMN IF NOT EXISTS `factory_code` VARCHAR(10) NOT NULL DEFAULT 'HY' AFTER `request_id`,
+	ADD INDEX IF NOT EXISTS `idx_factory_created` (`factory_code`, `created_at`);
+
+UPDATE `wp_uniform_inventory_movements`
+SET `factory_code` = 'HY'
+WHERE `factory_code` IS NULL OR `factory_code` = '';
+
+-- UPDATE CHO DATABASE DA TON TAI: EMAIL NHAC HOAN TRA DONG PHUC KHI NGHI VIEC
+ALTER TABLE `wp_uniform_employee_exit_cases`
+	ADD COLUMN IF NOT EXISTS `email` VARCHAR(255) DEFAULT NULL AFTER `first_contract_date`,
+	ADD COLUMN IF NOT EXISTS `factory` VARCHAR(255) DEFAULT NULL AFTER `email`,
+	ADD COLUMN IF NOT EXISTS `notification_status` VARCHAR(20) NOT NULL DEFAULT 'legacy'
+		COMMENT 'legacy, pending, sending, sent, failed, skipped' AFTER `completed_at`,
+	ADD COLUMN IF NOT EXISTS `notification_sent_at` DATETIME DEFAULT NULL AFTER `notification_status`,
+	ADD COLUMN IF NOT EXISTS `notification_attempted_at` DATETIME DEFAULT NULL AFTER `notification_sent_at`,
+	ADD COLUMN IF NOT EXISTS `notification_error` TEXT DEFAULT NULL AFTER `notification_attempted_at`,
+	ADD COLUMN IF NOT EXISTS `reminder_status` VARCHAR(20) NOT NULL DEFAULT 'pending'
+		COMMENT 'pending, sending, sent, failed, skipped' AFTER `notification_error`,
+	ADD COLUMN IF NOT EXISTS `reminder_sent_at` DATETIME DEFAULT NULL AFTER `reminder_status`,
+	ADD COLUMN IF NOT EXISTS `reminder_attempted_at` DATETIME DEFAULT NULL AFTER `reminder_sent_at`,
+	ADD COLUMN IF NOT EXISTS `reminder_error` TEXT DEFAULT NULL AFTER `reminder_attempted_at`,
+	ADD INDEX IF NOT EXISTS `idx_exit_notification` (`notification_status`),
+	ADD INDEX IF NOT EXISTS `idx_exit_reminder` (`reminder_status`);

@@ -60,6 +60,7 @@ foreach ( $movements as $movement ) {
 				)
 			)
 		) ?: '-',
+		'factory_name' => ( UMS_DB_Inventory::get_factory_options()[ $movement['factory_code'] ?? 'HY' ] ?? ( $movement['factory_code'] ?? 'HY' ) ),
         'note'           => $movement['note'] ?: '-',
     );
 }
@@ -74,6 +75,7 @@ uasort(
 $grid_columns = array(
     array( 'text' => 'Thời gian', 'datafield' => 'created_at', 'width' => '11%' ),
     array( 'text' => 'Loại', 'datafield' => 'movement_type', 'width' => '9%' ),
+	array( 'text' => 'Nhà máy', 'datafield' => 'factory_name', 'width' => '9%' ),
     array( 'text' => 'Phiếu', 'datafield' => 'request_id', 'width' => '7%' ),
     array( 'text' => 'Sản phẩm', 'datafield' => 'item_name', 'width' => '22%' ),
     array( 'text' => 'Size', 'datafield' => 'size', 'width' => '7%' ),
@@ -97,6 +99,15 @@ $grid_columns = array(
         <h2>Lọc lịch sử kho</h2>
         <form method="get" class="ums-filter-bar">
             <input type="hidden" name="page" value="tvn-ums-inventory-movements">
+			<label>
+				<span class="screen-reader-text">Nhà máy</span>
+				<select name="factory_code">
+					<option value="">Tất cả nhà máy</option>
+					<?php foreach ( $factories as $factory_code => $factory_name ) : ?>
+						<option value="<?php echo esc_attr( $factory_code ); ?>" <?php selected( $filters['factory_code'], $factory_code ); ?>><?php echo esc_html( $factory_name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+			</label>
 
             <label>
                 <span class="screen-reader-text">Tìm kiếm</span>

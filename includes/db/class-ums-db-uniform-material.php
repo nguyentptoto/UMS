@@ -26,8 +26,14 @@ class UMS_DB_Uniform_Material extends UMS_DB_Base {
 	public static function get_all( $args = array() ) {
 		$args = wp_parse_args(
 			$args,
-			array( 'search' => '', 'status' => '', 'limit' => 5000 )
+			array( 'search' => '', 'status' => '', 'limit' => 5000, 'factory_code' => UMS_DB_Inventory::DEFAULT_FACTORY )
 		);
+		$factory_code = UMS_DB_Inventory::normalize_factory_code( $args['factory_code'] );
+		$has_factory_stock = UMS_DB_Inventory::supports_factory_stock();
+		$stock_expression = $has_factory_stock ? 'COALESCE(factory_stock.stock_qty, 0)' : ( $factory_code === UMS_DB_Inventory::DEFAULT_FACTORY ? 'inventory.stock_qty' : '0' );
+		$stock_join = $has_factory_stock
+			? self::db()->prepare( ' LEFT JOIN ' . UMS_DB_Inventory::stock_table() . ' factory_stock ON factory_stock.item_id = inventory.item_id AND factory_stock.factory_code = %s', $factory_code )
+			: '';
 		$where  = array( '1=1' );
 		$params = array();
 
@@ -46,9 +52,10 @@ class UMS_DB_Uniform_Material extends UMS_DB_Base {
 
 		$limit    = max( 1, min( 10000, absint( $args['limit'] ) ) );
 		$sql      = 'SELECT materials.*, inventory.item_variant AS inventory_product_name, inventory.size AS inventory_size,
-			inventory.stock_qty AS inventory_stock_qty, inventory.base_price AS inventory_base_price
+			' . $stock_expression . ' AS inventory_stock_qty, inventory.base_price AS inventory_base_price
 			FROM ' . self::table() . ' materials
 			LEFT JOIN ' . UMS_DB_Inventory::table() . ' inventory ON inventory.item_id = materials.inventory_item_id
+			' . $stock_join . '
 			WHERE ' . implode( ' AND ', $where )
 			. ' ORDER BY materials.is_active DESC, materials.product_name ASC, materials.size ASC, materials.item_name ASC LIMIT %d';
 		$params[] = $limit;

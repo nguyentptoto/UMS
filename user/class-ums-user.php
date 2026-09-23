@@ -173,7 +173,7 @@ class UMS_User {
             ? wp_unslash( $_POST['request_items'] )
             : array();
         $item_errors = array();
-        $details     = self::sanitize_request_items( $raw_items, $item_errors );
+		$details     = self::sanitize_request_items( $raw_items, $item_errors, $target_profile );
         if ( ! empty( $item_errors ) ) {
             self::redirect_with_notice(
                 $redirect_url,
@@ -413,7 +413,9 @@ class UMS_User {
 
         if ( $current_page === 'request' ) {
             $teammates       = $is_admin_view ? UMS_DB_User::get_all( array( 'status' => 'active' ) ) : self::get_active_teammates( $profile );
-            $inventory_items = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
+			$inventory_items = UMS_DB_Inventory::get_all(
+				array( 'stock' => 'available', 'factory_code' => self::get_factory_code_for_profile( $profile ) )
+			);
             $category_tree   = self::get_active_product_category_tree();
             $editing_request = self::get_editing_request_for_form( $current_user_id );
         }
@@ -433,8 +435,17 @@ class UMS_User {
         return ob_get_clean();
     }
 
-    private static function sanitize_request_items( $raw_items, &$errors = array() ) {
-        $grouped = array();
+	private static function get_factory_code_for_profile( $profile ) {
+		$employee_no = trim( (string) ( $profile['employee_no'] ?? $profile['employee_code'] ?? '' ) );
+		$organization = $employee_no !== '' ? UMS_DB_Organization::get_by_employee_no( $employee_no ) : null;
+		return UMS_DB_Inventory::resolve_factory_code_for_employee(
+			is_array( $organization ) ? $organization : ( is_array( $profile ) ? $profile : array() )
+		);
+	}
+
+	private static function sanitize_request_items( $raw_items, &$errors = array(), $target_profile = array() ) {
+		$grouped = array();
+		$factory_code = self::get_factory_code_for_profile( $target_profile );
 
         foreach ( $raw_items as $row_index => $raw_item ) {
             $row_number = absint( $row_index ) + 1;
@@ -451,7 +462,7 @@ class UMS_User {
                 continue;
             }
 
-            $inventory = UMS_DB_Inventory::get_by_id( $item_id );
+			$inventory = UMS_DB_Inventory::get_by_id( $item_id, $factory_code );
             if ( ! $inventory || (int) $inventory['stock_qty'] <= 0 ) {
                 $errors[] = 'Sản phẩm tại dòng ' . $row_number . ' không tồn tại hoặc đã hết kho.';
                 continue;
@@ -490,7 +501,7 @@ class UMS_User {
         foreach ( $details as $detail ) {
             $item_id   = isset( $detail['item_id'] ) ? absint( $detail['item_id'] ) : 0;
             $quantity  = isset( $detail['quantity'] ) ? max( 1, absint( $detail['quantity'] ) ) : 1;
-            $inventory = $item_id ? UMS_DB_Inventory::get_by_id( $item_id ) : null;
+			$inventory = $item_id ? UMS_DB_Inventory::get_by_id( $item_id, self::get_factory_code_for_profile( $target_profile ) ) : null;
 
             if ( ! $inventory ) {
                 $errors[] = 'Có dòng đồng phục không còn tồn tại trong kho.';

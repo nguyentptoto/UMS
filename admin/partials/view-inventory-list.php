@@ -60,6 +60,7 @@ foreach ( $inventory as $item ) {
         array(
             'page'         => 'tvn-ums-inventory',
             'edit_item_id' => absint( $item['item_id'] ),
+			'factory_code' => $selected_factory_code,
         ),
         admin_url( 'admin.php' )
     );
@@ -119,11 +120,22 @@ unset( $section );
             <p><?php echo esc_html( $notice['message'] ); ?></p>
         </div>
     <?php endif; ?>
+	<?php if ( ! $factory_stock_ready ) : ?>
+		<div class="notice notice-error inline"><p>Chưa có bảng tồn kho theo nhà máy. Hãy chạy phần cập nhật trong <code>ums.sql</code> trước khi nhập hoặc xuất kho.</p></div>
+	<?php endif; ?>
 
     <div class="ums-panel">
         <h2>Tổng hợp tồn kho theo danh mục</h2>
         <form method="get" class="ums-filter-bar">
             <input type="hidden" name="page" value="tvn-ums-inventory">
+			<label>
+				<span class="screen-reader-text">Nhà máy</span>
+				<select name="factory_code" onchange="this.form.submit()">
+					<?php foreach ( $factories as $factory_code => $factory_name ) : ?>
+						<option value="<?php echo esc_attr( $factory_code ); ?>" <?php selected( $selected_factory_code, $factory_code ); ?>>Kho <?php echo esc_html( $factory_name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+			</label>
 
             <label>
                 <span class="screen-reader-text">Tìm sản phẩm</span>
@@ -239,6 +251,7 @@ unset( $section );
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
 				<?php wp_nonce_field( 'ums_preview_inventory_import' ); ?>
 				<input type="hidden" name="action" value="ums_preview_inventory_import">
+				<input type="hidden" name="inventory_factory_code" value="<?php echo esc_attr( $selected_factory_code ); ?>">
 				<input type="file" name="ums_inventory_import_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
 				<button type="submit" class="button button-primary" <?php disabled( ! $inventory_import_ready ); ?>>Nhập kho</button>
 			</form>
@@ -263,6 +276,7 @@ unset( $section );
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" enctype="multipart/form-data" class="ums-inline-form">
 			<?php wp_nonce_field( 'ums_preview_newcomer_inventory_out' ); ?>
 			<input type="hidden" name="action" value="ums_preview_newcomer_inventory_out">
+			<input type="hidden" name="newcomer_factory_code" value="<?php echo esc_attr( $selected_factory_code ); ?>">
 			<input type="file" name="ums_newcomer_out_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
 			<button type="submit" class="button button-primary" <?php disabled( ! $newcomer_out_ready ); ?>>Kiểm tra cấp phát ngày đầu</button>
 		</form>
@@ -325,6 +339,7 @@ unset( $section );
 					<?php wp_nonce_field( 'ums_confirm_newcomer_inventory_out' ); ?>
 					<input type="hidden" name="action" value="ums_confirm_newcomer_inventory_out">
 					<input type="hidden" name="newcomer_out_preview_token" value="<?php echo esc_attr( $newcomer_out_preview_token ); ?>">
+					<input type="hidden" name="factory_code" value="<?php echo esc_attr( $newcomer_out_preview['factory_code'] ?? $selected_factory_code ); ?>">
 					<p class="submit"><button type="submit" class="button button-primary">Xác nhận cấp phát ngày đầu</button></p>
 				</form>
 			<?php endif; ?>
@@ -412,7 +427,7 @@ unset( $section );
 
 	<?php if ( is_array( $inventory_import_preview ) ) : ?>
 		<div class="ums-panel ums-inventory-import-preview">
-			<h2>Xem trước nhập kho: <?php echo esc_html( $inventory_import_preview['file_name'] ); ?></h2>
+			<h2>Xem trước nhập kho <?php echo esc_html( $inventory_import_preview['factory_name'] ?? '' ); ?>: <?php echo esc_html( $inventory_import_preview['file_name'] ); ?></h2>
 			<p><?php echo esc_html( sprintf( '%d dòng hợp lệ, tổng số lượng nhập %s. Không có sản phẩm mới được tạo từ file này.', count( $inventory_import_preview['rows'] ), number_format_i18n( $inventory_import_preview['total_quantity'] ) ) ); ?></p>
 
 			<?php if ( ! empty( $inventory_import_preview['errors'] ) ) : ?>
@@ -444,6 +459,7 @@ unset( $section );
 					<?php wp_nonce_field( 'ums_confirm_inventory_import' ); ?>
 					<input type="hidden" name="action" value="ums_confirm_inventory_import">
 					<input type="hidden" name="inventory_preview_token" value="<?php echo esc_attr( $inventory_preview_token ); ?>">
+					<input type="hidden" name="factory_code" value="<?php echo esc_attr( $inventory_import_preview['factory_code'] ?? $selected_factory_code ); ?>">
 					<p class="submit"><button type="submit" class="button button-primary">Xác nhận nhập kho</button></p>
 				</form>
 			<?php endif; ?>
@@ -458,6 +474,7 @@ unset( $section );
         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ums-profile-form">
             <?php wp_nonce_field( 'ums_manual_inventory_out' ); ?>
             <input type="hidden" name="action" value="ums_manual_inventory_out">
+			<input type="hidden" name="ums_manual_out[factory_code]" value="<?php echo esc_attr( $selected_factory_code ); ?>">
 
             <div class="ums-form-grid">
                 <label>
@@ -511,7 +528,7 @@ unset( $section );
             </div>
 
             <p class="submit">
-                <button type="submit" class="button button-primary">Ghi nhận xuất kho</button>
+				<button type="submit" class="button button-primary" <?php disabled( ! $factory_stock_ready ); ?>>Ghi nhận xuất kho</button>
             </p>
         </form>
     </div>
@@ -522,6 +539,7 @@ unset( $section );
         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ums-profile-form">
             <?php wp_nonce_field( 'ums_save_inventory_item' ); ?>
             <input type="hidden" name="action" value="ums_save_inventory_item">
+			<input type="hidden" name="ums_inventory[factory_code]" value="<?php echo esc_attr( $selected_factory_code ); ?>">
             <input type="hidden" name="ums_inventory[is_edit]" value="<?php echo $is_editing ? '1' : '0'; ?>">
             <input type="hidden" name="ums_inventory[item_id]" value="<?php echo esc_attr( $form_values['item_id'] ); ?>">
 

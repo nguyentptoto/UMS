@@ -436,27 +436,32 @@ class UMS_Admin {
      * Hàm gọi file giao diện quản lý sản phẩm và tổng kho.
      */
     public static function render_inventory_page() {
+		$factories = UMS_DB_Inventory::get_factory_options();
+		$selected_factory_code = UMS_DB_Inventory::normalize_factory_code( $_GET['factory_code'] ?? '' );
+		$factory_stock_ready = UMS_DB_Inventory::supports_factory_stock() && UMS_DB_Inventory_Movement::has_factory_column();
         $filters = array(
             'search'      => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
             'parent_id'   => isset( $_GET['parent_id'] ) ? sanitize_text_field( wp_unslash( $_GET['parent_id'] ) ) : '',
             'category_id' => '',
             'stock'       => isset( $_GET['stock'] ) ? sanitize_key( wp_unslash( $_GET['stock'] ) ) : '',
+			'factory_code' => $selected_factory_code,
         );
 
         $edit_item_id   = isset( $_GET['edit_item_id'] ) ? absint( $_GET['edit_item_id'] ) : 0;
-        $editing_item   = $edit_item_id ? UMS_DB_Inventory::get_by_id( $edit_item_id ) : null;
+		$editing_item   = $edit_item_id ? UMS_DB_Inventory::get_by_id( $edit_item_id, $selected_factory_code ) : null;
         $inventory      = UMS_DB_Inventory::get_all( $filters );
         $category_tree  = UMS_DB_Product_Category::get_tree();
         $child_categories = UMS_DB_Product_Category::get_child_categories();
         $notice            = self::get_notice();
         $form_values       = self::get_default_inventory_values( $editing_item );
-        $available_items   = UMS_DB_Inventory::get_all( array( 'stock' => 'available' ) );
+		$available_items   = UMS_DB_Inventory::get_all( array( 'stock' => 'available', 'factory_code' => $selected_factory_code ) );
         $recipient_options = UMS_DB_Organization::get_recipient_options();
-		$inventory_import_ready = UMS_DB_Inventory_Import::is_ready() && UMS_DB_Uniform_Material::is_ready();
+		$inventory_import_ready = UMS_DB_Inventory_Import::is_ready() && UMS_DB_Uniform_Material::is_ready() && $factory_stock_ready;
 		$inventory_preview_token = isset( $_GET['inventory_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['inventory_preview_token'] ) ) : '';
 		$inventory_import_preview = $inventory_preview_token !== '' ? UMS_Inventory_Import::get_preview( $inventory_preview_token ) : null;
 		$newcomer_out_ready = UMS_DB_Inventory_Import::is_ready()
 			&& UMS_DB_Uniform_Material::is_ready()
+			&& $factory_stock_ready
 			&& UMS_DB_Inventory_Movement::has_target_snapshot_columns();
 		$newcomer_out_preview_token = isset( $_GET['newcomer_out_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['newcomer_out_preview_token'] ) ) : '';
 		$newcomer_out_preview = $newcomer_out_preview_token !== '' ? UMS_Newcomer_Inventory_Out_Import::get_preview( $newcomer_out_preview_token ) : null;
@@ -472,11 +477,13 @@ class UMS_Admin {
     }
 
     public static function render_inventory_movement_page() {
+		$factories = UMS_DB_Inventory::get_factory_options();
         $filters = array(
             'search'        => isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '',
             'movement_type' => isset( $_GET['movement_type'] ) ? sanitize_key( wp_unslash( $_GET['movement_type'] ) ) : '',
             'date_from'     => isset( $_GET['date_from'] ) ? sanitize_text_field( wp_unslash( $_GET['date_from'] ) ) : '',
             'date_to'       => isset( $_GET['date_to'] ) ? sanitize_text_field( wp_unslash( $_GET['date_to'] ) ) : '',
+			'factory_code'  => isset( $_GET['factory_code'] ) ? UMS_DB_Inventory::normalize_factory_code( wp_unslash( $_GET['factory_code'] ) ) : '',
         );
 
         $movements = UMS_DB_Inventory_Movement::get_all( $filters );
@@ -509,8 +516,9 @@ class UMS_Admin {
 	}
 
 	public static function render_pr_calculation_page() {
+		$factories = UMS_DB_Inventory::get_factory_options();
 		$allocation_ready = UMS_DB_Allocation_Calculation::is_ready();
-		$table_ready  = UMS_DB_Uniform_Material::is_ready() && $allocation_ready;
+		$table_ready  = UMS_DB_Uniform_Material::is_ready() && $allocation_ready && UMS_DB_Inventory::supports_factory_stock();
 		$default_year = (int) current_time( 'Y' );
 		$notice       = self::get_notice();
 		$allocation_batches = $allocation_ready ? UMS_DB_Allocation_Calculation::get_active_batches() : array();
@@ -1472,8 +1480,12 @@ class UMS_Admin {
         }
 
         check_admin_referer( 'ums_save_inventory_item' );
+		if ( ! UMS_DB_Inventory::supports_factory_stock() || ! UMS_DB_Inventory_Movement::has_factory_column() ) {
+			self::redirect_to_inventory( array( 'notice' => 'inventory_import_schema_missing' ) );
+		}
 
         $raw     = isset( $_POST['ums_inventory'] ) && is_array( $_POST['ums_inventory'] ) ? wp_unslash( $_POST['ums_inventory'] ) : array();
+		$factory_code = UMS_DB_Inventory::normalize_factory_code( $raw['factory_code'] ?? '' );
         $data    = self::sanitize_inventory_data( $raw );
         $is_edit = ! empty( $raw['is_edit'] );
         $errors  = self::validate_inventory_data( $data, $is_edit );
@@ -1487,13 +1499,13 @@ class UMS_Admin {
         }
 
         $item_id      = $data['item_id'];
-        $old_item     = $is_edit ? UMS_DB_Inventory::get_by_id( $item_id ) : null;
+		$old_item     = $is_edit ? UMS_DB_Inventory::get_by_id( $item_id, $factory_code ) : null;
         $old_stock    = $old_item ? (int) $old_item['stock_qty'] : 0;
         unset( $data['item_id'] );
 
         $result = $is_edit
-            ? UMS_DB_Inventory::update( $item_id, $data )
-            : UMS_DB_Inventory::insert( $data );
+			? UMS_DB_Inventory::update( $item_id, $data, $factory_code )
+			: UMS_DB_Inventory::insert( $data, $factory_code );
 
         if ( $result === false ) {
             self::redirect_to_inventory( array(
@@ -1505,9 +1517,9 @@ class UMS_Admin {
 
 		$saved_item_id = $is_edit ? $item_id : UMS_DB_Inventory::get_last_insert_id();
 
-		$saved_item  = UMS_DB_Inventory::get_by_id( $saved_item_id );
+		$saved_item  = UMS_DB_Inventory::get_by_id( $saved_item_id, $factory_code );
 		$saved_price = $saved_item ? (float) $saved_item['base_price'] : (float) $data['base_price'];
-		self::record_inventory_admin_movement( $saved_item_id, $old_stock, (int) $data['stock_qty'], $saved_price, $is_edit );
+		self::record_inventory_admin_movement( $saved_item_id, $old_stock, (int) $data['stock_qty'], $saved_price, $is_edit, $factory_code );
 
         self::redirect_to_inventory( array( 'notice' => $is_edit ? 'inventory_updated' : 'inventory_created' ) );
     }
@@ -1707,7 +1719,8 @@ class UMS_Admin {
 		}
 
 		try {
-			$preview = UMS_Inventory_Import::analyze( $file['tmp_name'], $file['name'] );
+			$factory_code = UMS_DB_Inventory::normalize_factory_code( $_POST['inventory_factory_code'] ?? '' );
+			$preview = UMS_Inventory_Import::analyze( $file['tmp_name'], $file['name'], $factory_code );
 			$token   = UMS_Inventory_Import::store_preview( $preview );
 			self::redirect_to_inventory(
 				array(
@@ -1781,7 +1794,8 @@ class UMS_Admin {
 		try {
 			$preview = UMS_Newcomer_Inventory_Out_Import::analyze(
 				$file['tmp_name'],
-				$file['name']
+				$file['name'],
+				UMS_DB_Inventory::normalize_factory_code( $_POST['newcomer_factory_code'] ?? '' )
 			);
 			$token = UMS_Newcomer_Inventory_Out_Import::store_preview( $preview );
 			self::redirect_to_inventory(
@@ -1992,12 +2006,16 @@ class UMS_Admin {
         }
 
         check_admin_referer( 'ums_manual_inventory_out' );
+		if ( ! UMS_DB_Inventory::supports_factory_stock() || ! UMS_DB_Inventory_Movement::has_factory_column() ) {
+			self::redirect_to_inventory( array( 'notice' => 'inventory_import_schema_missing' ) );
+		}
 
         $raw            = isset( $_POST['ums_manual_out'] ) && is_array( $_POST['ums_manual_out'] ) ? wp_unslash( $_POST['ums_manual_out'] ) : array();
         $item_id        = isset( $raw['item_id'] ) ? absint( $raw['item_id'] ) : 0;
         $quantity       = isset( $raw['quantity'] ) ? absint( $raw['quantity'] ) : 0;
         $target_employee_no = isset( $raw['target_employee_no'] ) ? sanitize_text_field( $raw['target_employee_no'] ) : '';
         $note           = isset( $raw['note'] ) ? sanitize_textarea_field( $raw['note'] ) : '';
+		$factory_code   = UMS_DB_Inventory::normalize_factory_code( $raw['factory_code'] ?? '' );
 
         if ( $item_id <= 0 || $quantity <= 0 ) {
             self::redirect_to_inventory( array(
@@ -2013,7 +2031,7 @@ class UMS_Admin {
             ) );
         }
 
-        $item = UMS_DB_Inventory::get_by_id( $item_id );
+		$item = UMS_DB_Inventory::get_by_id( $item_id, $factory_code );
         if ( ! $item ) {
             self::redirect_to_inventory( array( 'notice' => 'invalid_inventory_item' ) );
         }
@@ -2067,12 +2085,22 @@ class UMS_Admin {
         $after_qty = $before_qty - $quantity;
         global $wpdb;
         $wpdb->query( 'START TRANSACTION' );
+		$locked_item = UMS_DB_Inventory::get_by_id_for_update( $item_id, $factory_code );
+		if ( ! $locked_item || (int) $locked_item['stock_qty'] < $quantity ) {
+			$wpdb->query( 'ROLLBACK' );
+			self::redirect_to_inventory(
+				array( 'notice' => 'validation_error', 'notice_extra' => 'Tồn kho vừa thay đổi và không còn đủ để xuất.' )
+			);
+		}
+		$before_qty = (int) $locked_item['stock_qty'];
+		$after_qty  = $before_qty - $quantity;
 
         $updated = UMS_DB_Inventory::update(
             $item_id,
             array(
                 'stock_qty' => $after_qty,
-            )
+			),
+			$factory_code
         );
 
         if ( $updated === false ) {
@@ -2086,6 +2114,7 @@ class UMS_Admin {
         $unit_price = (float) $item['base_price'];
         $inserted   = UMS_DB_Inventory_Movement::insert(
             array(
+				'factory_code'  => $factory_code,
                 'item_id'        => $item_id,
                 'request_id'     => null,
                 'movement_type'  => 'out',
@@ -2113,7 +2142,7 @@ class UMS_Admin {
         self::redirect_to_inventory( array( 'notice' => 'inventory_manual_out_created' ) );
     }
 
-    private static function record_inventory_admin_movement( $item_id, $before_qty, $after_qty, $unit_price, $is_edit ) {
+    private static function record_inventory_admin_movement( $item_id, $before_qty, $after_qty, $unit_price, $is_edit, $factory_code ) {
         if ( $item_id <= 0 ) {
             return;
         }
@@ -2139,6 +2168,7 @@ class UMS_Admin {
 
         UMS_DB_Inventory_Movement::insert(
             array(
+				'factory_code'  => UMS_DB_Inventory::normalize_factory_code( $factory_code ),
                 'item_id'        => $item_id,
                 'request_id'     => null,
                 'movement_type'  => $movement_type,
@@ -3405,7 +3435,8 @@ class UMS_Admin {
 			$result = UMS_PR_Calculator::calculate(
 				$file['tmp_name'],
 				isset( $_POST['pr_year'] ) ? absint( $_POST['pr_year'] ) : 0,
-				isset( $_POST['period_month'] ) ? absint( $_POST['period_month'] ) : 0
+				isset( $_POST['period_month'] ) ? absint( $_POST['period_month'] ) : 0,
+				UMS_DB_Inventory::normalize_factory_code( $_POST['factory_code'] ?? '' )
 			);
 
 			if ( empty( $result['success'] ) ) {
@@ -3445,7 +3476,8 @@ class UMS_Admin {
 			$result = UMS_PR_Calculator::calculate(
 				$file['tmp_name'],
 				isset( $_POST['pr_year'] ) ? absint( $_POST['pr_year'] ) : 0,
-				isset( $_POST['period_month'] ) ? absint( $_POST['period_month'] ) : 0
+				isset( $_POST['period_month'] ) ? absint( $_POST['period_month'] ) : 0,
+				UMS_DB_Inventory::normalize_factory_code( $_POST['factory_code'] ?? '' )
 			);
 			if ( empty( $result['success'] ) ) {
 				throw new RuntimeException( implode( ' ', $result['errors'] ) );
@@ -3596,6 +3628,18 @@ class UMS_Admin {
     }
 
     private static function redirect_to_inventory( $args = array() ) {
+		if ( empty( $args['factory_code'] ) ) {
+			$posted_factory = $_POST['factory_code'] ?? $_POST['inventory_factory_code'] ?? $_POST['newcomer_factory_code'] ?? '';
+			if ( $posted_factory === '' && isset( $_POST['ums_inventory']['factory_code'] ) ) {
+				$posted_factory = $_POST['ums_inventory']['factory_code'];
+			}
+			if ( $posted_factory === '' && isset( $_POST['ums_manual_out']['factory_code'] ) ) {
+				$posted_factory = $_POST['ums_manual_out']['factory_code'];
+			}
+			if ( $posted_factory !== '' ) {
+				$args['factory_code'] = UMS_DB_Inventory::normalize_factory_code( wp_unslash( $posted_factory ) );
+			}
+		}
         $url = add_query_arg(
             array_filter(
                 array_merge(

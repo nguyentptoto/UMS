@@ -5,9 +5,13 @@
 class UMS_PR_Calculator {
 	const RESERVE_SHEET = 'Sheet1';
 
-	public static function calculate( $file_path, $year, $period_month ) {
+	public static function calculate( $file_path, $year, $period_month, $factory_code = UMS_DB_Inventory::DEFAULT_FACTORY ) {
 		$year         = absint( $year );
 		$period_month = absint( $period_month );
+		$factory_code = UMS_DB_Inventory::normalize_factory_code( $factory_code );
+		if ( ! UMS_DB_Inventory::supports_factory_stock() ) {
+			throw new RuntimeException( 'Chưa cập nhật bảng tồn kho theo nhà máy trong ums.sql.' );
+		}
 
 		if ( $year < 2000 || $year > 2100 ) {
 			throw new InvalidArgumentException( 'Năm lập PR không hợp lệ.' );
@@ -31,6 +35,7 @@ class UMS_PR_Calculator {
 			array(
 				'status' => 'active',
 				'limit'  => 10000,
+				'factory_code' => $factory_code,
 			)
 		);
 		$materials_by_name = array();
@@ -66,7 +71,7 @@ class UMS_PR_Calculator {
 				: $row['quantity'];
 		}
 
-		$periodic_by_item = UMS_DB_Allocation_Calculation::get_active_totals( $year, $period_month );
+		$periodic_by_item = UMS_DB_Allocation_Calculation::get_active_totals( $year, $period_month, $factory_code );
 		foreach ( $periodic_by_item as $item_id => $quantity ) {
 			if ( $quantity > 0 && empty( $materials_by_item[ absint( $item_id ) ] ) ) {
 				$errors[] = sprintf(
@@ -190,6 +195,8 @@ class UMS_PR_Calculator {
 
 		return array(
 			'success'  => true,
+			'factory_code' => $factory_code,
+			'factory_name' => UMS_DB_Inventory::get_factory_options()[ $factory_code ],
 			'errors'   => array(),
 			'warnings' => array_values( array_unique( $warnings ) ),
 			'rows'     => $rows,

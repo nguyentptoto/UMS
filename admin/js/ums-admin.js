@@ -471,8 +471,9 @@
                     var summary = data.summary || {};
                     renderPrGrid(data.rows || []);
                     renderPrMessages([], data.warnings || []);
-                    $prSummary.text(
-						'Cấp phát: ' + numberFormat.format(summary.periodic_qty || 0) +
+					$prSummary.text(
+						'Kho ' + (data.factory_name || data.factory_code || '') +
+						' | Cấp phát: ' + numberFormat.format(summary.periodic_qty || 0) +
                         ' | Dự phòng: ' + numberFormat.format(summary.reserve_qty || 0) +
                         ' | Tồn kho: ' + numberFormat.format(summary.stock_qty || 0) +
                         ' | Số lượng PR: ' + numberFormat.format(summary.final_pr_qty || 0) +

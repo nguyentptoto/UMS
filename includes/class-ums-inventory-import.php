@@ -47,7 +47,8 @@ class UMS_Inventory_Import {
 		exit;
 	}
 
-	public static function analyze( $file_path, $file_name ) {
+	public static function analyze( $file_path, $file_name, $factory_code = UMS_DB_Inventory::DEFAULT_FACTORY ) {
+		$factory_code = UMS_DB_Inventory::normalize_factory_code( $factory_code );
 		if ( ! UMS_DB_Uniform_Material::is_ready() ) {
 			throw new RuntimeException( 'Database chưa có cấu trúc master Mã SAP.' );
 		}
@@ -66,9 +67,9 @@ class UMS_Inventory_Import {
 			$errors[] = 'Template phải có dạng STT, Loại sản phẩm, Số lượng, Ghi chú; hoặc dạng cũ có thêm cột Size riêng.';
 		}
 
-		$inventory    = UMS_DB_Inventory::get_all();
+		$inventory    = UMS_DB_Inventory::get_all( array( 'factory_code' => $factory_code ) );
 		$catalog      = self::build_catalog_index( $inventory );
-		$materials    = UMS_DB_Uniform_Material::get_all( array( 'status' => 'active', 'limit' => 10000 ) );
+		$materials    = UMS_DB_Uniform_Material::get_all( array( 'status' => 'active', 'limit' => 10000, 'factory_code' => $factory_code ) );
 		$master_index = self::build_material_index( $materials );
 		$seen_products = array();
 		$projected_stock = array();
@@ -158,7 +159,11 @@ class UMS_Inventory_Import {
 
 		return array(
 			'file_name' => sanitize_file_name( $file_name ),
-			'file_hash' => hash_file( 'sha256', $file_path ),
+			'file_hash' => $factory_code === UMS_DB_Inventory::DEFAULT_FACTORY
+				? hash_file( 'sha256', $file_path )
+				: hash( 'sha256', 'inventory-in|' . $factory_code . '|' . hash_file( 'sha256', $file_path ) ),
+			'factory_code' => $factory_code,
+			'factory_name' => UMS_DB_Inventory::get_factory_options()[ $factory_code ],
 			'rows'      => $rows,
 			'errors'    => array_values( array_unique( $errors ) ),
 			'total_quantity' => array_sum( array_column( $rows, 'quantity' ) ),
@@ -224,6 +229,10 @@ class UMS_Inventory_Import {
 	}
 
 	public static function import( $preview, $user_id ) {
+		$factory_code = UMS_DB_Inventory::normalize_factory_code( $preview['factory_code'] ?? '' );
+		if ( ! UMS_DB_Inventory::supports_factory_stock() ) {
+			return array( 'success' => false, 'errors' => array( 'Chưa cập nhật bảng tồn kho theo nhà máy trong ums.sql.' ) );
+		}
 		if ( ! UMS_DB_Inventory_Import::is_ready() ) {
 			return array( 'success' => false, 'errors' => array( 'Database chưa có cấu trúc import kho trong ums.sql.' ) );
 		}
@@ -259,7 +268,7 @@ class UMS_Inventory_Import {
 				$errors[] = sprintf( 'Dòng %d: ánh xạ master Mã SAP đã thay đổi sau bước xem trước. Hãy tải lại file.', $row['source_row'] );
 				break;
 			}
-			$item = UMS_DB_Inventory::get_by_id_for_update( $row['item_id'] );
+			$item = UMS_DB_Inventory::get_by_id_for_update( $row['item_id'], $factory_code );
 
 			if ( ! $item ) {
 				$errors[] = sprintf( 'Dòng %d: Sản phẩm không còn tồn tại.', $row['source_row'] );
@@ -273,7 +282,7 @@ class UMS_Inventory_Import {
 			$before = (int) $item['stock_qty'];
 			$after  = $before + (int) $row['quantity'];
 			$inventory_update = array( 'stock_qty' => $after );
-			if ( false === UMS_DB_Inventory::update( $item['item_id'], $inventory_update ) ) {
+			if ( false === UMS_DB_Inventory::update( $item['item_id'], $inventory_update, $factory_code ) ) {
 				$errors[] = sprintf( 'Dòng %d: Không cập nhật được tồn kho.', $row['source_row'] );
 				break;
 			}
@@ -290,6 +299,7 @@ class UMS_Inventory_Import {
 			}
 			$movement = UMS_DB_Inventory_Movement::insert(
 				array(
+					'factory_code' => $factory_code,
 					'item_id' => $item['item_id'], 'request_id' => null, 'movement_type' => 'in',
 					'quantity' => $row['quantity'], 'before_qty' => $before, 'after_qty' => $after,
 					'unit_price' => (float) $item['base_price'],

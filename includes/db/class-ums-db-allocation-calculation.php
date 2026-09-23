@@ -86,16 +86,31 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 		return array( 'batch_id' => $batch_id, 'detail_count' => count( $preview['details'] ), 'total' => absint( $preview['total_quantity'] ) );
 	}
 
-	public static function get_active_totals( $year, $period_month ) {
+	public static function get_active_totals( $year, $period_month, $factory_code = '' ) {
 		if ( ! self::is_ready() ) {
 			return array();
+		}
+		$factory_code = $factory_code !== '' ? UMS_DB_Inventory::normalize_factory_code( $factory_code ) : '';
+		$organization_join = '';
+		$factory_where = '';
+		if ( $factory_code !== '' ) {
+			$organization_join = ' LEFT JOIN ' . UMS_DB_Organization::table() . ' organization ON organization.employee_no = details.employee_no';
+			if ( $factory_code === 'DA' ) {
+				$factory_where = " AND LEFT(REPLACE(organization.cost_center, '-', ''), 4) = '1300'";
+			} elseif ( $factory_code === 'VP' ) {
+				$factory_where = " AND LEFT(REPLACE(organization.cost_center, '-', ''), 4) = '4900'";
+			} else {
+				$factory_where = " AND (organization.employee_no IS NULL OR LEFT(REPLACE(organization.cost_center, '-', ''), 4) NOT IN ('1300', '4900'))";
+			}
 		}
 		$rows = self::db()->get_results(
 			self::db()->prepare(
 				'SELECT details.item_id, SUM(details.allocated_quantity) AS total_quantity
 				FROM ' . self::detail_table() . ' details
 				INNER JOIN ' . self::table() . ' batches ON batches.batch_id = details.batch_id
+				' . $organization_join . '
 				WHERE batches.calculation_year = %d AND batches.period_month = %d AND batches.is_active = 1
+				' . $factory_where . '
 				GROUP BY details.item_id',
 				absint( $year ), absint( $period_month )
 			),

@@ -82,7 +82,8 @@
 			});
 
 			$summary.text(
-				'Cấp phát: ' + formatNumber(resultSummary.periodic_qty) +
+				'Kho ' + (calculationResult.factory_name || calculationResult.factory_code || '') +
+				' | Cấp phát: ' + formatNumber(resultSummary.periodic_qty) +
 				' | Dự phòng: ' + formatNumber(resultSummary.reserve_qty) +
 				' | Tồn kho: ' + formatNumber(resultSummary.stock_qty) +
 				' | Số lượng PR: ' + formatNumber(resultSummary.final_pr_qty) +

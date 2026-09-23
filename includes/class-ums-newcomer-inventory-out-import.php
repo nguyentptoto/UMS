@@ -7,7 +7,8 @@ class UMS_Newcomer_Inventory_Out_Import {
 	const PREVIEW_PREFIX = 'ums_newcomer_out_preview_';
 	const PREVIEW_TTL    = 2 * HOUR_IN_SECONDS;
 
-	public static function analyze( $file_path, $file_name ) {
+	public static function analyze( $file_path, $file_name, $factory_code = UMS_DB_Inventory::DEFAULT_FACTORY ) {
+		$factory_code = UMS_DB_Inventory::normalize_factory_code( $factory_code );
 		$reader = new UMS_XLSX_Reader( $file_path );
 		if ( ! $reader->has_sheet( self::SHEET_NAME ) ) {
 			throw new RuntimeException( 'Không tìm thấy sheet "' . self::SHEET_NAME . '".' );
@@ -58,12 +59,12 @@ class UMS_Newcomer_Inventory_Out_Import {
 
 		$employee_nos = array_keys( $employee_rows );
 		$organization = UMS_DB_Organization::get_by_employee_nos( $employee_nos );
-		$inventory = UMS_DB_Inventory::get_all();
+		$inventory = UMS_DB_Inventory::get_all( array( 'factory_code' => $factory_code ) );
 		$inventory_by_id = array();
 		foreach ( $inventory as $item ) {
 			$inventory_by_id[ absint( $item['item_id'] ) ] = $item;
 		}
-		$materials = UMS_DB_Uniform_Material::get_all( array( 'status' => 'active', 'limit' => 10000 ) );
+		$materials = UMS_DB_Uniform_Material::get_all( array( 'status' => 'active', 'limit' => 10000, 'factory_code' => $factory_code ) );
 
 		$details        = array();
 		$projected_stock = array();
@@ -121,7 +122,11 @@ class UMS_Newcomer_Inventory_Out_Import {
 
 		return array(
 			'file_name' => sanitize_file_name( $file_name ),
-			'file_hash' => hash( 'sha256', 'newcomer-first-day-out|' . hash_file( 'sha256', $file_path ) ),
+			'file_hash' => $factory_code === UMS_DB_Inventory::DEFAULT_FACTORY
+				? hash( 'sha256', 'newcomer-first-day-out|' . hash_file( 'sha256', $file_path ) )
+				: hash( 'sha256', 'newcomer-first-day-out|' . $factory_code . '|' . hash_file( 'sha256', $file_path ) ),
+			'factory_code' => $factory_code,
+			'factory_name' => UMS_DB_Inventory::get_factory_options()[ $factory_code ],
 			'employee_count' => count( $employee_nos ),
 			'rows' => $details, 'total_quantity' => array_sum( array_column( $details, 'quantity' ) ),
 			'errors' => array_values( array_unique( $errors ) ),
@@ -130,6 +135,10 @@ class UMS_Newcomer_Inventory_Out_Import {
 	}
 
 	public static function import( $preview, $actor_user_id ) {
+		$factory_code = UMS_DB_Inventory::normalize_factory_code( $preview['factory_code'] ?? '' );
+		if ( ! UMS_DB_Inventory::supports_factory_stock() ) {
+			return array( 'success' => false, 'errors' => array( 'Chưa cập nhật bảng tồn kho theo nhà máy trong ums.sql.' ) );
+		}
 		if ( ! empty( $preview['errors'] ) ) {
 			return array( 'success' => false, 'errors' => $preview['errors'] );
 		}
@@ -155,7 +164,7 @@ class UMS_Newcomer_Inventory_Out_Import {
 		$total = 0;
 		$user_ids = array();
 		foreach ( $preview['rows'] as $row ) {
-			$item = UMS_DB_Inventory::get_by_id_for_update( $row['item_id'] );
+			$item = UMS_DB_Inventory::get_by_id_for_update( $row['item_id'], $factory_code );
 			if ( ! $item || self::normalize_size( $item['size'] ) !== self::normalize_size( $row['size'] )
 				|| self::normalize( $item['item_variant'] ) !== self::normalize( $row['product'] ) ) {
 				$errors[] = sprintf( 'Dòng %d: sản phẩm hoặc size đã thay đổi sau bước xem trước.', $row['source_row'] );
@@ -167,7 +176,7 @@ class UMS_Newcomer_Inventory_Out_Import {
 				$errors[] = sprintf( 'Dòng %d: tồn kho "%s" size "%s" không đủ.', $row['source_row'], $row['product'], $row['size'] );
 				break;
 			}
-			if ( false === UMS_DB_Inventory::update( $row['item_id'], array( 'stock_qty' => $after ) ) ) {
+			if ( false === UMS_DB_Inventory::update( $row['item_id'], array( 'stock_qty' => $after ), $factory_code ) ) {
 				$errors[] = sprintf( 'Dòng %d: không trừ được tồn kho.', $row['source_row'] );
 				break;
 			}
@@ -184,6 +193,7 @@ class UMS_Newcomer_Inventory_Out_Import {
 
 			if ( ! UMS_DB_Inventory_Movement::insert(
 				array(
+					'factory_code' => $factory_code,
 					'item_id' => (int) $row['item_id'], 'request_id' => null, 'movement_type' => 'out',
 					'quantity' => (int) $row['quantity'], 'before_qty' => $before, 'after_qty' => $after,
 					'unit_price' => (float) $item['base_price'],
