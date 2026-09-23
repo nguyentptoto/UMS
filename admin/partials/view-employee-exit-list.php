@@ -20,7 +20,7 @@ $notification_labels = array(
 );
 $group_labels = array(
 	'pants' => 'Quần', 'shirt' => 'Áo', 'jacket' => 'Áo khoác', 'coat' => 'Áo phao',
-	'hat' => 'Mũ', 'shoes' => 'Giày', 'id_card' => 'Thẻ nhân viên', 'lanyard' => 'Dây đeo thẻ', 'other' => 'Khác',
+	'hat' => 'Mũ', 'shoes' => 'Giày', 'id_card' => 'Thẻ nhân viên', 'other' => 'Khác',
 );
 ?>
 <div class="wrap ums-admin-wrap ums-exit-wrap">
@@ -109,7 +109,8 @@ $group_labels = array(
 				? mysql2date( 'd/m/Y', $first_contract_date )
 				: '-';
 			foreach ( $selected_exit_items as $selected_exit_item ) {
-				if ( (int) $selected_exit_item['item_id'] > 0 ) {
+				if ( ! in_array( $selected_exit_item['item_group'], array( 'id_card', 'lanyard' ), true )
+					&& (int) $selected_exit_item['required_quantity'] > (int) $selected_exit_item['exempt_quantity'] ) {
 					$has_uniform_return_item = true;
 					break;
 				}
@@ -138,7 +139,7 @@ $group_labels = array(
 					<input type="hidden" name="exit_id" value="<?php echo absint( $selected_exit['exit_id'] ); ?>">
 					<?php wp_nonce_field( 'ums_save_employee_exit_returns_' . $selected_exit['exit_id'] ); ?>
 					<?php if ( ! $has_uniform_return_item ) : ?>
-						<div class="notice notice-warning inline"><p>Không tìm thấy đồng phục đã xuất kho hoặc SL cấp phát đã chốt cho CNV này. Hệ thống chỉ hiển thị thẻ nhân viên và dây đeo thẻ.</p></div>
+						<div class="notice notice-warning inline"><p>Không tìm thấy đồng phục đã xuất kho, SL cấp phát đã chốt hoặc định mức phù hợp cho CNV này. Hệ thống chỉ hiển thị thẻ nhân viên.</p></div>
 					<?php endif; ?>
 					<div class="ums-table-scroll"><table class="widefat striped ums-exit-items">
 						<thead><tr><th>Nhóm</th><th>Sản phẩm</th><th>Size</th><th>Đã cấp</th><th>Phải trả</th><th>Miễn trả</th><th>Thực trả</th><th>Lần cấp gần nhất / ghi chú</th></tr></thead>

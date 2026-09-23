@@ -269,6 +269,55 @@ class UMS_Employee_Allowance_Report {
 		return $result;
 	}
 
+	/**
+	 * Tinh tong dinh muc nam tu snapshot cua mot CNV da roi so do to chuc.
+	 */
+	public static function build_context_annual_totals( $employee, $year ) {
+		$products = self::get_products();
+		$rules    = UMS_DB_Annual_Allowance::get_active_for_report();
+		foreach ( $products as &$product ) {
+			$product['rules'] = array_values(
+				array_filter(
+					$rules,
+					function ( $rule ) use ( $product ) {
+						return self::rule_applies_to_product( $rule, $product );
+					}
+				)
+			);
+		}
+		unset( $product );
+
+		$position_code = UMS_DB_Annual_Allowance::normalize_position_code( $employee['position'] ?? '' );
+		$position_ids  = self::get_position_ids();
+		$position_id   = $position_ids[ $position_code ] ?? 0;
+		$employee_no   = strtoupper( trim( (string) ( $employee['employee_no'] ?? '' ) ) );
+		$totals        = array_fill_keys( array( 'hat', 'shoes', 'pants', 'shirt', 'jacket', 'coat' ), 0 );
+
+		foreach ( array( 4, 9 ) as $month ) {
+			$evaluation_date = date( 'Y-m-t', strtotime( sprintf( '%04d-%02d-01', absint( $year ), $month ) ) );
+			$assignment = UMS_DB_Special_Work_Assignment::get_for_employee( $employee_no, $month );
+			$context = array(
+				'employee_no' => $employee_no,
+				'department' => (string) ( $employee['department'] ?? '' ),
+				'team' => (string) ( $employee['team'] ?? '' ),
+				'cost_center' => (string) ( $employee['cost_center'] ?? '' ),
+				'position' => $position_code,
+				'date_joined' => (string) ( $employee['date_joined'] ?? '' ),
+				'evaluation_date' => $evaluation_date,
+				'special_work_type' => (string) ( $assignment['special_work_type'] ?? '' ),
+			);
+			$resolved = self::get_allocations( $products, $context, $position_id, $month );
+			foreach ( $resolved['allocations'] as $allocation ) {
+				$group = (string) $allocation['group'];
+				if ( isset( $totals[ $group ] ) ) {
+					$totals[ $group ] += max( 0, (int) $allocation['quota'] );
+				}
+			}
+		}
+
+		return $totals;
+	}
+
 	private static function get_allocations( $products, $context, $position_id, $report_month ) {
 		$allocations = array();
 		$warnings    = array();

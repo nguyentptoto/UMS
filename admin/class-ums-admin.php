@@ -1767,7 +1767,8 @@ class UMS_Admin {
 		self::redirect_to_inventory(
 			array(
 				'notice' => 'inventory_import_completed',
-				'notice_extra' => sprintf( 'Đã nhập %d dòng, cộng tổng %s sản phẩm.', $result['imported'], number_format_i18n( $result['total'] ) ),
+				'notice_extra' => sprintf( 'Đã nhập %d dòng, cộng tổng %s sản phẩm vào kho %s.', $result['imported'], number_format_i18n( $result['total'] ), $result['factory_name'] ),
+				'factory_code' => $result['factory_code'],
 			)
 		);
 	}

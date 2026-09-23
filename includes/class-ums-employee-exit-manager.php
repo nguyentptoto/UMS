@@ -115,10 +115,21 @@ class UMS_Employee_Exit_Manager {
 			return $result;
 		}
 		$status = self::calculate_status( UMS_DB_Employee_Exit::get_items( $exit_id ) );
+		$case_update = array( 'status' => $status, 'completed_at' => $status === 'completed' ? current_time( 'mysql' ) : null );
+		$formats     = array( '%s', '%s' );
+		$notification_error = (string) ( $case['notification_error'] ?? '' );
+		if ( ( $case['notification_status'] ?? '' ) === 'skipped'
+			&& ( strpos( $notification_error, 'chưa có dữ liệu đồng phục' ) !== false || strpos( $notification_error, 'hồ sơ chỉ có' ) !== false )
+			&& self::has_uniform_return_obligation( UMS_DB_Employee_Exit::get_items( $exit_id ) ) ) {
+			$case_update['notification_status']       = 'pending';
+			$case_update['notification_attempted_at'] = null;
+			$case_update['notification_error']        = '';
+			$formats = array_merge( $formats, array( '%s', '%s', '%s' ) );
+		}
 		if ( UMS_DB_Employee_Exit::update_case(
 			$exit_id,
-			array( 'status' => $status, 'completed_at' => $status === 'completed' ? current_time( 'mysql' ) : null ),
-			array( '%s', '%s' )
+			$case_update,
+			$formats
 		) === false ) {
 			$wpdb->query( 'ROLLBACK' );
 			return new WP_Error( 'employee_exit_update_failed', UMS_DB_Employee_Exit::get_last_error() );
@@ -176,11 +187,25 @@ class UMS_Employee_Exit_Manager {
 			return false;
 		}
 
+		$existing_items   = UMS_DB_Employee_Exit::get_items( $exit_id );
 		$existing_by_item = array();
-		foreach ( UMS_DB_Employee_Exit::get_items( $exit_id ) as $item ) {
+		$existing_groups  = array();
+		foreach ( $existing_items as $item ) {
+			$existing_groups[ sanitize_key( (string) $item['item_group'] ) ] = true;
 			if ( (int) $item['item_id'] > 0 ) {
 				$existing_by_item[ (int) $item['item_id'] ] = (int) $item['issued_quantity'];
 			}
+		}
+		if ( isset( $existing_groups['lanyard'] ) ) {
+			return self::refresh_case( $exit_id, $case['actual_leave_date'] );
+		}
+		if ( in_array( $case['employee_type'], array( 'official', 'labor_leasing' ), true ) ) {
+			foreach ( array( 'pants', 'shirt', 'hat', 'shoes', 'id_card' ) as $required_group ) {
+				if ( ! isset( $existing_groups[ $required_group ] ) ) {
+					return self::refresh_case( $exit_id, $case['actual_leave_date'] );
+				}
+			}
+			return false;
 		}
 
 		$issued = self::get_issued_items( $case['employee_no'], $case['actual_leave_date'] );
@@ -235,7 +260,7 @@ class UMS_Employee_Exit_Manager {
 					array(
 						'notification_status' => 'skipped',
 						'notification_attempted_at' => current_time( 'mysql' ),
-						'notification_error' => 'Không gửi vì chưa có dữ liệu đồng phục đã cấp; hồ sơ chỉ có thẻ nhân viên và dây đeo thẻ.',
+						'notification_error' => 'Không gửi vì chưa có dữ liệu đồng phục đã cấp; hồ sơ chỉ có thẻ nhân viên.',
 					),
 					array( '%s', '%s', '%s' )
 				);
@@ -301,7 +326,7 @@ class UMS_Employee_Exit_Manager {
 						'reminder_attempted_at' => current_time( 'mysql' ),
 						'reminder_error' => self::has_uniform_return_obligation( $items )
 							? 'Không gửi vì CNV không còn thiếu đồng phục phải hoàn trả.'
-							: 'Không gửi vì hồ sơ chỉ có thẻ nhân viên và dây đeo thẻ.',
+							: 'Không gửi vì hồ sơ chỉ có thẻ nhân viên.',
 					),
 					array( '%s', '%s', '%s' )
 				);
@@ -363,10 +388,10 @@ class UMS_Employee_Exit_Manager {
 		$quantities  = array();
 		$labels = array(
 			'pants' => 'Quần', 'shirt' => 'Áo', 'jacket' => 'Áo khoác', 'coat' => 'Áo phao',
-			'hat' => 'Mũ', 'shoes' => 'Giày', 'id_card' => 'Thẻ tên / thẻ nhân viên', 'lanyard' => 'Dây đeo thẻ', 'other' => 'Khác',
+			'hat' => 'Mũ', 'shoes' => 'Giày', 'other' => 'Khác',
 		);
 		foreach ( (array) $items as $item ) {
-			if ( (int) $item['item_id'] <= 0 ) {
+			if ( ! self::is_uniform_return_group( $item['item_group'] ?? '' ) ) {
 				continue;
 			}
 			$quantity = max( 0, (int) $item['required_quantity'] - (int) $item['exempt_quantity'] - (int) $item['returned_quantity'] );
@@ -418,7 +443,7 @@ class UMS_Employee_Exit_Manager {
 		);
 		$quantities = array();
 		foreach ( (array) $items as $item ) {
-			if ( (int) $item['item_id'] <= 0 ) {
+			if ( ! self::is_uniform_return_group( $item['item_group'] ?? '' ) ) {
 				continue;
 			}
 			$required = max( 0, (int) $item['required_quantity'] - (int) $item['exempt_quantity'] );
@@ -465,7 +490,7 @@ class UMS_Employee_Exit_Manager {
 
 	private static function has_uniform_return_obligation( $items ) {
 		foreach ( (array) $items as $item ) {
-			if ( (int) $item['item_id'] > 0 && (int) $item['required_quantity'] > (int) $item['exempt_quantity'] ) {
+			if ( self::is_uniform_return_group( $item['item_group'] ?? '' ) && (int) $item['required_quantity'] > (int) $item['exempt_quantity'] ) {
 				return true;
 			}
 		}
@@ -475,11 +500,15 @@ class UMS_Employee_Exit_Manager {
 	private static function has_outstanding_uniform_return( $items ) {
 		foreach ( (array) $items as $item ) {
 			$missing = (int) $item['required_quantity'] - (int) $item['exempt_quantity'] - (int) $item['returned_quantity'];
-			if ( (int) $item['item_id'] > 0 && $missing > 0 ) {
+			if ( self::is_uniform_return_group( $item['item_group'] ?? '' ) && $missing > 0 ) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	private static function is_uniform_return_group( $group ) {
+		return ! in_array( sanitize_key( (string) $group ), array( 'id_card', 'lanyard' ), true );
 	}
 
 	private static function resolve_factory_notice( $case ) {
@@ -516,53 +545,79 @@ class UMS_Employee_Exit_Manager {
 
 	private static function build_return_items( $case, $preserve_progress = false ) {
 		$existing = array();
+		$existing_returned_by_group = array();
 		if ( $preserve_progress ) {
 			foreach ( UMS_DB_Employee_Exit::get_items( $case['exit_id'] ) as $item ) {
 				$existing[ self::item_key( $item['item_id'], $item['item_group'], $item['item_name'], $item['size'] ) ] = $item;
+				$group = sanitize_key( (string) $item['item_group'] );
+				$existing_returned_by_group[ $group ] = ( $existing_returned_by_group[ $group ] ?? 0 ) + (int) $item['returned_quantity'];
 			}
 		}
 		$issued = self::get_issued_items( $case['employee_no'], $case['actual_leave_date'] );
 		$type   = $case['employee_type'];
-		$caps   = array( 'pants' => 2, 'shirt' => 2, 'jacket' => 1, 'hat' => 1, 'shoes' => 1 );
-		$remaining = $caps;
-		$latest_shoe = '';
+		$allowance_by_group = in_array( $type, array( 'official', 'labor_leasing' ), true )
+			? UMS_Employee_Allowance_Report::build_context_annual_totals( $case, (int) substr( $case['actual_leave_date'], 0, 4 ) )
+			: array();
+		$issued_by_group = array();
 		foreach ( $issued as &$row ) {
 			$row['item_group'] = UMS_Employee_Allowance_Report::get_business_group( $row );
-			if ( $row['item_group'] === 'shoes' && ( $latest_shoe === '' || $row['latest_issued_at'] > $latest_shoe ) ) {
-				$latest_shoe = $row['latest_issued_at'];
+			$group = $row['item_group'] !== '' ? $row['item_group'] : 'other';
+			if ( ! isset( $issued_by_group[ $group ] ) ) {
+				$issued_by_group[ $group ] = array( 'quantity' => 0, 'latest_issued_at' => '' );
+			}
+			$issued_by_group[ $group ]['quantity'] += max( 0, (int) $row['issued_quantity'] );
+			if ( $issued_by_group[ $group ]['latest_issued_at'] === '' || $row['latest_issued_at'] > $issued_by_group[ $group ]['latest_issued_at'] ) {
+				$issued_by_group[ $group ]['latest_issued_at'] = $row['latest_issued_at'];
 			}
 		}
 		unset( $row );
-		usort( $issued, function ( $a, $b ) { return strcmp( $b['latest_issued_at'], $a['latest_issued_at'] ); } );
-		$latest_shoe_date = $latest_shoe !== '' ? mysql2date( 'Y-m-d', $latest_shoe ) : '';
-		$shoe_exempt = $type === 'official' && $latest_shoe_date !== ''
-			&& strtotime( $latest_shoe_date ) < strtotime( '-' . self::SHOE_LIFETIME_YEARS . ' years', strtotime( $case['actual_leave_date'] ) );
 
 		$new_items = array();
 		$order = 0;
-		foreach ( $issued as $row ) {
-			$issued_qty = max( 0, (int) $row['issued_quantity'] );
-			$group = $row['item_group'] !== '' ? $row['item_group'] : 'other';
-			$required = 0;
-			$exempt = 0;
-			$reason = '';
-			if ( $type === 'probation' ) {
-				$required = $issued_qty;
-			} elseif ( isset( $remaining[ $group ] ) && $remaining[ $group ] > 0 ) {
-				$required = min( $issued_qty, $remaining[ $group ] );
-				$remaining[ $group ] -= $required;
-				if ( $group === 'shoes' && $shoe_exempt ) {
-					$exempt = $required;
-					$reason = 'Lần cấp giày gần nhất đã quá 02 năm tính đến ngày nghỉ việc.';
-				}
+		if ( $type === 'probation' ) {
+			usort( $issued, function ( $a, $b ) { return strcmp( $b['latest_issued_at'], $a['latest_issued_at'] ); } );
+			foreach ( $issued as $row ) {
+				$issued_qty = max( 0, (int) $row['issued_quantity'] );
+				$group = $row['item_group'] !== '' ? $row['item_group'] : 'other';
+				$new_items[] = self::return_item_data( $case['exit_id'], $row, $group, $issued_qty, $issued_qty, 0, '', ++$order, $existing );
 			}
-			$new_items[] = self::return_item_data( $case['exit_id'], $row, $group, $issued_qty, $required, $exempt, $reason, ++$order, $existing );
+		} else {
+			$fixed_obligations = array(
+				'pants' => array( 'name' => 'Quần', 'quantity' => 2 ),
+				'shirt' => array( 'name' => 'Áo', 'quantity' => 2 ),
+				'hat' => array( 'name' => 'Mũ', 'quantity' => 1 ),
+				'shoes' => array( 'name' => 'Giày BHLĐ', 'quantity' => 1 ),
+			);
+			if ( ! empty( $issued_by_group['jacket']['quantity'] ) || ! empty( $allowance_by_group['jacket'] ) ) {
+				$fixed_obligations = array_slice( $fixed_obligations, 0, 2, true )
+					+ array( 'jacket' => array( 'name' => 'Áo khoác', 'quantity' => 1 ) )
+					+ array_slice( $fixed_obligations, 2, null, true );
+			}
+			foreach ( $fixed_obligations as $group => $obligation ) {
+				$history = $issued_by_group[ $group ] ?? array( 'quantity' => 0, 'latest_issued_at' => '' );
+				$source_quantity = (int) $history['quantity'] > 0
+					? (int) $history['quantity']
+					: max( 0, (int) ( $allowance_by_group[ $group ] ?? 0 ) );
+				$required_quantity = min( (int) $obligation['quantity'], $source_quantity );
+				$latest = (string) $history['latest_issued_at'];
+				$exempt = 0;
+				$reason = 'Số lượng bắt buộc hoàn trả theo TVN-QDDP 01.05.';
+				if ( $group === 'shoes' && $type === 'official' && $latest !== '' ) {
+					$latest_date = mysql2date( 'Y-m-d', $latest );
+					if ( strtotime( $latest_date ) < strtotime( '-' . self::SHOE_LIFETIME_YEARS . ' years', strtotime( $case['actual_leave_date'] ) ) ) {
+						$exempt = 1;
+						$reason = 'Lần cấp giày gần nhất đã quá 02 năm tính đến ngày nghỉ việc.';
+					}
+				}
+				$row = array( 'item_id' => 0, 'item_variant' => $obligation['name'], 'size' => '', 'latest_issued_at' => $latest ?: null );
+				$item = self::return_item_data( $case['exit_id'], $row, $group, $source_quantity, $required_quantity, min( $exempt, $required_quantity ), $reason, ++$order, $existing );
+				$item['returned_quantity'] = min( $required_quantity, max( $item['returned_quantity'], $existing_returned_by_group[ $group ] ?? 0 ) );
+				$new_items[] = $item;
+			}
 		}
 
-		foreach ( array( 'id_card' => 'Thẻ tên / thẻ nhân viên', 'lanyard' => 'Dây đeo thẻ' ) as $group => $name ) {
-			$row = array( 'item_id' => 0, 'item_variant' => $name, 'size' => '', 'latest_issued_at' => null );
-			$new_items[] = self::return_item_data( $case['exit_id'], $row, $group, 1, 1, 0, '', ++$order, $existing );
-		}
+		$row = array( 'item_id' => 0, 'item_variant' => 'Thẻ tên / thẻ nhân viên', 'size' => '', 'latest_issued_at' => null );
+		$new_items[] = self::return_item_data( $case['exit_id'], $row, 'id_card', 1, 1, 0, '', ++$order, $existing );
 
 		if ( UMS_DB_Employee_Exit::delete_items( $case['exit_id'] ) === false ) {
 			return new WP_Error( 'employee_exit_items_failed', UMS_DB_Employee_Exit::get_last_error() );

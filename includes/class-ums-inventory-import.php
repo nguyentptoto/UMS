@@ -286,6 +286,18 @@ class UMS_Inventory_Import {
 				$errors[] = sprintf( 'Dòng %d: Không cập nhật được tồn kho.', $row['source_row'] );
 				break;
 			}
+			$verified_item = UMS_DB_Inventory::get_by_id( $item['item_id'], $factory_code );
+			if ( ! $verified_item || (int) $verified_item['stock_qty'] !== $after ) {
+				$actual_quantity = $verified_item ? (int) $verified_item['stock_qty'] : 0;
+				$errors[] = sprintf(
+					'Dòng %d: số dư kho %s sau khi ghi không khớp (cần %d, đọc lại %d). Import đã được hủy.',
+					$row['source_row'],
+					UMS_DB_Inventory::get_factory_options()[ $factory_code ],
+					$after,
+					$actual_quantity
+				);
+				break;
+			}
 
 			$note = trim( (string) $row['note'] );
 			$movement_note = sprintf(
@@ -336,7 +348,11 @@ class UMS_Inventory_Import {
 			)
 		);
 
-		return array( 'success' => empty( $errors ), 'batch_id' => $batch_id, 'imported' => $imported, 'total' => $total, 'errors' => $errors );
+		return array(
+			'success' => empty( $errors ), 'batch_id' => $batch_id, 'imported' => $imported, 'total' => $total,
+			'factory_code' => $factory_code, 'factory_name' => UMS_DB_Inventory::get_factory_options()[ $factory_code ],
+			'errors' => $errors,
+		);
 	}
 
 	private static function product_label( $item ) {

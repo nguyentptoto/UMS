@@ -500,7 +500,7 @@ CREATE TABLE IF NOT EXISTS `wp_uniform_employee_exit_cases` (
 CREATE TABLE IF NOT EXISTS `wp_uniform_employee_exit_items` (
 	`return_item_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
 	`exit_id` BIGINT(20) UNSIGNED NOT NULL,
-	`item_id` INT NOT NULL DEFAULT 0 COMMENT '0 cho the nhan vien va day deo the',
+	`item_id` INT NOT NULL DEFAULT 0 COMMENT '0 cho nghia vu theo nhom va the nhan vien',
 	`item_group` VARCHAR(30) NOT NULL,
 	`item_name` VARCHAR(255) NOT NULL,
 	`size` VARCHAR(20) NOT NULL DEFAULT '',
