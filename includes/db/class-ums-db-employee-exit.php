@@ -26,7 +26,6 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 		$case_columns = self::db()->get_col( 'SHOW COLUMNS FROM ' . self::case_table(), 0 );
 		$required = array(
 			'email', 'factory', 'notification_status', 'notification_sent_at', 'notification_attempted_at', 'notification_error',
-			'reminder_status', 'reminder_sent_at', 'reminder_attempted_at', 'reminder_error',
 		);
 		if ( array_diff( $required, $case_columns ) ) {
 			return false;
@@ -130,10 +129,15 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 	}
 
 	public static function insert_case( $data ) {
+		$formats = array_fill( 0, count( $data ), '%s' );
+		$organization_source_index = array_search( 'organization_source_id', array_keys( $data ), true );
+		if ( false !== $organization_source_index ) {
+			$formats[ $organization_source_index ] = '%d';
+		}
 		$result = self::db()->insert(
 			self::case_table(),
 			$data,
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s' )
+			$formats
 		);
 		return $result ? (int) self::db()->insert_id : 0;
 	}
@@ -145,22 +149,6 @@ class UMS_DB_Employee_Exit extends UMS_DB_Base {
 				WHERE notification_status IN ('pending','failed') AND status IN ('pending','in_progress')
 				ORDER BY detected_at ASC, exit_id ASC LIMIT %d",
 				max( 1, min( 500, absint( $limit ) ) )
-			),
-			ARRAY_A
-		);
-	}
-
-	public static function get_reminder_candidates( $month_start, $month_end, $limit = 5000 ) {
-		return self::db()->get_results(
-			self::db()->prepare(
-				"SELECT * FROM " . self::case_table() . "
-				WHERE reminder_status IN ('pending','failed')
-					AND status IN ('pending','in_progress')
-					AND actual_leave_date BETWEEN %s AND %s
-				ORDER BY actual_leave_date ASC, exit_id ASC LIMIT %d",
-				$month_start,
-				$month_end,
-				max( 1, min( 10000, absint( $limit ) ) )
 			),
 			ARRAY_A
 		);

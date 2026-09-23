@@ -48,7 +48,6 @@ foreach ( $exit_cases as $case ) {
 		'detected_at' => mysql2date( 'd/m/Y H:i', $case['detected_at'] ),
 		'status' => $status_labels[ $case['status'] ] ?? $case['status'],
 		'notification_status' => '<span title="' . esc_attr( $case['notification_error'] ?? '' ) . '">' . esc_html( $notification_labels[ $case['notification_status'] ?? 'legacy' ] ?? ( $case['notification_status'] ?? '-' ) ) . '</span>',
-		'reminder_status' => '<span title="' . esc_attr( $case['reminder_error'] ?? '' ) . '">' . esc_html( $notification_labels[ $case['reminder_status'] ?? 'pending' ] ?? ( $case['reminder_status'] ?? '-' ) ) . '</span>',
 		'actions' => '<a class="button button-small" href="' . esc_url( $detail_url ) . '">Xử lý</a>',
 	);
 }
@@ -62,8 +61,7 @@ $grid_columns = array(
 	array( 'text' => 'Ngày phát hiện', 'datafield' => 'detected_at', 'width' => '10%' ),
 	array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '10%' ),
 	array( 'text' => 'Email lần đầu', 'datafield' => 'notification_status', 'width' => '8%', 'cellsrenderer' => 'html' ),
-	array( 'text' => 'Nhắc cuối tháng', 'datafield' => 'reminder_status', 'width' => '9%', 'cellsrenderer' => 'html' ),
-	array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '6%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
+	array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '15%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
 );
 ?>
 <div class="wrap ums-admin-wrap ums-exit-wrap">

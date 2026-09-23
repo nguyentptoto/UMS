@@ -6,29 +6,6 @@ class UMS_Employee_Exit_Manager {
 
 	const SHOE_LIFETIME_YEARS = 2;
 
-	public static function init() {
-		if ( defined( 'UMS_EMPLOYEE_EXIT_REMINDER_CRON_HOOK' ) ) {
-			add_action( UMS_EMPLOYEE_EXIT_REMINDER_CRON_HOOK, array( __CLASS__, 'run_month_end_reminders' ) );
-		}
-	}
-
-	public static function run_month_end_reminders() {
-		$today = current_datetime();
-		if ( ! UMS_DB_Employee_Exit::is_ready() ) {
-			return array( 'reminders_sent' => 0, 'reminders_failed' => 0, 'reminders_skipped' => 0 );
-		}
-		if ( $today->format( 'Y-m-d' ) === $today->format( 'Y-m-t' ) ) {
-			$target_month = $today;
-		} elseif ( $today->format( 'd' ) === '01' ) {
-			// First-day fallback covers a month-end WP-Cron event delayed by low site traffic.
-			$target_month = $today->modify( '-1 day' );
-		} else {
-			return array( 'reminders_sent' => 0, 'reminders_failed' => 0, 'reminders_skipped' => 0 );
-		}
-
-		return self::send_month_end_reminders( $target_month->format( 'Y-m-01' ), $target_month->format( 'Y-m-t' ) );
-	}
-
 	public static function finalize_organization_sync( $sync_token, $detected_at ) {
 		if ( ! UMS_DB_Organization::supports_employment_status() || ! UMS_DB_Employee_Exit::is_ready() ) {
 			return new WP_Error( 'employee_exit_schema_missing', 'Database chưa có cấu trúc quản lý CNV nghỉ việc. Hãy chạy phần UPDATE trong ums.sql trước khi đồng bộ.' );
@@ -318,7 +295,6 @@ class UMS_Employee_Exit_Manager {
 			'employee_type' => self::classify_employee( $employee ),
 			'detected_at' => $detected_at, 'actual_leave_date' => $leave_date, 'status' => 'pending', 'notes' => '',
 			'notification_status' => 'pending',
-			'reminder_status' => 'pending',
 			'organization_source_id' => absint( $employee['source_id'] ), 'created_at' => $detected_at, 'updated_at' => $detected_at,
 		);
 		$exit_id = UMS_DB_Employee_Exit::insert_case( $data );
@@ -394,73 +370,6 @@ class UMS_Employee_Exit_Manager {
 		return $result;
 	}
 
-	private static function send_month_end_reminders( $month_start, $month_end ) {
-		$result = array( 'reminders_sent' => 0, 'reminders_failed' => 0, 'reminders_skipped' => 0 );
-		foreach ( UMS_DB_Employee_Exit::get_reminder_candidates( $month_start, $month_end ) as $case ) {
-			$exit_id = absint( $case['exit_id'] );
-			$items   = UMS_DB_Employee_Exit::get_items( $exit_id );
-			if ( ! self::has_outstanding_uniform_return( $items ) ) {
-				UMS_DB_Employee_Exit::update_case(
-					$exit_id,
-					array(
-						'reminder_status' => 'skipped',
-						'reminder_attempted_at' => current_time( 'mysql' ),
-						'reminder_error' => self::has_uniform_return_obligation( $items )
-							? 'Không gửi vì CNV không còn thiếu đồng phục phải hoàn trả.'
-							: 'Không gửi vì hồ sơ chỉ có thẻ nhân viên.',
-					),
-					array( '%s', '%s', '%s' )
-				);
-				$result['reminders_skipped']++;
-				continue;
-			}
-
-			$email = sanitize_email( (string) $case['email'] );
-			if ( $email === '' || ! is_email( $email ) ) {
-				UMS_DB_Employee_Exit::update_case(
-					$exit_id,
-					array(
-						'reminder_status' => 'skipped',
-						'reminder_attempted_at' => current_time( 'mysql' ),
-						'reminder_error' => 'Không có địa chỉ email hợp lệ trong Sơ đồ tổ chức.',
-					),
-					array( '%s', '%s', '%s' )
-				);
-				$result['reminders_skipped']++;
-				continue;
-			}
-
-			UMS_DB_Employee_Exit::update_case(
-				$exit_id,
-				array( 'reminder_status' => 'sending', 'reminder_attempted_at' => current_time( 'mysql' ), 'reminder_error' => '' ),
-				array( '%s', '%s', '%s' )
-			);
-			$sent = wp_mail(
-				$email,
-				'[NHẮC LẠI] THÔNG BÁO HOÀN TRẢ ĐỒNG PHỤC NGHỈ VIỆC',
-				self::build_reminder_notification_html( $case, $items ),
-				array( 'Content-Type: text/html; charset=UTF-8' )
-			);
-			if ( $sent ) {
-				UMS_DB_Employee_Exit::update_case(
-					$exit_id,
-					array( 'reminder_status' => 'sent', 'reminder_sent_at' => current_time( 'mysql' ), 'reminder_error' => '' ),
-					array( '%s', '%s', '%s' )
-				);
-				$result['reminders_sent']++;
-			} else {
-				UMS_DB_Employee_Exit::update_case(
-					$exit_id,
-					array( 'reminder_status' => 'failed', 'reminder_error' => 'WordPress không gửi được email nhắc cuối tháng.' ),
-					array( '%s', '%s' )
-				);
-				$result['reminders_failed']++;
-			}
-		}
-
-		return $result;
-	}
-
 	private static function build_exit_notification_html( $case, $items ) {
 		$employee_no = strtoupper( trim( (string) $case['employee_no'] ) );
 		$salutation  = strpos( $employee_no, 'M' ) === 0 ? 'Anh' : ( strpos( $employee_no, 'F' ) === 0 ? 'Chị' : 'Anh/chị' );
@@ -513,75 +422,9 @@ class UMS_Employee_Exit_Manager {
 			. '<p>Trân trọng,<br><strong>Phòng Hành Chính nhân sự</strong></p></div>';
 	}
 
-	private static function build_reminder_notification_html( $case, $items ) {
-		$employee_no = strtoupper( trim( (string) $case['employee_no'] ) );
-		$salutation  = strpos( $employee_no, 'M' ) === 0 ? 'Anh' : ( strpos( $employee_no, 'F' ) === 0 ? 'Chị' : 'Anh/chị' );
-		$pronoun     = $salutation === 'Anh' ? 'anh' : ( $salutation === 'Chị' ? 'chị' : 'anh/chị' );
-		$factory     = self::resolve_factory_notice( $case );
-		$labels      = array(
-			'pants' => 'Quần', 'shirt' => 'Áo', 'jacket' => 'Áo khoác', 'coat' => 'Áo phao',
-			'hat' => 'Mũ', 'shoes' => 'Giày', 'other' => 'Khác',
-		);
-		$quantities = array();
-		foreach ( (array) $items as $item ) {
-			if ( ! self::is_uniform_return_group( $item['item_group'] ?? '' ) ) {
-				continue;
-			}
-			$required = max( 0, (int) $item['required_quantity'] - (int) $item['exempt_quantity'] );
-			if ( $required <= 0 ) {
-				continue;
-			}
-			$label = $labels[ $item['item_group'] ] ?? ( $item['item_name'] ?: 'Khác' );
-			if ( ! isset( $quantities[ $label ] ) ) {
-				$quantities[ $label ] = array( 'required' => 0, 'returned' => 0 );
-			}
-			$quantities[ $label ]['required'] += $required;
-			$quantities[ $label ]['returned'] += min( $required, max( 0, (int) $item['returned_quantity'] ) );
-		}
-
-		$rows = '';
-		foreach ( $quantities as $label => $quantity ) {
-			$missing = max( 0, $quantity['required'] - $quantity['returned'] );
-			$rows .= '<tr><td style="border:1px solid #cbd5e1;padding:9px 12px">' . esc_html( $label ) . '</td>'
-				. '<td style="border:1px solid #cbd5e1;padding:9px 12px;text-align:center">' . number_format_i18n( $quantity['returned'] ) . '</td>'
-				. '<td style="border:1px solid #cbd5e1;padding:9px 12px;text-align:center">' . number_format_i18n( $missing ) . '</td></tr>';
-		}
-
-		$name = esc_html( (string) $case['full_name'] );
-		return '<div style="font-family:Arial,sans-serif;color:#1f2937;line-height:1.55;max-width:800px">'
-			. '<h2 style="color:#164e86;text-align:center">THÔNG BÁO HOÀN TRẢ ĐỒNG PHỤC NGHỈ VIỆC</h2>'
-			. '<p>Kính gửi ' . esc_html( $salutation ) . ' <strong>' . $name . '</strong>,</p>'
-			. '<p>Phòng HCNS công ty TOTO Việt Nam - Chi nhánh ' . esc_html( $factory['branch'] )
-			. ' gửi thông báo về việc hoàn trả đồng phục khi nghỉ việc.</p>'
-			. '<p>Hiện tại HCNS chưa nhận đủ đồng phục hoàn trả khi nghỉ việc của ' . esc_html( $pronoun )
-			. '. Vì vậy, phòng HCNS gửi thông báo nhắc lại để ' . esc_html( $pronoun )
-			. ' sắp xếp thời gian tới công ty hoàn trả đồng phục theo đúng quy định.</p>'
-			. '<p><strong>Số lượng đồng phục cần hoàn trả:</strong></p>'
-			. '<table style="border-collapse:collapse;width:100%;margin:12px 0 18px"><thead><tr>'
-			. '<th style="background:#164e86;color:#fff;border:1px solid #cbd5e1;padding:10px">Loại đồng phục</th>'
-			. '<th style="background:#164e86;color:#fff;border:1px solid #cbd5e1;padding:10px;width:180px">Số lượng đã trả</th>'
-			. '<th style="background:#164e86;color:#fff;border:1px solid #cbd5e1;padding:10px;width:180px">Số lượng còn thiếu</th>'
-			. '</tr></thead><tbody>' . $rows . '</tbody></table>'
-			. '<p><strong>Thời gian hoàn trả:</strong><br>' . esc_html( $factory['time'] ) . '</p>'
-			. '<p><strong>Địa điểm trả:</strong> ' . esc_html( $factory['location'] ) . '</p>'
-			. '<p style="color:#dc2626">Sau thời gian trên, HCNS sẽ chốt dữ liệu tính lương. Nếu ' . esc_html( $pronoun )
-			. ' không hoàn trả theo đúng thời hạn trên, HCNS sẽ trừ tiền theo đúng quy định.</p>'
-			. '<p>Trân trọng,<br><strong>Phòng Hành Chính nhân sự</strong></p></div>';
-	}
-
 	private static function has_uniform_return_obligation( $items ) {
 		foreach ( (array) $items as $item ) {
 			if ( self::is_uniform_return_group( $item['item_group'] ?? '' ) && (int) $item['required_quantity'] > (int) $item['exempt_quantity'] ) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static function has_outstanding_uniform_return( $items ) {
-		foreach ( (array) $items as $item ) {
-			$missing = (int) $item['required_quantity'] - (int) $item['exempt_quantity'] - (int) $item['returned_quantity'];
-			if ( self::is_uniform_return_group( $item['item_group'] ?? '' ) && $missing > 0 ) {
 				return true;
 			}
 		}
