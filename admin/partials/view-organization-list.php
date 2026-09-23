@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$page_url = admin_url( 'admin.php?page=tvn-ums-organization' );
+$page_url = admin_url( 'admin.php?page=tvn-uniform-management' );
 $auto_start_sync = isset( $_GET['ums_auto_sync'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['ums_auto_sync'] ) );
 $grid_columns = array(
 	array( 'text' => 'STT', 'datafield' => 'sheet_stt', 'width' => 80 ),
@@ -101,7 +101,7 @@ $grid_fields = array(
 		</div>
 
 		<form method="get" class="ums-filter-bar ums-organization-filters">
-			<input type="hidden" name="page" value="tvn-ums-organization">
+			<input type="hidden" name="page" value="tvn-uniform-management">
 
 			<label>
 				<span class="screen-reader-text">Tìm nhân viên</span>

@@ -14,16 +14,6 @@ class UMS_Admin {
         // Móc hàm nạp các file CSS/JS vào trang Admin
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_assets' ) );
 
-        add_action( 'admin_post_ums_save_user_profile', array( __CLASS__, 'handle_save_user_profile' ) );
-        add_action( 'admin_post_ums_delete_user_profile', array( __CLASS__, 'handle_delete_user_profile' ) );
-        add_action( 'admin_post_ums_save_department', array( __CLASS__, 'handle_save_department' ) );
-        add_action( 'admin_post_ums_delete_department', array( __CLASS__, 'handle_delete_department' ) );
-        add_action( 'admin_post_ums_import_departments', array( __CLASS__, 'handle_import_departments' ) );
-        add_action( 'admin_post_ums_download_department_import_template', array( __CLASS__, 'handle_download_department_import_template' ) );
-        add_action( 'admin_post_ums_save_position', array( __CLASS__, 'handle_save_position' ) );
-        add_action( 'admin_post_ums_delete_position', array( __CLASS__, 'handle_delete_position' ) );
-        add_action( 'admin_post_ums_save_factory_location', array( __CLASS__, 'handle_save_factory_location' ) );
-        add_action( 'admin_post_ums_delete_factory_location', array( __CLASS__, 'handle_delete_factory_location' ) );
         add_action( 'admin_post_ums_save_contract_type', array( __CLASS__, 'handle_save_contract_type' ) );
         add_action( 'admin_post_ums_delete_contract_type', array( __CLASS__, 'handle_delete_contract_type' ) );
         add_action( 'admin_post_ums_save_approval_flow', array( __CLASS__, 'handle_save_approval_flow' ) );
@@ -73,45 +63,18 @@ class UMS_Admin {
             'Quản lý Đồng phục',              // Tên hiển thị trên Menu (Menu Title)
             'manage_options',                 // Quyền hạn bắt buộc (Chỉ Admin mới thấy)
             'tvn-uniform-management',         // Mã định danh Menu (Slug)
-            array( __CLASS__, 'render_user_list_page' ), // Hàm gọi hiển thị giao diện
+            array( __CLASS__, 'render_organization_page' ), // Sơ đồ tổ chức là nguồn nhân sự chính
             'dashicons-businessman',          // Biểu tượng Menu (Icon áo vest nhân sự)
             30                                // Vị trí xuất hiện trên Sidebar
         );
 
         add_submenu_page(
             'tvn-uniform-management',
-            'Hồ sơ Nhân sự',
-            'Hồ sơ Nhân sự',
+            'Sơ đồ tổ chức TVN',
+            'Sơ đồ tổ chức TVN',
             'manage_options',
             'tvn-uniform-management',
-            array( __CLASS__, 'render_user_list_page' )
-        );
-
-        add_submenu_page(
-            'tvn-uniform-management',
-            'Quản lý Phòng ban',
-            'Phòng ban',
-            'manage_options',
-            'tvn-ums-departments',
-            array( __CLASS__, 'render_department_page' )
-        );
-
-        add_submenu_page(
-            'tvn-uniform-management',
-            'Quản lý Chức danh',
-            'Chức danh',
-            'manage_options',
-            'tvn-ums-positions',
-            array( __CLASS__, 'render_position_page' )
-        );
-
-        add_submenu_page(
-            'tvn-uniform-management',
-            'Quản lý Nhà máy',
-            'Nhà máy',
-            'manage_options',
-            'tvn-ums-factory-locations',
-            array( __CLASS__, 'render_factory_location_page' )
+            array( __CLASS__, 'render_organization_page' )
         );
 
         add_submenu_page(
@@ -188,15 +151,6 @@ class UMS_Admin {
 
         add_submenu_page(
             'tvn-uniform-management',
-            'Sơ đồ tổ chức TVN',
-            'Sơ đồ tổ chức TVN',
-            'manage_options',
-            'tvn-ums-organization',
-            array( __CLASS__, 'render_organization_page' )
-        );
-
-        add_submenu_page(
-            'tvn-uniform-management',
             'Đồng bộ Google Sheet',
             'Đồng bộ Sheet',
             'manage_options',
@@ -222,7 +176,7 @@ class UMS_Admin {
 			$hook = 'tvn-uniform-management';
 		}
         // Chỉ nạp CSS/JS khi Admin đang đứng đúng trong trang của plugin UMS
-        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-departments' ) === false && strpos( $hook, 'tvn-ums-positions' ) === false && strpos( $hook, 'tvn-ums-factory-locations' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-organization' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
+        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
             return;
         }
 
@@ -3804,7 +3758,7 @@ class UMS_Admin {
         $url = add_query_arg(
             array_filter(
                 array_merge(
-                    array( 'page' => 'tvn-ums-organization' ),
+                    array( 'page' => 'tvn-uniform-management' ),
                     $args
                 ),
                 function( $value ) {
