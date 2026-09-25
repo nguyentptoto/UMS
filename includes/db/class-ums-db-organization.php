@@ -311,6 +311,24 @@ class UMS_DB_Organization extends UMS_DB_Base {
 	}
 
 	/**
+	 * Find the active organization row linked to a company email address.
+	 */
+	public static function get_by_email( $email ) {
+		$email = sanitize_email( (string) $email );
+		if ( $email === '' || ! is_email( $email ) || ! self::table_exists() ) {
+			return null;
+		}
+
+		return self::db()->get_row(
+			self::db()->prepare(
+				"SELECT * FROM " . self::table() . " WHERE email = %s AND employment_status = 'active' LIMIT 1",
+				$email
+			),
+			ARRAY_A
+		);
+	}
+
+	/**
 	 * Lay nhieu nhan su trong mot truy van, lap chi muc theo ma nhan vien viet hoa.
 	 */
 	public static function get_by_employee_nos( $employee_nos ) {
@@ -356,7 +374,13 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			$employee_no = $user instanceof WP_User ? trim( (string) $user->user_login ) : '';
 		}
 
-		return $employee_no !== '' ? self::get_by_employee_no( $employee_no ) : null;
+		$organization = $employee_no !== '' ? self::get_by_employee_no( $employee_no ) : null;
+		if ( $organization || $user_id <= 0 ) {
+			return $organization;
+		}
+
+		$user = get_userdata( $user_id );
+		return $user instanceof WP_User ? self::get_by_email( $user->user_email ) : null;
 	}
 
 	public static function upsert_batch( $rows, $sync_token, $synced_at ) {

@@ -111,6 +111,11 @@ class UMS_DB_User extends UMS_DB_Base {
      * Lấy hồ sơ nhân sự theo tài khoản WordPress đang đăng nhập.
      */
     public static function get_by_wp_user_id( $user_id ) {
+        $user_id = absint( $user_id );
+        if ( $user_id <= 0 || ! self::table_exists() ) {
+            return null;
+        }
+
         $table       = self::table();
         $users_table = self::db()->users;
         $sql         = self::db()->prepare(
@@ -120,10 +125,128 @@ class UMS_DB_User extends UMS_DB_Base {
             LEFT JOIN $users_table wp_users ON profiles.user_id = wp_users.ID
             WHERE profiles.user_id = %d
             ",
-            absint( $user_id )
+            $user_id
         );
 
-        return self::db()->get_row( $sql, ARRAY_A );
+        $profile = self::db()->get_row( $sql, ARRAY_A );
+        if ( $profile ) {
+            return $profile;
+        }
+
+        // Older WordPress accounts may already exist in the organization chart
+        // but predate creation of the compatibility profile used by UMS modules.
+        if ( ! class_exists( 'UMS_DB_Organization' ) ) {
+            return null;
+        }
+
+        $organization = UMS_DB_Organization::get_by_wp_user_id( $user_id );
+        if ( ! $organization ) {
+            return null;
+        }
+
+        $result = self::ensure_from_organization( $user_id, $organization );
+        return is_wp_error( $result ) ? null : $result;
+    }
+
+    /**
+     * Create or refresh the internal UMS identity linked to an organization row.
+     *
+     * The organization chart remains the personnel source of truth. This row is
+     * retained because requests, approval snapshots and delegations use profile_id.
+     *
+     * @param int   $user_id      WordPress user ID.
+     * @param array $organization Organization row using database or sync field names.
+     * @return array|WP_Error
+     */
+    public static function ensure_from_organization( $user_id, $organization = array() ) {
+        $user_id = absint( $user_id );
+        if ( $user_id <= 0 ) {
+            return new WP_Error( 'ums_profile_user_invalid', 'Tài khoản WordPress không hợp lệ.' );
+        }
+        if ( ! self::table_exists() ) {
+            return new WP_Error( 'ums_profile_table_missing', 'Chưa có bảng liên kết hồ sơ UMS.' );
+        }
+
+        if ( empty( $organization ) && class_exists( 'UMS_DB_Organization' ) ) {
+            $organization = UMS_DB_Organization::get_by_wp_user_id( $user_id );
+        }
+        if ( ! is_array( $organization ) || empty( $organization ) ) {
+            return new WP_Error( 'ums_organization_not_found', 'Không tìm thấy nhân sự đang hoạt động tương ứng trong Sơ đồ tổ chức TVN.' );
+        }
+
+        $employee_code = trim( sanitize_text_field( (string) ( $organization['employee_no'] ?? $organization['emp_no'] ?? '' ) ) );
+        $date_joined    = self::normalize_profile_date( $organization['date_joined'] ?? '' );
+        if ( $employee_code === '' ) {
+            return new WP_Error( 'ums_profile_employee_code_missing', 'Dữ liệu Sơ đồ tổ chức chưa có mã nhân viên.' );
+        }
+        if ( $date_joined === '' ) {
+            return new WP_Error( 'ums_profile_date_joined_missing', $employee_code . ': ngày vào trong Sơ đồ tổ chức chưa hợp lệ.' );
+        }
+
+        $first_contract_date = self::normalize_profile_date( $organization['first_contract_date'] ?? '' );
+        $contract_type       = preg_match( '/^[MF]1/i', $employee_code )
+            ? 'Cho thuê lại lao động'
+            : ( $first_contract_date !== '' ? 'Hợp đồng lao động' : 'Tập nghề / thử việc' );
+        $factory             = sanitize_text_field( (string) ( $organization['factory'] ?? '' ) );
+
+        if ( class_exists( 'UMS_DB_Inventory' ) ) {
+            $factory_code = UMS_DB_Inventory::resolve_factory_code_for_employee(
+                array(
+                    'factory'     => $factory,
+                    'department'  => $organization['department'] ?? '',
+                    'cost_center' => $organization['cost_center'] ?? '',
+                )
+            );
+            $factory_options = UMS_DB_Inventory::get_factory_options();
+            $factory         = $factory_options[ $factory_code ] ?? $factory_code;
+        }
+
+        $profile_data = array(
+            'user_id'          => $user_id,
+            'employee_code'    => $employee_code,
+            'full_name'        => sanitize_text_field( (string) ( $organization['full_name'] ?? $organization['fname'] ?? $employee_code ) ),
+            'factory_location' => $factory,
+            'department'       => sanitize_text_field( (string) ( $organization['department'] ?? '' ) ),
+            'job_position'     => sanitize_text_field( (string) ( $organization['position'] ?? '' ) ),
+            'contract_type'    => $contract_type,
+            'date_joined'      => $date_joined,
+            'resignation_date' => null,
+        );
+
+        $existing = self::get_by_employee_code( $employee_code );
+        if ( $existing ) {
+            $saved = self::update( $existing['profile_id'], $profile_data );
+        } else {
+            $profile_data['gender']            = stripos( $employee_code, 'F' ) === 0 ? 'Nữ' : 'Nam';
+            $profile_data['transfer_date']     = null;
+            $profile_data['is_maternity']      = 0;
+            $profile_data['is_outdoor_worker'] = 0;
+            $saved = self::insert( $profile_data );
+        }
+
+        if ( false === $saved ) {
+            return new WP_Error( 'ums_profile_save_failed', $employee_code . ': không thể tạo liên kết hồ sơ UMS - ' . self::get_last_error() );
+        }
+
+        update_user_meta( $user_id, 'ums_employee_code', $employee_code );
+        update_user_meta( $user_id, 'ums_department', $profile_data['department'] );
+        update_user_meta( $user_id, 'ums_job_position', $profile_data['job_position'] );
+        update_user_meta( $user_id, 'ums_date_joined', $date_joined );
+        update_user_meta( $user_id, 'ums_first_contract_date', $first_contract_date );
+
+        return self::get_by_employee_code( $employee_code );
+    }
+
+    /**
+     * Normalize an organization date for the DATE columns in the profile table.
+     */
+    private static function normalize_profile_date( $value ) {
+        $value = trim( sanitize_text_field( (string) $value ) );
+        if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $value, $matches ) ) {
+            return '';
+        }
+
+        return checkdate( (int) $matches[2], (int) $matches[3], (int) $matches[1] ) ? $value : '';
     }
 
     /**

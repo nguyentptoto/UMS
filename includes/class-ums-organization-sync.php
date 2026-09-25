@@ -241,6 +241,9 @@ class UMS_Organization_Sync {
 
 		$display_name = ! empty( $row['fname'] ) ? sanitize_text_field( $row['fname'] ) : $user_login;
 		$user_id      = username_exists( $user_login );
+		if ( ! $user_id && is_email( $email ) ) {
+			$user_id = email_exists( $email );
+		}
 		$is_new       = ! $user_id;
 
 		if ( $is_new ) {
@@ -300,52 +303,8 @@ class UMS_Organization_Sync {
 	}
 
 	private static function sync_ums_profile_from_organization_row( $user_id, $row ) {
-		if ( ! UMS_DB_User::table_exists() ) {
-			return new WP_Error( 'organization_profile_table_missing', 'Chưa có bảng hồ sơ UMS để liên kết Sơ đồ tổ chức.' );
-		}
-		$employee_no = trim( sanitize_text_field( (string) ( $row['emp_no'] ?? '' ) ) );
-		$date_joined = sanitize_text_field( (string) ( $row['date_joined'] ?? '' ) );
-		if ( $employee_no === '' || $date_joined === '' ) {
-			return new WP_Error( 'organization_profile_incomplete', $employee_no . ': thiếu ngày vào nên chưa thể tạo hồ sơ UMS.' );
-		}
-
-		$first_contract_date = sanitize_text_field( (string) ( $row['first_contract_date'] ?? '' ) );
-		$employee_type = preg_match( '/^[MF]1/i', $employee_no )
-			? 'Cho thuê lại lao động'
-			: ( $first_contract_date !== '' ? 'Hợp đồng lao động' : 'Tập nghề / thử việc' );
-		$factory_code = UMS_DB_Inventory::resolve_factory_code_for_employee(
-			array(
-				'factory' => $row['factory'] ?? '',
-				'department' => $row['department'] ?? '',
-				'cost_center' => $row['cost_center'] ?? '',
-			)
-		);
-		$factory_name = UMS_DB_Inventory::get_factory_options()[ $factory_code ] ?? $factory_code;
-		$profile_data = array(
-			'user_id' => absint( $user_id ),
-			'employee_code' => $employee_no,
-			'full_name' => sanitize_text_field( (string) ( $row['fname'] ?? $employee_no ) ),
-			'factory_location' => $factory_name,
-			'department' => sanitize_text_field( (string) ( $row['department'] ?? '' ) ),
-			'job_position' => sanitize_text_field( (string) ( $row['position'] ?? '' ) ),
-			'contract_type' => $employee_type,
-			'date_joined' => $date_joined,
-			'resignation_date' => null,
-		);
-		$existing = UMS_DB_User::get_by_employee_code( $employee_no );
-		if ( $existing ) {
-			$result = UMS_DB_User::update( $existing['profile_id'], $profile_data );
-		} else {
-			$profile_data['gender'] = stripos( $employee_no, 'F' ) === 0 ? 'Nữ' : 'Nam';
-			$profile_data['transfer_date'] = null;
-			$profile_data['is_maternity'] = 0;
-			$profile_data['is_outdoor_worker'] = 0;
-			$result = UMS_DB_User::insert( $profile_data );
-		}
-
-		return false === $result
-			? new WP_Error( 'organization_profile_save_failed', $employee_no . ': không lưu được hồ sơ UMS - ' . UMS_DB_User::get_last_error() )
-			: true;
+		$result = UMS_DB_User::ensure_from_organization( $user_id, $row );
+		return is_wp_error( $result ) ? $result : true;
 	}
 
 	public static function get_config() {
