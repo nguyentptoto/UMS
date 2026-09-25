@@ -217,7 +217,7 @@ Các trang portal hiện có:
 - Luồng duyệt
 - Hồ sơ của tôi
 
-Module `Tạo yêu cầu` chỉ hiển thị cho user có `profile_id` nằm trong `approver_profile_ids` của bước duyệt `step_order = 1` thuộc phòng ban hiện tại. User ngoài bước 1 không thấy module này.
+Module `Tạo yêu cầu` hiển thị cho mọi tài khoản UMS đang hoạt động và có hồ sơ hợp lệ. Quyền tạo phiếu độc lập với chuỗi phê duyệt.
 
 Khi gửi hoặc sửa phiếu, plugin không tin giá, số lượng hay thông tin nhân sự từ HTML. Hệ thống đọc lại sản phẩm và tồn kho, gộp các dòng trùng, lấy Phòng/Nhóm/Cost center/Vị trí/Ngày vào từ Sơ đồ tổ chức TVN, chọn rule định mức phù hợp rồi kiểm tra tháng cấp, số lượng bắt buộc của CNV mới, số lượng đã dùng và tần suất trước khi lưu phiếu. Rule cấp ban đầu cho CNV mới vẫn hoạt động trong engine dù không hiển thị thành một bảng riêng trên trang quản trị định mức.
 
@@ -227,19 +227,19 @@ Admin có quyền vào portal và xem toàn bộ phiếu ở góc nhìn quản t
 
 Khi user hợp lệ bấm `Gửi duyệt`:
 
-1. Hệ thống kiểm tra quyền tạo phiếu theo bước 1 của luồng duyệt phòng ban.
+1. Hệ thống kiểm tra tài khoản người tạo đang hoạt động.
 2. Hệ thống kiểm tra định mức cấp phát hàng năm theo từng dòng đồng phục.
 3. Phiếu được lưu vào `wp_uniform_requests`.
-4. Trạng thái ban đầu chuyển tới bước duyệt tiếp theo sau bước 1, ví dụ `pending_step_2`. Nếu luồng chỉ có bước 1, phiếu có thể hoàn thành ngay theo logic hiện hành.
+4. Trạng thái ban đầu chuyển tới bước phê duyệt đầu tiên, ví dụ `pending_step_1`.
 5. Chi tiết đồng phục được lưu vào `wp_uniform_request_details`.
 6. Giá được tính lại từ dữ liệu kho: `base_price * quantity`.
-7. Hệ thống tạo log `submitted` trong `wp_uniform_approval_logs` tại `step_order = 1`.
+7. Hệ thống tạo log `submitted` trong `wp_uniform_approval_logs` tại `step_order = 0`, tách biệt khỏi các bước duyệt.
 8. Hệ thống ghi dòng `request_out` vào `wp_uniform_inventory_movements` để Admin nhìn thấy yêu cầu xuất kho theo từng vật tư.
-9. Hệ thống gửi email cho người duyệt ở bước tiếp theo nếu có.
+9. Hệ thống gửi email cho người duyệt ở bước 1.
 
 Luồng duyệt là chuỗi động theo bảng `wp_uniform_department_approval_flows`, không cố định 4 cấp.
 
-Người tạo phiếu ở bước 1 có thể sửa hoặc xóa phiếu khi phiếu chưa được bước tiếp theo duyệt. Phiếu bị từ chối có thể sửa hoặc xóa để gửi lại.
+Người tạo có thể sửa hoặc xóa phiếu khi bước duyệt đầu tiên chưa được duyệt. Phiếu bị từ chối có thể sửa hoặc xóa để gửi lại.
 
 ## Duyệt Phiếu Và Xuất Kho
 

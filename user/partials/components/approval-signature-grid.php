@@ -21,7 +21,7 @@ $approval_steps = array_values(
 	array_filter(
 		$signature_flows,
 		function ( $flow ) {
-			return (int) $flow['step_order'] > 1;
+			return (int) $flow['step_order'] > 0;
 		}
 	)
 );

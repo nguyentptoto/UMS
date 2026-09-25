@@ -2454,12 +2454,18 @@ class UMS_Admin {
 
 	private static function sanitize_approval_delegation_data( $raw ) {
 		$end_date = isset( $raw['end_date'] ) ? sanitize_text_field( $raw['end_date'] ) : '';
+		$factories = array();
+		if ( isset( $raw['factories'] ) && is_array( $raw['factories'] ) ) {
+			$factories = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $raw['factories'] ) ) ) );
+		} elseif ( ! empty( $raw['factory'] ) ) {
+			$factories = array( sanitize_text_field( $raw['factory'] ) );
+		}
 		return array(
 			'delegation_id'      => isset( $raw['delegation_id'] ) ? absint( $raw['delegation_id'] ) : 0,
 			'delegate_profile_id'=> isset( $raw['delegate_profile_id'] ) ? absint( $raw['delegate_profile_id'] ) : 0,
 			'role_code'          => isset( $raw['role_code'] ) ? UMS_DB_Approval_Delegation::normalize_role( $raw['role_code'] ) : '',
 			'department'         => isset( $raw['department'] ) ? sanitize_text_field( $raw['department'] ) : '',
-			'factory'            => isset( $raw['factory'] ) ? sanitize_text_field( $raw['factory'] ) : '',
+			'factory'            => $factories ? wp_json_encode( $factories ) : '',
 			'start_date'          => isset( $raw['start_date'] ) ? sanitize_text_field( $raw['start_date'] ) : '',
 			'end_date'            => $end_date !== '' ? $end_date : null,
 			'reason'              => isset( $raw['reason'] ) ? sanitize_text_field( $raw['reason'] ) : '',
@@ -3298,12 +3304,18 @@ class UMS_Admin {
 			'role_code' => '',
 			'department' => '',
 			'factory' => '',
+			'factories' => array(),
 			'start_date' => current_time( 'Y-m-d' ),
 			'end_date' => '',
 			'reason' => '',
 			'is_active' => 1,
 		);
-		return $delegation ? wp_parse_args( $delegation, $defaults ) : $defaults;
+		$values = $delegation ? wp_parse_args( $delegation, $defaults ) : $defaults;
+		if ( ! empty( $values['factory'] ) ) {
+			$decoded = json_decode( (string) $values['factory'], true );
+			$values['factories'] = is_array( $decoded ) ? array_values( $decoded ) : array( (string) $values['factory'] );
+		}
+		return $values;
 	}
 
     private static function get_default_product_category_values( $category = null ) {

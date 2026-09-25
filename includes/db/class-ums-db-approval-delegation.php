@@ -130,11 +130,11 @@ class UMS_DB_Approval_Delegation extends UMS_DB_Base {
 		$ids = array();
 		foreach ( $rows as $row ) {
 			$row_department = self::normalize_scope( $row['department'] );
-			$row_factory    = self::normalize_scope( $row['factory'] );
+			$row_factories  = self::decode_scope_values( $row['factory'] );
 			if ( $row_department !== '' && $row_department !== $department ) {
 				continue;
 			}
-			if ( $row_factory !== '' && $row_factory !== $factory ) {
+			if ( ! empty( $row_factories ) && ! in_array( $factory, $row_factories, true ) ) {
 				continue;
 			}
 			$ids[] = absint( $row['delegate_profile_id'] );
@@ -165,6 +165,16 @@ class UMS_DB_Approval_Delegation extends UMS_DB_Base {
 	private static function normalize_scope( $value ) {
 		$value = remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+	}
+
+	private static function decode_scope_values( $value ) {
+		$value = trim( (string) $value );
+		if ( $value === '' ) {
+			return array();
+		}
+		$decoded = json_decode( $value, true );
+		$values  = is_array( $decoded ) ? $decoded : preg_split( '/[,;]+/', $value );
+		return array_values( array_unique( array_filter( array_map( array( __CLASS__, 'normalize_scope' ), $values ) ) ) );
 	}
 
 	private static function formats_for( $data ) {

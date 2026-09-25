@@ -215,8 +215,16 @@ class UMS_User {
             );
         }
 
+		$flows               = self::apply_request_organization_scope( $flows, $target_profile );
 		$flow_snapshot       = self::build_approval_flow_snapshot( $flows, (int) $profile['profile_id'] );
 		$snapshot_flows      = json_decode( $flow_snapshot, true );
+		$initial_status      = self::get_initial_pending_status( is_array( $snapshot_flows ) ? $snapshot_flows : $flows );
+		if ( is_array( $snapshot_flows ) ) {
+			$flows = $snapshot_flows;
+		}
+		if ( $initial_status === 'completed' ) {
+			self::redirect_with_notice( $redirect_url, 'request_flow_missing' );
+		}
 		$request_data        = array(
             'creator_id'     => $current_user_id,
             'target_user_id' => (int) $target_profile['user_id'],
@@ -224,7 +232,7 @@ class UMS_User {
             'reason_type'    => $reason_type,
             'reason_detail'  => isset( $_POST['reason_detail'] ) ? sanitize_textarea_field( wp_unslash( $_POST['reason_detail'] ) ) : '',
             'payment_method' => $payment_method,
-			'current_status' => self::get_initial_pending_status( is_array( $snapshot_flows ) ? $snapshot_flows : $flows ),
+			'current_status' => $initial_status,
 			'approval_flow_snapshot' => $flow_snapshot,
         );
 
@@ -296,19 +304,20 @@ class UMS_User {
         }
 
         $step_order = self::get_status_step_order( $request['current_status'] );
-        if ( $step_order <= 1 ) {
+		if ( $step_order <= 0 ) {
             self::redirect_with_notice( $redirect_url, 'request_not_approvable', array( 'ums_page' => 'my-requests' ) );
         }
 
         $target_profile = UMS_DB_User::get_by_wp_user_id( (int) $request['target_user_id'] );
 		$department     = $target_profile ? self::get_department_for_profile( $target_profile ) : null;
-        $flows          = $department ? UMS_DB_Approval_Flow::get_all(
+		$flows          = $department ? UMS_DB_Approval_Flow::get_all(
             array(
                 'department_id' => (int) $department['department_id'],
                 'status'        => 'active',
 				'include_global'=> true,
             )
         ) : array();
+		$flows = self::apply_request_organization_scope( $flows, $target_profile );
 		$flows = self::get_request_approval_flows( $request, $flows );
 
         if ( ! self::can_approve_step( $profile, $flows, $step_order ) ) {
@@ -412,6 +421,7 @@ class UMS_User {
 				'include_global'=> true,
             )
         ) : array();
+		$approval_flows      = self::apply_request_organization_scope( $approval_flows, $profile );
         $approval_flows      = self::prepare_approval_flows( $approval_flows );
         $can_create_request = self::can_create_request( $profile, $approval_flows );
         $portal_pages       = self::get_portal_pages( $can_create_request );
@@ -671,33 +681,21 @@ class UMS_User {
         return $label !== '' ? $label : 'Sản phẩm #' . absint( $inventory['item_id'] );
     }
 
-    private static function can_create_request( $profile, $approval_flows ) {
-        if ( empty( $profile['profile_id'] ) || empty( $approval_flows ) ) {
-            return false;
-        }
-
-        $first_step = null;
-        foreach ( $approval_flows as $flow ) {
-            if ( (int) $flow['step_order'] === 1 ) {
-                $first_step = $flow;
-                break;
-            }
-        }
-
-        if ( ! $first_step ) {
-            return false;
-        }
-
-        $approver_ids = self::get_flow_approver_ids( $first_step );
-        if ( empty( $approver_ids ) ) {
-            return false;
-        }
-
-        return in_array( (int) $profile['profile_id'], $approver_ids, true );
+	private static function can_create_request( $profile, $approval_flows ) {
+		if ( empty( $profile['profile_id'] ) || ! empty( $profile['user_status'] ) ) {
+			return false;
+		}
+		if ( ! UMS_DB_Organization::table_exists() ) {
+			return true;
+		}
+		return null !== UMS_DB_Organization::get_by_wp_user_id(
+			absint( $profile['user_id'] ?? 0 ),
+			(string) ( $profile['employee_code'] ?? '' )
+		);
     }
 
     private static function get_initial_pending_status( $approval_flows ) {
-        $next_step = self::get_next_step_order( $approval_flows, 1 );
+		$next_step = self::get_next_step_order( $approval_flows, 0 );
         return $next_step ? 'pending_step_' . $next_step : 'completed';
     }
 
@@ -740,7 +738,7 @@ class UMS_User {
         }
 
         $step_order = self::get_status_step_order( $request['current_status'] );
-        if ( $step_order <= 1 ) {
+		if ( $step_order <= 0 ) {
             return false;
         }
 
@@ -753,15 +751,24 @@ class UMS_User {
 				'include_global'=> true,
             )
         ) : array();
+		$flows = self::apply_request_organization_scope( $flows, $target_profile );
 		$flows = self::get_request_approval_flows( $request, $flows );
 
         return self::can_approve_step( $profile, $flows, $step_order );
     }
 
-    private static function can_edit_created_request( $request, $creator_user_id ) {
-        return $request
-            && (int) $request['creator_id'] === (int) $creator_user_id
-            && in_array( (string) $request['current_status'], array( 'pending_step_2', 'rejected' ), true );
+	public static function can_edit_created_request( $request, $creator_user_id ) {
+		if ( ! $request || (int) $request['creator_id'] !== (int) $creator_user_id ) {
+			return false;
+		}
+		if ( (string) $request['current_status'] === 'rejected' ) {
+			return true;
+		}
+		$flows = self::get_request_approval_flows( $request );
+		if ( empty( $flows ) ) {
+			return (string) $request['current_status'] === 'pending_step_2';
+		}
+		return (string) $request['current_status'] === self::get_initial_pending_status( $flows );
     }
 
     private static function get_requests_waiting_for_profile_approval( $profile, $approval_flows ) {
@@ -771,7 +778,7 @@ class UMS_User {
 				$requests,
 				function ( $request ) use ( $profile, $approval_flows ) {
 					$step = self::get_status_step_order( $request['current_status'] );
-					return $step > 1 && self::can_approve_step( $profile, self::get_request_approval_flows( $request, $approval_flows ), $step );
+					return $step > 0 && self::can_approve_step( $profile, self::get_request_approval_flows( $request, $approval_flows ), $step );
 				}
 			)
 		);
@@ -785,7 +792,7 @@ class UMS_User {
         $statuses = array();
         foreach ( $approval_flows as $flow ) {
             $step = (int) $flow['step_order'];
-            if ( $step <= 1 || ! self::can_approve_step( $profile, $approval_flows, $step ) ) {
+			if ( $step <= 0 || ! self::can_approve_step( $profile, $approval_flows, $step ) ) {
                 continue;
             }
             $statuses[] = 'pending_step_' . $step;
@@ -919,7 +926,7 @@ class UMS_User {
         $can_approve_in_department = false;
         foreach ( $approval_flows as $flow ) {
             $step = (int) $flow['step_order'];
-            if ( $step > 1 && self::can_approve_step( $profile, $approval_flows, $step ) ) {
+			if ( $step > 0 && self::can_approve_step( $profile, $approval_flows, $step ) ) {
                 $can_approve_in_department = true;
                 break;
             }
@@ -1039,11 +1046,12 @@ class UMS_User {
 				'include_global'=> true,
             )
         );
+		$flows = self::apply_request_organization_scope( $flows, $target_profile );
 		$flows = self::get_request_approval_flows( $request, $flows );
 
         foreach ( $flows as $flow ) {
             $step = (int) $flow['step_order'];
-            if ( $step > 1 && self::can_approve_step( $profile, $flows, $step ) ) {
+			if ( $step > 0 && self::can_approve_step( $profile, $flows, $step ) ) {
                 return true;
             }
         }
@@ -1091,7 +1099,8 @@ class UMS_User {
             'request_reject_reason_required' => array( 'error', 'Vui lòng nhập lý do từ chối phiếu.' ),
             'request_stock_error'     => array( 'error', 'Không thể ghi nhận xuất kho. Vui lòng kiểm tra tồn kho hoặc lịch sử xuất kho của phiếu.' ),
             'request_invalid_profile' => array( 'error', 'Hồ sơ của bạn không hợp lệ hoặc tài khoản đang bị khóa.' ),
-            'request_no_permission'   => array( 'error', 'Bạn không thuộc bước 1 của luồng duyệt nên không có quyền tạo yêu cầu.' ),
+			'request_no_permission'   => array( 'error', 'Tài khoản của bạn không có quyền tạo yêu cầu.' ),
+			'request_flow_missing'    => array( 'error', 'Không tìm thấy bước duyệt hợp lệ cho phòng ban và nhà máy của phiếu. Vui lòng liên hệ quản trị viên luồng duyệt.' ),
             'request_invalid_target'  => array( 'error', 'Người nhận đồng phục không hợp lệ.' ),
             'request_empty_items'     => array( 'error', 'Vui lòng chọn ít nhất một dòng đồng phục hợp lệ.' ),
             'request_invalid_reason'  => array( 'error', 'Lý do yêu cầu không hợp lệ.' ),
@@ -1352,9 +1361,32 @@ class UMS_User {
         if ( empty( $approver_ids ) && ! empty( $flow['approver_profile_id'] ) ) {
             $approver_ids = array( $flow['approver_profile_id'] );
         }
+		if ( ! empty( $flow['resolver_factory'] ) ) {
+			$approver_ids = UMS_DB_Organization::filter_approval_profile_ids_by_factory( $approver_ids, $flow['resolver_factory'] );
+		}
 
         return array_values( array_unique( array_filter( array_map( 'absint', $approver_ids ) ) ) );
     }
+
+	/**
+	 * A shared template still resolves approvers inside the request's own factory.
+	 */
+	private static function apply_request_organization_scope( $approval_flows, $profile ) {
+		if ( ! is_array( $profile ) ) {
+			return (array) $approval_flows;
+		}
+		$organization = UMS_DB_Organization::get_by_wp_user_id(
+			absint( $profile['user_id'] ?? 0 ),
+			(string) ( $profile['employee_code'] ?? '' )
+		);
+		$factory = is_array( $organization ) ? trim( (string) ( $organization['factory'] ?? '' ) ) : '';
+		foreach ( (array) $approval_flows as $index => $flow ) {
+			if ( empty( $flow['resolver_factory'] ) ) {
+				$approval_flows[ $index ]['resolver_factory'] = $factory;
+			}
+		}
+		return (array) $approval_flows;
+	}
 
 	/**
 	 * Persist resolved people, not role rules, so an in-flight request keeps its original route.
@@ -1363,12 +1395,25 @@ class UMS_User {
 		$snapshot = array();
 		foreach ( (array) $approval_flows as $flow ) {
 			$resolved_ids = self::get_flow_approver_ids( $flow );
-			if ( (int) $flow['step_order'] > 1 && $creator_profile_id > 0 ) {
+			if ( (int) $flow['step_order'] > 0 && $creator_profile_id > 0 ) {
 				$resolved_ids = array_values( array_diff( $resolved_ids, array( absint( $creator_profile_id ) ) ) );
+				if ( empty( $resolved_ids ) && ( $flow['resolver_type'] ?? '' ) === 'position' ) {
+					$positions = json_decode( (string) ( $flow['approver_positions'] ?? '[]' ), true );
+					foreach ( is_array( $positions ) ? $positions : array() as $position ) {
+						$candidate_flow = $flow;
+						$candidate_flow['approver_positions'] = wp_json_encode( array( $position ) );
+						$candidate_ids = array_values( array_diff( self::get_flow_approver_ids( $candidate_flow ), array( absint( $creator_profile_id ) ) ) );
+						if ( ! empty( $candidate_ids ) ) {
+							$resolved_ids = $candidate_ids;
+							break;
+						}
+					}
+				}
 			}
 			$flow['resolver_type']        = 'specific';
 			$flow['approver_profile_ids'] = wp_json_encode( $resolved_ids );
 			$flow['approver_positions']   = '[]';
+			$flow['resolver_factory']     = '';
 			$snapshot[] = $flow;
 		}
 		return wp_json_encode( $snapshot );
@@ -1386,7 +1431,7 @@ class UMS_User {
 
     private static function send_approval_step_email( $request_id, $request, $approval_flows, $status, $portal_url ) {
         $step_order = self::get_status_step_order( $status );
-        if ( $step_order <= 1 ) {
+		if ( $step_order <= 0 ) {
             return;
         }
 

@@ -246,7 +246,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 			}
 		}
 
-		self::add_log( $request_id, 1, 0, 'submitted', 'Người ở bước 1 đã tạo phiếu và chuyển sang bước duyệt tiếp theo.' );
+		self::add_log( $request_id, 0, (int) $request['creator_id'], 'submitted', 'Người yêu cầu đã tạo phiếu và gửi vào luồng duyệt.' );
 		$wpdb->query( 'COMMIT' );
 		return $request_id;
 	}
@@ -269,7 +269,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 			return false;
 		}
 
-		self::add_log( $request_id, 1, 0, 'edited', 'Người tạo ở bước 1 đã chỉnh sửa phiếu khi đang chờ bước 2 duyệt.' );
+		self::add_log( $request_id, 0, (int) $request['creator_id'], 'edited', 'Người yêu cầu đã chỉnh sửa và gửi lại phiếu.' );
 		$wpdb->query( 'COMMIT' );
 		return true;
 	}

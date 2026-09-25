@@ -107,10 +107,12 @@ foreach ( $delegations as $delegation ) {
 		add_query_arg( array( 'action' => 'ums_delete_approval_delegation', 'delegation_id' => absint( $delegation['delegation_id'] ) ), admin_url( 'admin-post.php' ) ),
 		'ums_delete_approval_delegation_' . absint( $delegation['delegation_id'] )
 	);
+	$stored_factories = json_decode( (string) $delegation['factory'], true );
+	$stored_factories = is_array( $stored_factories ) ? $stored_factories : ( $delegation['factory'] !== '' ? array( $delegation['factory'] ) : array() );
 	$delegation_rows[] = array(
 		'employee'   => $person ? $person['employee_code'] . ' - ' . $person['full_name'] : 'Hồ sơ #' . $profile_id . ' (không còn hoạt động)',
 		'role'       => $delegation['role_code'],
-		'scope'      => ( $delegation['department'] !== '' ? $delegation['department'] : 'Tất cả phòng ban' ) . ' / ' . ( $delegation['factory'] !== '' ? $delegation['factory'] : 'Tất cả nhà máy' ),
+		'scope'      => ( $delegation['department'] !== '' ? $delegation['department'] : 'Tất cả phòng ban' ) . ' / ' . ( $stored_factories ? implode( ', ', $stored_factories ) : 'Tất cả nhà máy' ),
 		'effective'  => $delegation['start_date'] . ' - ' . ( $delegation['end_date'] ? $delegation['end_date'] : 'Không thời hạn' ),
 		'reason'     => $delegation['reason'],
 		'status'     => (int) $delegation['is_active'] === 1 ? 'Đang sử dụng' : 'Ngừng sử dụng',
@@ -179,6 +181,7 @@ $delegation_columns = array(
 
     <div class="ums-panel" id="ums-approval-flow-form">
         <h2><?php echo $is_editing ? 'Cập nhật bước duyệt' : 'Thêm bước duyệt'; ?></h2>
+		<p class="description">Bước 1 là bước phê duyệt đầu tiên sau khi người dùng gửi phiếu. Mẫu chung áp dụng cho mọi phòng ban và mọi nhà máy, nhưng người duyệt mặc định vẫn được giới hạn theo phòng ban và nhà máy của phiếu.</p>
 
         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ums-profile-form">
             <?php wp_nonce_field( 'ums_save_approval_flow' ); ?>
@@ -187,8 +190,8 @@ $delegation_columns = array(
             <input type="hidden" name="ums_approval_flow[flow_id]" value="<?php echo esc_attr( $form_values['flow_id'] ); ?>">
 
             <div class="ums-form-grid">
-                <label>
-                    <span>Phòng ban <b>*</b></span>
+				<label>
+					<span>Phạm vi phòng ban của mẫu <b>*</b></span>
                     <select name="ums_approval_flow[department_id]" required>
 						<option value="">Chọn phạm vi</option>
 						<option value="0" <?php selected( (int) $form_values['department_id'], 0 ); ?>>Tất cả phòng ban (mẫu chung)</option>
@@ -254,15 +257,6 @@ $delegation_columns = array(
 					</select>
 				</label>
 
-				<label data-ums-resolver-section="position">
-					<span>Nhà máy áp dụng vai trò</span>
-					<select name="ums_approval_flow[resolver_factory]">
-						<option value="">Tất cả nhà máy</option>
-						<?php foreach ( $factory_options as $factory ) : ?>
-							<option value="<?php echo esc_attr( $factory ); ?>" <?php selected( $form_values['resolver_factory'], $factory ); ?>><?php echo esc_html( $factory ); ?></option>
-						<?php endforeach; ?>
-					</select>
-				</label>
             </div>
 			<datalist id="ums-position-options">
 				<?php foreach ( $position_options as $position ) : ?><option value="<?php echo esc_attr( $position ); ?>"><?php endforeach; ?>
@@ -332,12 +326,13 @@ $delegation_columns = array(
 				</label>
 				<label>
 					<span>Nhà máy</span>
-					<select name="ums_approval_delegation[factory]">
-						<option value="">Tất cả nhà máy</option>
+					<select name="ums_approval_delegation[factories][]" multiple size="4">
+						<option value="" <?php selected( empty( $delegation_values['factories'] ) ); ?>>Tất cả nhà máy</option>
 						<?php foreach ( $factory_options as $factory ) : ?>
-							<option value="<?php echo esc_attr( $factory ); ?>" <?php selected( $delegation_values['factory'], $factory ); ?>><?php echo esc_html( $factory ); ?></option>
+							<option value="<?php echo esc_attr( $factory ); ?>" <?php selected( in_array( $factory, $delegation_values['factories'], true ) ); ?>><?php echo esc_html( $factory ); ?></option>
 						<?php endforeach; ?>
 					</select>
+					<p class="description">Giữ Ctrl để chọn nhiều nhà máy.</p>
 				</label>
 				<label><span>Ngày bắt đầu <b>*</b></span><input type="date" name="ums_approval_delegation[start_date]" value="<?php echo esc_attr( $delegation_values['start_date'] ); ?>" required></label>
 				<label><span>Ngày kết thúc</span><input type="date" name="ums_approval_delegation[end_date]" value="<?php echo esc_attr( $delegation_values['end_date'] ); ?>"></label>

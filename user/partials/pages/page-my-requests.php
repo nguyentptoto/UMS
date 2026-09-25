@@ -51,7 +51,7 @@ $owner_action = function ( $request ) use ( $portal_url, $view_link ) {
 	$request_id = absint( $request['request_id'] );
 	$html       = $view_link( $request_id );
 
-	if ( in_array( (string) $request['current_status'], array( 'pending_step_2', 'rejected' ), true ) ) {
+	if ( UMS_User::can_edit_created_request( $request, get_current_user_id() ) ) {
 		$html .= '<a class="ums-user-link-button" href="' . esc_url( add_query_arg( array( 'ums_page' => 'request', 'edit_request_id' => $request_id ), $portal_url ) ) . '">Sửa</a>';
 		$html .= '<a class="ums-user-link-button" href="' . esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'ums_delete_uniform_request', 'request_id' => $request_id, 'portal_url' => $portal_url ), admin_url( 'admin-post.php' ) ), 'ums_delete_uniform_request_' . $request_id ) ) . '" onclick="return window.confirm(\'Xóa phiếu #' . esc_js( $request_id ) . '?\');">Xóa</a>';
 	}

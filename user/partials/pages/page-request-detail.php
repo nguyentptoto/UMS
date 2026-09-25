@@ -333,7 +333,7 @@ include UMS_PLUGIN_DIR . 'user/partials/components/approval-signature-grid.php';
 
 <div class="ums-user-actions">
 	<a class="ums-user-button ums-user-button-light" href="<?php echo esc_url( add_query_arg( 'ums_page', 'my-requests', $portal_url ) ); ?>">Quay lại danh sách</a>
-	<?php if ( (int) $detail_request['creator_id'] === get_current_user_id() && in_array( (string) $detail_request['current_status'], array( 'pending_step_2', 'rejected' ), true ) ) : ?>
+	<?php if ( UMS_User::can_edit_created_request( $detail_request, get_current_user_id() ) ) : ?>
 		<a class="ums-user-button" href="<?php echo esc_url( add_query_arg( array( 'ums_page' => 'request', 'edit_request_id' => absint( $detail_request['request_id'] ) ), $portal_url ) ); ?>">Sửa phiếu</a>
 		<a
 			class="ums-user-button ums-user-button-danger"

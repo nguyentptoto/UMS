@@ -203,6 +203,21 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		return array();
 	}
 
+	public static function filter_approval_profile_ids_by_factory( $profile_ids, $factory ) {
+		$profile_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $profile_ids ) ) ) );
+		$factory_key = self::normalize_approval_scope( $factory );
+		if ( empty( $profile_ids ) || $factory_key === '' ) {
+			return $profile_ids;
+		}
+		$allowed = array();
+		foreach ( self::get_approval_options() as $employee ) {
+			if ( in_array( absint( $employee['profile_id'] ), $profile_ids, true ) && self::normalize_approval_scope( $employee['factory'] ) === $factory_key ) {
+				$allowed[] = absint( $employee['profile_id'] );
+			}
+		}
+		return array_values( array_unique( $allowed ) );
+	}
+
 	private static function normalize_approval_scope( $value ) {
 		$value = remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
