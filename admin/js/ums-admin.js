@@ -24,6 +24,23 @@
         });
     }
 
+	function initializeApprovalResolverFields() {
+		var $resolver = $('#ums-approval-resolver-type');
+		if (!$resolver.length) {
+			return;
+		}
+
+		function refreshResolverFields() {
+			var mode = $resolver.val() === 'position' ? 'position' : 'specific';
+			$('[data-ums-resolver-section]').each(function () {
+				$(this).prop('hidden', $(this).data('ums-resolver-section') !== mode);
+			});
+		}
+
+		$resolver.on('change', refreshResolverFields);
+		refreshResolverFields();
+	}
+
     function initializeOrganizationGrid() {
         $('.ums-jqx-remote-grid').each(function () {
             var $grid = $(this);
@@ -289,6 +306,7 @@
 
     $(function () {
         initializeApprovalStepOrder();
+		initializeApprovalResolverFields();
         initializeOrganizationGrid();
         initializeSheetSyncBridge();
 

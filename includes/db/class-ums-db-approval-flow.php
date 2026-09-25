@@ -15,6 +15,7 @@ class UMS_DB_Approval_Flow extends UMS_DB_Base {
         $defaults = array(
             'department_id' => '',
             'status' => '',
+			'include_global' => false,
         );
         $args = wp_parse_args( $args, $defaults );
 
@@ -22,7 +23,7 @@ class UMS_DB_Approval_Flow extends UMS_DB_Base {
         $params = array();
 
         if ( $args['department_id'] !== '' ) {
-            $where[]  = 'flow.department_id = %d';
+			$where[]  = ! empty( $args['include_global'] ) ? '(flow.department_id = %d OR flow.department_id = 0)' : 'flow.department_id = %d';
             $params[] = absint( $args['department_id'] );
         }
 
@@ -42,7 +43,26 @@ class UMS_DB_Approval_Flow extends UMS_DB_Base {
             $sql = self::db()->prepare( $sql, $params );
         }
 
-        return self::db()->get_results( $sql, ARRAY_A );
+		$rows = self::db()->get_results( $sql, ARRAY_A );
+		if ( empty( $args['include_global'] ) || $args['department_id'] === '' ) {
+			return $rows;
+		}
+
+		$department = UMS_DB_Department::get_by_id( absint( $args['department_id'] ) );
+		$by_step = array();
+		foreach ( $rows as $row ) {
+			$step = (int) $row['step_order'];
+			$is_specific = (int) $row['department_id'] === absint( $args['department_id'] );
+			if ( ! isset( $by_step[ $step ] ) || $is_specific ) {
+				if ( (int) $row['department_id'] === 0 && $department ) {
+					$row['department_name'] = $department['department_name'];
+					$row['department_code'] = $department['department_code'];
+				}
+				$by_step[ $step ] = $row;
+			}
+		}
+		ksort( $by_step, SORT_NUMERIC );
+		return array_values( $by_step );
     }
 
     public static function get_by_id( $flow_id ) {
@@ -91,7 +111,11 @@ class UMS_DB_Approval_Flow extends UMS_DB_Base {
             'department_id'       => '%d',
             'step_order'          => '%d',
             'step_name'           => '%s',
+			'resolver_type'       => '%s',
             'approver_profile_ids'=> '%s',
+			'approver_positions'  => '%s',
+			'resolver_department' => '%s',
+			'resolver_factory'    => '%s',
             'is_active'           => '%d',
         );
     }

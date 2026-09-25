@@ -81,6 +81,7 @@ function run_tvn_uniform_management() {
     // 1. Nạp Tầng Database Layer (Theo kiến trúc mô-đun phân tách)
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-base.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-approval-flow.php';
+	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-approval-delegation.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-department.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-position.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-factory-location.php';
@@ -120,6 +121,7 @@ function run_tvn_uniform_management() {
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-uniform-material-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-calculator.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-export.php';
+	UMS_DB_Approval_Delegation::ensure_schema();
     UMS_Sheet_User_Sync::init();
     UMS_Organization_Sync::init();
     UMS_Auto_Sync_Bridge::init();

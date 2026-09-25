@@ -162,6 +162,53 @@ class UMS_DB_Organization extends UMS_DB_Base {
 	}
 
 	/**
+	 * Resolve approvers from current organization positions and temporary delegations.
+	 */
+	public static function resolve_approval_profile_ids( $positions, $department = '', $factory = '' ) {
+		$positions = array_values( array_unique( array_filter( array_map( array( 'UMS_DB_Approval_Delegation', 'normalize_role' ), (array) $positions ) ) ) );
+		if ( empty( $positions ) ) {
+			return array();
+		}
+
+		$department_key = self::normalize_approval_scope( $department );
+		$factory_key    = self::normalize_approval_scope( $factory );
+		$options = self::get_approval_options();
+		$active_profile_ids = array_map( 'absint', array_column( $options, 'profile_id' ) );
+
+		// Position order is priority order: use the first role that has at least one eligible person.
+		foreach ( $positions as $position_role ) {
+			$ids = array();
+			foreach ( $options as $employee ) {
+				$position = UMS_DB_Approval_Delegation::normalize_role( $employee['job_position'] );
+				if ( $position !== $position_role ) {
+					continue;
+				}
+				if ( $department_key !== '' && self::normalize_approval_scope( $employee['department'] ) !== $department_key ) {
+					continue;
+				}
+				if ( $factory_key !== '' && self::normalize_approval_scope( $employee['factory'] ) !== $factory_key ) {
+					continue;
+				}
+				$ids[] = absint( $employee['profile_id'] );
+			}
+
+			$delegated_ids = UMS_DB_Approval_Delegation::get_active_profile_ids( array( $position_role ), $department, $factory );
+			$ids = array_merge( $ids, array_values( array_intersect( $delegated_ids, $active_profile_ids ) ) );
+			$ids = array_values( array_unique( array_filter( $ids ) ) );
+			if ( ! empty( $ids ) ) {
+				return $ids;
+			}
+		}
+
+		return array();
+	}
+
+	private static function normalize_approval_scope( $value ) {
+		$value = remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) );
+		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+	}
+
+	/**
 	 * Lấy nhân sự phục vụ báo cáo định mức, không áp dụng phân trang giao diện.
 	 */
 	public static function get_for_allowance_export( $args = array() ) {

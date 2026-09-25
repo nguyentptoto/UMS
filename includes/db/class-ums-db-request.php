@@ -201,7 +201,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 		$inserted = $wpdb->insert(
 			self::table(),
 			$request,
-			array( '%d', '%d', '%s', '%d', '%s', '%d', '%s' )
+			self::request_formats( $request )
 		);
 
 		if ( ! $inserted ) {
@@ -260,7 +260,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 			self::table(),
 			$request,
 			array( 'request_id' => $request_id ),
-			array( '%d', '%d', '%s', '%d', '%s', '%d', '%s' ),
+			self::request_formats( $request ),
 			array( '%d' )
 		);
 
@@ -272,6 +272,16 @@ class UMS_DB_Request extends UMS_DB_Base {
 		self::add_log( $request_id, 1, 0, 'edited', 'Người tạo ở bước 1 đã chỉnh sửa phiếu khi đang chờ bước 2 duyệt.' );
 		$wpdb->query( 'COMMIT' );
 		return true;
+	}
+
+	private static function request_formats( $request ) {
+		$integer_fields = array( 'creator_id', 'target_user_id', 'reason_type', 'payment_method' );
+		return array_map(
+			function ( $field ) use ( $integer_fields ) {
+				return in_array( $field, $integer_fields, true ) ? '%d' : '%s';
+			},
+			array_keys( $request )
+		);
 	}
 
 	private static function replace_details( $request_id, $details ) {

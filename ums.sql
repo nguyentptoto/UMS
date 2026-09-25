@@ -62,7 +62,11 @@ CREATE TABLE `wp_uniform_department_approval_flows` (
     `department_id` INT NOT NULL,
     `step_order` INT NOT NULL,
     `step_name` VARCHAR(150) NOT NULL,
+	`resolver_type` VARCHAR(20) NOT NULL DEFAULT 'specific',
     `approver_profile_ids` JSON NOT NULL,
+	`approver_positions` TEXT NULL,
+	`resolver_department` VARCHAR(150) NOT NULL DEFAULT '',
+	`resolver_factory` VARCHAR(150) NOT NULL DEFAULT '',
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -70,6 +74,25 @@ CREATE TABLE `wp_uniform_department_approval_flows` (
     UNIQUE KEY `idx_department_step` (`department_id`, `step_order`),
     KEY `idx_department_id` (`department_id`),
     KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 5B. BANG UY QUYEN / VAI TRO DUYET THAY THE
+CREATE TABLE `wp_uniform_approval_delegations` (
+    `delegation_id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `delegate_profile_id` BIGINT(20) UNSIGNED NOT NULL,
+    `role_code` VARCHAR(50) NOT NULL,
+    `department` VARCHAR(150) NOT NULL DEFAULT '',
+    `factory` VARCHAR(150) NOT NULL DEFAULT '',
+    `start_date` DATE NOT NULL,
+    `end_date` DATE DEFAULT NULL,
+    `reason` VARCHAR(255) NOT NULL DEFAULT '',
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`delegation_id`),
+    KEY `idx_delegate` (`delegate_profile_id`),
+    KEY `idx_role_scope` (`role_code`, `department`, `factory`),
+    KEY `idx_effective` (`is_active`, `start_date`, `end_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. BANG HO SO NHAN SU MO RONG
@@ -365,6 +388,7 @@ CREATE TABLE `wp_uniform_requests` (
     `reason_detail` TEXT DEFAULT NULL,
     `payment_method` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0: Mien phi, 1: Khau tru luong, 2: Tien mat/Chuyen khoan',
     `current_status` VARCHAR(50) NOT NULL DEFAULT 'pending_step_1',
+	`approval_flow_snapshot` LONGTEXT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`request_id`),

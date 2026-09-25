@@ -18,6 +18,8 @@ class UMS_Admin {
         add_action( 'admin_post_ums_delete_contract_type', array( __CLASS__, 'handle_delete_contract_type' ) );
         add_action( 'admin_post_ums_save_approval_flow', array( __CLASS__, 'handle_save_approval_flow' ) );
         add_action( 'admin_post_ums_delete_approval_flow', array( __CLASS__, 'handle_delete_approval_flow' ) );
+		add_action( 'admin_post_ums_save_approval_delegation', array( __CLASS__, 'handle_save_approval_delegation' ) );
+		add_action( 'admin_post_ums_delete_approval_delegation', array( __CLASS__, 'handle_delete_approval_delegation' ) );
         add_action( 'admin_post_ums_save_product_category', array( __CLASS__, 'handle_save_product_category' ) );
         add_action( 'admin_post_ums_delete_product_category', array( __CLASS__, 'handle_delete_product_category' ) );
         add_action( 'admin_post_ums_save_inventory_item', array( __CLASS__, 'handle_save_inventory_item' ) );
@@ -378,6 +380,12 @@ class UMS_Admin {
         $approval_flows = UMS_DB_Approval_Flow::get_all( $filters );
 		$departments    = UMS_DB_Department::get_active_from_organization();
 		$approvers      = UMS_DB_Organization::get_approval_options();
+		$position_options = UMS_DB_Organization::get_distinct_values( 'position' );
+		$factory_options  = UMS_DB_Organization::get_distinct_values( 'factory' );
+		$delegations      = UMS_DB_Approval_Delegation::get_all();
+		$edit_delegation_id = isset( $_GET['edit_delegation_id'] ) ? absint( $_GET['edit_delegation_id'] ) : 0;
+		$editing_delegation = $edit_delegation_id ? UMS_DB_Approval_Delegation::get_by_id( $edit_delegation_id ) : null;
+		$delegation_values  = self::get_default_approval_delegation_values( $editing_delegation );
         $notice         = self::get_notice();
         $form_values    = self::get_default_approval_flow_values( $editing_flow );
 
@@ -1385,6 +1393,7 @@ class UMS_Admin {
         $flow_id = $data['flow_id'];
         unset( $data['flow_id'] );
         $data['approver_profile_ids'] = wp_json_encode( $data['approver_profile_ids'] );
+		$data['approver_positions']   = wp_json_encode( $data['approver_positions'] );
 
         $result = $is_edit
             ? UMS_DB_Approval_Flow::update( $flow_id, $data )
@@ -1419,6 +1428,45 @@ class UMS_Admin {
         $result = UMS_DB_Approval_Flow::delete( $flow_id );
         self::redirect_to_approval_flows( array( 'notice' => $result === false ? 'db_error' : 'approval_flow_deleted' ) );
     }
+
+	/**
+	 * Save a temporary role assignment used as an approval backup.
+	 */
+	public static function handle_save_approval_delegation() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		check_admin_referer( 'ums_save_approval_delegation' );
+		$raw     = isset( $_POST['ums_approval_delegation'] ) && is_array( $_POST['ums_approval_delegation'] ) ? wp_unslash( $_POST['ums_approval_delegation'] ) : array();
+		$data    = self::sanitize_approval_delegation_data( $raw );
+		$is_edit = ! empty( $raw['is_edit'] );
+		$errors  = self::validate_approval_delegation_data( $data, $is_edit );
+		if ( $errors ) {
+			self::redirect_to_approval_flows( array(
+				'notice' => 'validation_error',
+				'notice_extra' => implode( ' ', $errors ),
+				'edit_delegation_id' => $is_edit ? $data['delegation_id'] : null,
+			) );
+		}
+
+		$id = $data['delegation_id'];
+		unset( $data['delegation_id'] );
+		$result = $is_edit ? UMS_DB_Approval_Delegation::update( $id, $data ) : UMS_DB_Approval_Delegation::insert( $data );
+		if ( false === $result ) {
+			self::redirect_to_approval_flows( array( 'notice' => 'db_error', 'notice_extra' => UMS_DB_Approval_Delegation::get_last_error() ) );
+		}
+		self::redirect_to_approval_flows( array( 'notice' => $is_edit ? 'approval_delegation_updated' : 'approval_delegation_created' ) );
+	}
+
+	public static function handle_delete_approval_delegation() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		$id = isset( $_GET['delegation_id'] ) ? absint( $_GET['delegation_id'] ) : 0;
+		check_admin_referer( 'ums_delete_approval_delegation_' . $id );
+		$result = $id > 0 ? UMS_DB_Approval_Delegation::delete( $id ) : false;
+		self::redirect_to_approval_flows( array( 'notice' => false === $result ? 'db_error' : 'approval_delegation_deleted' ) );
+	}
 
     /**
      * Lưu danh mục sản phẩm cha-con.
@@ -2386,16 +2434,38 @@ class UMS_Admin {
             $approver_ids = array( absint( $raw['approver_profile_id'] ) );
         }
         $approver_ids = array_values( array_unique( array_filter( $approver_ids ) ) );
+		$positions = isset( $raw['approver_positions'] ) ? preg_split( '/[,;\r\n]+/', (string) $raw['approver_positions'] ) : array();
+		$positions = array_values( array_unique( array_filter( array_map( array( 'UMS_DB_Approval_Delegation', 'normalize_role' ), $positions ) ) ) );
+		$resolver_type = isset( $raw['resolver_type'] ) && $raw['resolver_type'] === 'position' ? 'position' : 'specific';
 
         return array(
             'flow_id'             => isset( $raw['flow_id'] ) ? absint( $raw['flow_id'] ) : 0,
-            'department_id'       => isset( $raw['department_id'] ) ? absint( $raw['department_id'] ) : 0,
+			'department_id'       => isset( $raw['department_id'] ) && $raw['department_id'] !== '' ? absint( $raw['department_id'] ) : -1,
             'step_order'          => isset( $raw['step_order'] ) ? absint( $raw['step_order'] ) : 0,
             'step_name'           => isset( $raw['step_name'] ) ? sanitize_text_field( $raw['step_name'] ) : '',
+			'resolver_type'       => $resolver_type,
             'approver_profile_ids'=> $approver_ids,
+			'approver_positions'  => $positions,
+			'resolver_department' => isset( $raw['resolver_department'] ) ? sanitize_text_field( $raw['resolver_department'] ) : '',
+			'resolver_factory'    => isset( $raw['resolver_factory'] ) ? sanitize_text_field( $raw['resolver_factory'] ) : '',
             'is_active'           => ! empty( $raw['is_active'] ) ? 1 : 0,
         );
     }
+
+	private static function sanitize_approval_delegation_data( $raw ) {
+		$end_date = isset( $raw['end_date'] ) ? sanitize_text_field( $raw['end_date'] ) : '';
+		return array(
+			'delegation_id'      => isset( $raw['delegation_id'] ) ? absint( $raw['delegation_id'] ) : 0,
+			'delegate_profile_id'=> isset( $raw['delegate_profile_id'] ) ? absint( $raw['delegate_profile_id'] ) : 0,
+			'role_code'          => isset( $raw['role_code'] ) ? UMS_DB_Approval_Delegation::normalize_role( $raw['role_code'] ) : '',
+			'department'         => isset( $raw['department'] ) ? sanitize_text_field( $raw['department'] ) : '',
+			'factory'            => isset( $raw['factory'] ) ? sanitize_text_field( $raw['factory'] ) : '',
+			'start_date'          => isset( $raw['start_date'] ) ? sanitize_text_field( $raw['start_date'] ) : '',
+			'end_date'            => $end_date !== '' ? $end_date : null,
+			'reason'              => isset( $raw['reason'] ) ? sanitize_text_field( $raw['reason'] ) : '',
+			'is_active'           => ! empty( $raw['is_active'] ) ? 1 : 0,
+		);
+	}
 
     private static function sanitize_product_category_data( $raw ) {
         return array(
@@ -2643,7 +2713,7 @@ class UMS_Admin {
         }
 
 		$organization_department_ids = array_map( 'absint', array_column( UMS_DB_Department::get_active_from_organization(), 'department_id' ) );
-		if ( $data['department_id'] <= 0 || ! in_array( $data['department_id'], $organization_department_ids, true ) ) {
+		if ( $data['department_id'] < 0 || ( $data['department_id'] > 0 && ! in_array( $data['department_id'], $organization_department_ids, true ) ) ) {
             $errors[] = 'Vui lòng chọn phòng ban hợp lệ.';
         }
 
@@ -2655,16 +2725,21 @@ class UMS_Admin {
             $errors[] = 'Vui lòng nhập tên bước duyệt.';
         }
 
-        if ( empty( $data['approver_profile_ids'] ) ) {
-            $errors[] = 'Vui lòng chọn ít nhất một người duyệt.';
-        }
-
-        foreach ( $data['approver_profile_ids'] as $approver_profile_id ) {
-			if ( $approver_profile_id <= 0 || ! UMS_DB_Organization::get_approval_option_by_profile_id( $approver_profile_id ) ) {
-				$errors[] = 'Người duyệt không còn hoạt động trên Sơ đồ tổ chức hoặc chưa có tài khoản UMS hợp lệ.';
-                break;
-            }
-        }
+		if ( $data['resolver_type'] === 'position' ) {
+			if ( empty( $data['approver_positions'] ) ) {
+				$errors[] = 'Vui lòng nhập ít nhất một chức danh duyệt.';
+			}
+		} else {
+			if ( empty( $data['approver_profile_ids'] ) ) {
+				$errors[] = 'Vui lòng chọn ít nhất một người duyệt.';
+			}
+			foreach ( $data['approver_profile_ids'] as $approver_profile_id ) {
+				if ( $approver_profile_id <= 0 || ! UMS_DB_Organization::get_approval_option_by_profile_id( $approver_profile_id ) ) {
+					$errors[] = 'Người duyệt không còn hoạt động trên Sơ đồ tổ chức hoặc chưa có tài khoản UMS hợp lệ.';
+					break;
+				}
+			}
+		}
 
         if ( UMS_DB_Approval_Flow::step_order_exists( $data['department_id'], $data['step_order'], $is_edit ? $data['flow_id'] : 0 ) ) {
             $errors[] = 'Phòng ban này đã có bước duyệt với thứ tự đã chọn.';
@@ -2672,6 +2747,26 @@ class UMS_Admin {
 
         return array_unique( $errors );
     }
+
+	private static function validate_approval_delegation_data( $data, $is_edit ) {
+		$errors = array();
+		if ( $is_edit && $data['delegation_id'] <= 0 ) {
+			$errors[] = 'Không tìm thấy cấu hình ủy quyền cần cập nhật.';
+		}
+		if ( ! UMS_DB_Organization::get_approval_option_by_profile_id( $data['delegate_profile_id'] ) ) {
+			$errors[] = 'Người nhận ủy quyền không còn hoạt động hoặc chưa có tài khoản UMS.';
+		}
+		if ( $data['role_code'] === '' ) {
+			$errors[] = 'Vui lòng chọn vai trò duyệt thay.';
+		}
+		if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $data['start_date'] ) ) {
+			$errors[] = 'Ngày bắt đầu không hợp lệ.';
+		}
+		if ( $data['end_date'] && ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $data['end_date'] ) || $data['end_date'] < $data['start_date'] ) ) {
+			$errors[] = 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.';
+		}
+		return array_unique( $errors );
+	}
 
     private static function validate_product_category_data( $data, $is_edit ) {
         $errors = array();
@@ -3172,10 +3267,14 @@ class UMS_Admin {
     private static function get_default_approval_flow_values( $flow = null ) {
         $defaults = array(
             'flow_id'             => 0,
-            'department_id'       => 0,
+			'department_id'       => -1,
             'step_order'          => 1,
             'step_name'           => '',
+			'resolver_type'       => 'specific',
             'approver_profile_ids'=> array(),
+			'approver_positions'  => array(),
+			'resolver_department' => '',
+			'resolver_factory'    => '',
             'is_active'           => 1,
         );
 
@@ -3184,9 +3283,28 @@ class UMS_Admin {
             $decoded = json_decode( $values['approver_profile_ids'], true );
             $values['approver_profile_ids'] = is_array( $decoded ) ? array_map( 'absint', $decoded ) : array();
         }
+		if ( is_string( $values['approver_positions'] ) ) {
+			$decoded = json_decode( $values['approver_positions'], true );
+			$values['approver_positions'] = is_array( $decoded ) ? $decoded : array();
+		}
 
         return $values;
     }
+
+	private static function get_default_approval_delegation_values( $delegation = null ) {
+		$defaults = array(
+			'delegation_id' => 0,
+			'delegate_profile_id' => 0,
+			'role_code' => '',
+			'department' => '',
+			'factory' => '',
+			'start_date' => current_time( 'Y-m-d' ),
+			'end_date' => '',
+			'reason' => '',
+			'is_active' => 1,
+		);
+		return $delegation ? wp_parse_args( $delegation, $defaults ) : $defaults;
+	}
 
     private static function get_default_product_category_values( $category = null ) {
         $defaults = array(
@@ -3370,6 +3488,9 @@ class UMS_Admin {
             'approval_flow_created' => array( 'success', 'Đã thêm bước duyệt mới.' ),
             'approval_flow_updated' => array( 'success', 'Đã cập nhật bước duyệt.' ),
             'approval_flow_deleted' => array( 'success', 'Đã xóa bước duyệt.' ),
+			'approval_delegation_created' => array( 'success', 'Đã thêm quyền duyệt thay thế.' ),
+			'approval_delegation_updated' => array( 'success', 'Đã cập nhật quyền duyệt thay thế.' ),
+			'approval_delegation_deleted' => array( 'success', 'Đã xóa quyền duyệt thay thế.' ),
             'product_category_created' => array( 'success', 'Đã thêm danh mục sản phẩm mới.' ),
             'product_category_updated' => array( 'success', 'Đã cập nhật danh mục sản phẩm.' ),
             'product_category_deleted' => array( 'success', 'Đã xóa danh mục sản phẩm.' ),
