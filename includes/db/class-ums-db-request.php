@@ -469,7 +469,8 @@ class UMS_DB_Request extends UMS_DB_Base {
 
 		$where  = array(
 			'requests.target_user_id = %d',
-			"requests.current_status <> 'rejected'",
+			"requests.current_status = 'completed'",
+			'requests.reason_type IN (1, 2)',
 			'requests.created_at >= %s',
 			'requests.created_at <= %s',
 		);

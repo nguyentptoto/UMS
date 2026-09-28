@@ -550,6 +550,7 @@ class UMS_Employee_Allowance_Report {
 		$times       = max( 1, absint( $rule['frequency_count'] ?? 1 ) );
 		$period_end  = strtotime( date( 'Y-m-d 23:59:59', strtotime( $evaluation_date ) ) );
 		$period_start = strtotime( date( 'Y-m-d 00:00:00', strtotime( '-' . $years . ' years', strtotime( $evaluation_date ) ) ) );
+		$advance_start = self::get_advance_period_start( $rule, $evaluation_date, $period_start );
 		$employee_key = strtoupper( trim( (string) $employee_no ) );
 		$item_ids = $rule_item_ids[ absint( $rule['rule_id'] ) ] ?? array();
 		$used_quantity = 0;
@@ -558,6 +559,12 @@ class UMS_Employee_Allowance_Report {
 		foreach ( $item_ids as $item_id ) {
 			$events = $usage_index[ $employee_key ][ $item_id ] ?? array();
 			foreach ( $events as $event ) {
+				if ( ( $event['type'] ?? 'regular' ) === 'advance' ) {
+					if ( $event['timestamp'] >= $advance_start && $event['timestamp'] <= $period_end ) {
+						$used_quantity += absint( $event['quantity'] );
+					}
+					continue;
+				}
 				if ( $event['timestamp'] >= $month_start && $event['timestamp'] <= $month_end ) {
 					$used_quantity += absint( $event['quantity'] );
 				}
@@ -568,6 +575,38 @@ class UMS_Employee_Allowance_Report {
 		}
 		$used_times = count( $used_events );
 		return $used_times >= $times ? 0 : max( 0, absint( $quota ) - $used_quantity );
+	}
+
+	/**
+	 * An advance is deducted once, from the next configured periodic issue.
+	 */
+	private static function get_advance_period_start( $rule, $evaluation_date, $fallback_timestamp ) {
+		$quantities = json_decode( (string) ( $rule['monthly_quantities'] ?? '' ), true );
+		$active_months = array();
+		foreach ( is_array( $quantities ) ? $quantities : array() as $month => $quantity ) {
+			$month = absint( $month );
+			if ( $month >= 1 && $month <= 12 && absint( $quantity ) > 0 ) {
+				$active_months[] = $month;
+			}
+		}
+		$active_months = array_values( array_unique( $active_months ) );
+		if ( empty( $active_months ) ) {
+			return $fallback_timestamp;
+		}
+
+		$evaluation_month = strtotime( date( 'Y-m-01 00:00:00', strtotime( $evaluation_date ) ) );
+		$evaluation_year  = (int) date( 'Y', $evaluation_month );
+		$previous_period  = 0;
+		foreach ( array( $evaluation_year, $evaluation_year - 1 ) as $year ) {
+			foreach ( $active_months as $month ) {
+				$candidate = strtotime( sprintf( '%04d-%02d-01 00:00:00', $year, $month ) );
+				if ( $candidate < $evaluation_month && $candidate > $previous_period ) {
+					$previous_period = $candidate;
+				}
+			}
+		}
+
+		return $previous_period > 0 ? strtotime( '+1 month', $previous_period ) : $fallback_timestamp;
 	}
 
 	private static function get_rule_item_ids( $products ) {
@@ -623,12 +662,14 @@ class UMS_Employee_Allowance_Report {
 		$user_id_values = array_keys( $user_to_employee );
 		foreach ( array_chunk( $user_id_values, 250 ) as $user_id_batch ) {
 			$user_placeholders = implode( ',', array_fill( 0, count( $user_id_batch ), '%d' ) );
-			$request_sql = 'SELECT requests.request_id, requests.target_user_id, requests.created_at, details.item_id, details.quantity
+			$request_sql = 'SELECT requests.request_id, requests.target_user_id, movement.created_at, movement.item_id, movement.quantity
 				FROM ' . UMS_DB_Request::table() . ' requests
-				INNER JOIN ' . UMS_DB_Request::detail_table() . " details ON details.request_id = requests.request_id
-				WHERE requests.current_status <> 'rejected' AND requests.created_at >= %s AND requests.created_at <= %s
+				INNER JOIN ' . UMS_DB_Inventory_Movement::table() . " movement
+					ON movement.request_id = requests.request_id AND movement.movement_type = 'out'
+				WHERE requests.current_status = 'completed' AND requests.reason_type IN (1, 2)
+				AND movement.created_at >= %s AND movement.created_at <= %s
 				AND requests.target_user_id IN ($user_placeholders)
-				AND details.item_id IN ($item_placeholders)";
+				AND movement.item_id IN ($item_placeholders)";
 			$request_rows = array_merge(
 				$request_rows,
 				$wpdb->get_results(
@@ -648,7 +689,8 @@ class UMS_Employee_Allowance_Report {
 				absint( $row['item_id'] ),
 				'r:' . absint( $row['request_id'] ),
 				$row['created_at'],
-				$row['quantity']
+				$row['quantity'],
+				'advance'
 			);
 		}
 
@@ -704,7 +746,7 @@ class UMS_Employee_Allowance_Report {
 		return $index;
 	}
 
-	private static function add_usage_event( &$index, $employee_key, $item_id, $event_key, $created_at, $quantity ) {
+	private static function add_usage_event( &$index, $employee_key, $item_id, $event_key, $created_at, $quantity, $type = 'regular' ) {
 		$timestamp = strtotime( (string) $created_at );
 		if ( ! $timestamp || $item_id <= 0 ) {
 			return;
@@ -713,6 +755,7 @@ class UMS_Employee_Allowance_Report {
 			'event_key' => $event_key,
 			'timestamp' => $timestamp,
 			'quantity'  => absint( $quantity ),
+			'type'      => sanitize_key( $type ),
 		);
 	}
 

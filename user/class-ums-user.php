@@ -204,16 +204,6 @@ class UMS_User {
         }
 
         $edit_request_id = isset( $_POST['request_id'] ) ? absint( $_POST['request_id'] ) : 0;
-        $allowance_errors = self::validate_request_allowances( $details, $target_profile, $edit_request_id );
-        if ( ! empty( $allowance_errors ) ) {
-            self::redirect_with_notice(
-                $redirect_url,
-                'request_allowance_error',
-                array(
-                    'ums_notice_extra' => implode( ' ', $allowance_errors ),
-                )
-            );
-        }
 
 		$flows               = self::apply_request_organization_scope( $flows, $target_profile );
 		$flow_snapshot       = self::build_approval_flow_snapshot( $flows, (int) $profile['profile_id'] );
