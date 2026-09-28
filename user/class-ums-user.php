@@ -1379,7 +1379,13 @@ class UMS_User {
 			absint( $profile['user_id'] ?? 0 ),
 			(string) ( $profile['employee_code'] ?? '' )
 		);
-		$factory = is_array( $organization ) ? trim( (string) ( $organization['factory'] ?? '' ) ) : '';
+		$factory = is_array( $organization )
+			? UMS_DB_Organization::normalize_approval_factory_code(
+				$organization['factory'] ?? '',
+				$organization['department'] ?? '',
+				$organization['cost_center'] ?? ''
+			)
+			: '';
 		foreach ( (array) $approval_flows as $index => $flow ) {
 			if ( empty( $flow['resolver_factory'] ) ) {
 				$approval_flows[ $index ]['resolver_factory'] = $factory;

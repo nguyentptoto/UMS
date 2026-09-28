@@ -171,7 +171,7 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		}
 
 		$department_key = self::normalize_approval_scope( $department );
-		$factory_key    = self::normalize_approval_scope( $factory );
+		$factory_key    = self::normalize_approval_factory_code( $factory );
 		$options = self::get_approval_options();
 		$active_profile_ids = array_map( 'absint', array_column( $options, 'profile_id' ) );
 
@@ -186,7 +186,12 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			if ( $department_key !== '' && self::normalize_approval_scope( $employee['department'] ) !== $department_key ) {
 				continue;
 			}
-			if ( $factory_key !== '' && self::normalize_approval_scope( $employee['factory'] ) !== $factory_key ) {
+			$employee_factory = self::normalize_approval_factory_code(
+				$employee['factory'] ?? '',
+				$employee['department'] ?? '',
+				$employee['cost_center'] ?? ''
+			);
+			if ( $factory_key !== '' && $employee_factory !== $factory_key ) {
 				continue;
 			}
 			$ids[] = absint( $employee['profile_id'] );
@@ -202,13 +207,18 @@ class UMS_DB_Organization extends UMS_DB_Base {
 
 	public static function filter_approval_profile_ids_by_factory( $profile_ids, $factory ) {
 		$profile_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $profile_ids ) ) ) );
-		$factory_key = self::normalize_approval_scope( $factory );
+		$factory_key = self::normalize_approval_factory_code( $factory );
 		if ( empty( $profile_ids ) || $factory_key === '' ) {
 			return $profile_ids;
 		}
 		$allowed = array();
 		foreach ( self::get_approval_options() as $employee ) {
-			if ( in_array( absint( $employee['profile_id'] ), $profile_ids, true ) && self::normalize_approval_scope( $employee['factory'] ) === $factory_key ) {
+			$employee_factory = self::normalize_approval_factory_code(
+				$employee['factory'] ?? '',
+				$employee['department'] ?? '',
+				$employee['cost_center'] ?? ''
+			);
+			if ( in_array( absint( $employee['profile_id'] ), $profile_ids, true ) && $employee_factory === $factory_key ) {
 				$allowed[] = absint( $employee['profile_id'] );
 			}
 		}
@@ -218,6 +228,29 @@ class UMS_DB_Organization extends UMS_DB_Base {
 	private static function normalize_approval_scope( $value ) {
 		$value = remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+	}
+
+	/**
+	 * Use one factory identity for approval scopes regardless of whether the
+	 * organization source stores a code, a label, or only an identifying cost center.
+	 */
+	public static function normalize_approval_factory_code( $factory, $department = '', $cost_center = '' ) {
+		$factory = trim( sanitize_text_field( (string) $factory ) );
+		$code    = strtoupper( $factory );
+		if ( array_key_exists( $code, UMS_DB_Inventory::get_factory_options() ) ) {
+			return $code;
+		}
+		if ( $factory === '' && trim( (string) $department ) === '' && trim( (string) $cost_center ) === '' ) {
+			return '';
+		}
+
+		return UMS_DB_Inventory::resolve_factory_code_for_employee(
+			array(
+				'factory'     => $factory,
+				'department'  => $department,
+				'cost_center' => $cost_center,
+			)
+		);
 	}
 
 	/**

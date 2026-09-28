@@ -16,6 +16,39 @@ $inventory_items = isset( $inventory_items ) && is_array( $inventory_items ) ? $
 $editing_request = isset( $editing_request ) && is_array( $editing_request ) ? $editing_request : null;
 $editing_details = $editing_request && ! empty( $editing_request['details'] ) && is_array( $editing_request['details'] ) ? $editing_request['details'] : array();
 
+$get_inventory_product_data = static function ( $item ) {
+    $category_id = isset( $item['category_id'] ) ? (int) $item['category_id'] : 0;
+    $variant     = isset( $item['item_variant'] ) ? trim( (string) $item['item_variant'] ) : '';
+    $label       = $variant;
+
+    if ( $label === '' ) {
+        $label = ! empty( $item['category_name'] ) ? trim( (string) $item['category_name'] ) : trim( (string) ( $item['item_type'] ?? '' ) );
+    }
+
+    return array(
+        'key'         => $category_id . ':' . md5( $variant !== '' ? $variant : $label ),
+        'category_id' => $category_id,
+        'parent_id'   => ! empty( $item['parent_category_id'] ) ? (int) $item['parent_category_id'] : $category_id,
+        'variant'     => $variant,
+        'label'       => $label,
+    );
+};
+
+$inventory_products = array();
+foreach ( $inventory_items as $inventory_item ) {
+    $product = $get_inventory_product_data( $inventory_item );
+    if ( $product['category_id'] > 0 && $product['label'] !== '' ) {
+        $inventory_products[ $product['key'] ] = $product;
+    }
+}
+
+uasort(
+    $inventory_products,
+    static function ( $left, $right ) {
+        return strnatcasecmp( $left['label'], $right['label'] );
+    }
+);
+
 $selected_target_user_id = $editing_request ? (int) $editing_request['target_user_id'] : (int) $default_target['user_id'];
 foreach ( $teammates as $teammate ) {
     if ( (int) $teammate['user_id'] === $selected_target_user_id ) {
@@ -24,15 +57,21 @@ foreach ( $teammates as $teammate ) {
     }
 }
 
-$render_request_item_row = function ( $index, $is_template = false, $selected_detail = array() ) use ( $category_tree, $inventory_items ) {
+$render_request_item_row = function ( $index, $is_template = false, $selected_detail = array() ) use ( $category_tree, $inventory_items, $inventory_products, $get_inventory_product_data ) {
     $prefix               = 'request_items[' . $index . ']';
     $row_classes          = 'ums-request-item';
     $selected_parent_id   = isset( $selected_detail['parent_id'] ) ? (int) $selected_detail['parent_id'] : 0;
-    $selected_category_id = isset( $selected_detail['category_id'] ) ? (int) $selected_detail['category_id'] : 0;
     $selected_item_id     = isset( $selected_detail['item_id'] ) ? (int) $selected_detail['item_id'] : 0;
     $selected_quantity    = isset( $selected_detail['quantity'] ) ? max( 1, (int) $selected_detail['quantity'] ) : 1;
     $selected_price       = isset( $selected_detail['price_at_request'] ) ? (float) $selected_detail['price_at_request'] : 0;
     $selected_unit_price  = $selected_quantity > 0 ? $selected_price / $selected_quantity : 0;
+    $selected_product_key = '';
+    foreach ( $inventory_items as $inventory_item ) {
+        if ( (int) $inventory_item['item_id'] === $selected_item_id ) {
+            $selected_product_key = $get_inventory_product_data( $inventory_item )['key'];
+            break;
+        }
+    }
     if ( $is_template ) {
         $row_classes .= ' is-template';
     }
@@ -47,7 +86,7 @@ $render_request_item_row = function ( $index, $is_template = false, $selected_de
             <label>
                 <span>Loại đồng phục</span>
                 <select name="<?php echo esc_attr( $prefix ); ?>[parent_category_id]" data-ums-parent-category required>
-                    <option value="">Chọn danh mục cha</option>
+                    <option value="">Chọn loại đồng phục</option>
                     <?php foreach ( $category_tree as $parent ) : ?>
                         <option value="<?php echo esc_attr( $parent['category_id'] ); ?>" <?php selected( $selected_parent_id, (int) $parent['category_id'] ); ?>>
                             <?php echo esc_html( $parent['category_name'] ); ?>
@@ -57,20 +96,20 @@ $render_request_item_row = function ( $index, $is_template = false, $selected_de
             </label>
 
             <label>
-                <span>Loại quần áo/giày</span>
-                <select name="<?php echo esc_attr( $prefix ); ?>[category_id]" data-ums-child-category required>
-                    <option value="">Chọn danh mục con</option>
-                    <?php foreach ( $category_tree as $parent ) : ?>
-                        <?php foreach ( $parent['children'] as $child ) : ?>
-                            <option
-                                value="<?php echo esc_attr( $child['category_id'] ); ?>"
-                                data-parent-id="<?php echo esc_attr( $parent['category_id'] ); ?>"
-                                <?php selected( $selected_category_id, (int) $child['category_id'] ); ?>
-                                hidden
-                            >
-                                <?php echo esc_html( $child['category_name'] ); ?>
-                            </option>
-                        <?php endforeach; ?>
+                <span>Loại sản phẩm</span>
+                <select name="<?php echo esc_attr( $prefix ); ?>[product_key]" data-ums-product-type required>
+                    <option value="">Chọn loại sản phẩm</option>
+                    <?php foreach ( $inventory_products as $product ) : ?>
+                        <option
+                            value="<?php echo esc_attr( $product['key'] ); ?>"
+                            data-parent-id="<?php echo esc_attr( $product['parent_id'] ); ?>"
+                            data-category-id="<?php echo esc_attr( $product['category_id'] ); ?>"
+                            data-variant="<?php echo esc_attr( $product['variant'] ); ?>"
+                            <?php selected( $selected_product_key, $product['key'] ); ?>
+                            hidden
+                        >
+                            <?php echo esc_html( $product['label'] ); ?>
+                        </option>
                     <?php endforeach; ?>
                 </select>
             </label>
@@ -81,14 +120,12 @@ $render_request_item_row = function ( $index, $is_template = false, $selected_de
                     <option value="">Chọn size</option>
                     <?php foreach ( $inventory_items as $item ) : ?>
                         <?php
-                        $size_label = $item['size'];
-                        if ( ! empty( $item['item_variant'] ) ) {
-                            $size_label .= ' - ' . $item['item_variant'];
-                        }
-                        $size_label .= ' - Tồn ' . (int) $item['stock_qty'];
+                        $product_data = $get_inventory_product_data( $item );
+                        $size_label   = $item['size'] . ' - Tồn ' . (int) $item['stock_qty'];
                         ?>
                         <option
                             value="<?php echo esc_attr( $item['size'] ); ?>"
+                            data-product-key="<?php echo esc_attr( $product_data['key'] ); ?>"
                             data-category-id="<?php echo esc_attr( $item['category_id'] ); ?>"
                             data-inventory-id="<?php echo esc_attr( $item['item_id'] ); ?>"
                             data-price="<?php echo esc_attr( number_format( (float) $item['base_price'], 0, '.', '' ) ); ?>"
@@ -189,7 +226,7 @@ $render_request_item_row = function ( $index, $is_template = false, $selected_de
         <div class="ums-user-panel-head">
             <div>
                 <h3>Thông tin đồng phục / vật tư</h3>
-                <p>Chọn loại đồng phục, loại quần áo/giày và size; giá sẽ tự tính theo đơn giá hệ thống và số lượng.</p>
+                <p>Chọn nhóm đồng phục, loại sản phẩm và size; giá sẽ tự tính theo đơn giá hệ thống và số lượng.</p>
             </div>
             <button type="button" class="ums-user-button ums-user-button-light" data-ums-add-item>Thêm đồng phục</button>
         </div>

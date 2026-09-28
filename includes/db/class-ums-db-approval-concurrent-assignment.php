@@ -90,11 +90,14 @@ class UMS_DB_Approval_Concurrent_Assignment extends UMS_DB_Base {
 		);
 
 		$department_key = self::normalize_scope( $department );
-		$factory_key    = self::normalize_scope( $factory );
+		$factory_key    = UMS_DB_Organization::normalize_approval_factory_code( $factory );
 		$ids            = array();
 		foreach ( $rows as $row ) {
 			$departments = self::decode_scope_values( $row['departments'] );
-			$factories   = self::decode_scope_values( $row['factories'] );
+			$factories   = array_values( array_unique( array_filter( array_map(
+				array( 'UMS_DB_Organization', 'normalize_approval_factory_code' ),
+				self::decode_values( $row['factories'] )
+			) ) ) );
 			if ( ! empty( $departments ) && ! in_array( $department_key, $departments, true ) ) {
 				continue;
 			}

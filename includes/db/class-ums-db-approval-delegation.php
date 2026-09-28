@@ -111,7 +111,7 @@ class UMS_DB_Approval_Delegation extends UMS_DB_Base {
 		}
 		$date        = $date !== '' ? sanitize_text_field( $date ) : current_time( 'Y-m-d' );
 		$department  = self::normalize_scope( $department );
-		$factory     = self::normalize_scope( $factory );
+		$factory     = UMS_DB_Organization::normalize_approval_factory_code( $factory );
 		$placeholders = implode( ',', array_fill( 0, count( $role_codes ), '%s' ) );
 		$params       = $role_codes;
 		$params[]     = $date;
@@ -130,7 +130,10 @@ class UMS_DB_Approval_Delegation extends UMS_DB_Base {
 		$ids = array();
 		foreach ( $rows as $row ) {
 			$row_department = self::normalize_scope( $row['department'] );
-			$row_factories  = self::decode_scope_values( $row['factory'] );
+			$row_factories  = array_values( array_unique( array_filter( array_map(
+				array( 'UMS_DB_Organization', 'normalize_approval_factory_code' ),
+				self::decode_scope_values( $row['factory'] )
+			) ) ) );
 			if ( $row_department !== '' && $row_department !== $department ) {
 				continue;
 			}

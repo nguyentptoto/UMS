@@ -152,11 +152,11 @@
         price.value = unitPrice.value ? formatNumber(amount) : '';
     }
 
-    function filterSizesByCategory(row) {
-        var categorySelect = row.querySelector('[data-ums-child-category]');
+    function filterSizesByProduct(row) {
+        var productSelect = row.querySelector('[data-ums-product-type]');
         var sizeSelect = row.querySelector('[data-ums-size-select]');
         var inventoryField = row.querySelector('[data-ums-inventory-field="inventory_id"]');
-        var categoryId = categorySelect ? categorySelect.value : '';
+        var productKey = productSelect ? productSelect.value : '';
         var currentInventoryId = inventoryField ? inventoryField.value : '';
         var matchedCurrent = false;
 
@@ -170,7 +170,7 @@
                 return;
             }
 
-            setVisibleOption(option, categoryId !== '' && option.dataset.categoryId === categoryId);
+            setVisibleOption(option, productKey !== '' && option.dataset.productKey === productKey);
             if (currentInventoryId && option.dataset.inventoryId === currentInventoryId && !option.disabled) {
                 option.selected = true;
                 matchedCurrent = true;
@@ -183,38 +183,38 @@
         updateSizeFields(sizeSelect);
     }
 
-    function filterChildrenByParent(row) {
+    function filterProductsByParent(row) {
         var parentSelect = row.querySelector('[data-ums-parent-category]');
-        var childSelect = row.querySelector('[data-ums-child-category]');
+        var productSelect = row.querySelector('[data-ums-product-type]');
         var parentId = parentSelect ? parentSelect.value : '';
-        var currentChildId = childSelect ? childSelect.value : '';
+        var currentProductKey = productSelect ? productSelect.value : '';
         var matchedCurrent = false;
 
-        if (!childSelect) {
+        if (!productSelect) {
             return;
         }
 
-        Array.prototype.forEach.call(childSelect.options, function (option) {
+        Array.prototype.forEach.call(productSelect.options, function (option) {
             if (!option.value) {
                 setVisibleOption(option, true);
                 return;
             }
 
             setVisibleOption(option, parentId !== '' && option.dataset.parentId === parentId);
-            if (currentChildId && option.value === currentChildId && !option.disabled) {
+            if (currentProductKey && option.value === currentProductKey && !option.disabled) {
                 option.selected = true;
                 matchedCurrent = true;
             }
         });
 
         if (!matchedCurrent) {
-            resetSelect(childSelect);
+            resetSelect(productSelect);
         }
-        filterSizesByCategory(row);
+        filterSizesByProduct(row);
     }
 
     function initRequestItem(row) {
-        filterChildrenByParent(row);
+        filterProductsByParent(row);
     }
 
     function updateRemoveButtons(form) {
@@ -437,11 +437,11 @@
         }
 
         if (row && event.target.matches('[data-ums-parent-category]')) {
-            filterChildrenByParent(row);
+            filterProductsByParent(row);
         }
 
-        if (row && event.target.matches('[data-ums-child-category]')) {
-            filterSizesByCategory(row);
+        if (row && event.target.matches('[data-ums-product-type]')) {
+            filterSizesByProduct(row);
         }
 
         if (row && event.target.matches('[data-ums-size-select]')) {
