@@ -128,6 +128,39 @@ $delegation_columns = array(
 	array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '10%' ),
 	array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '12%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
 );
+
+$concurrent_rows = array();
+foreach ( $concurrent_assignments as $assignment ) {
+	$profile_id = absint( $assignment['profile_id'] );
+	$person     = isset( $approver_map[ $profile_id ] ) ? $approver_map[ $profile_id ] : null;
+	$edit_url   = add_query_arg( array( 'page' => 'tvn-ums-approval-flows', 'edit_concurrent_id' => absint( $assignment['assignment_id'] ) ), admin_url( 'admin.php' ) );
+	$delete_url = wp_nonce_url(
+		add_query_arg( array( 'action' => 'ums_delete_approval_concurrent_assignment', 'assignment_id' => absint( $assignment['assignment_id'] ) ), admin_url( 'admin-post.php' ) ),
+		'ums_delete_approval_concurrent_assignment_' . absint( $assignment['assignment_id'] )
+	);
+	$stored_departments = UMS_DB_Approval_Concurrent_Assignment::decode_values( $assignment['departments'] );
+	$stored_factories   = UMS_DB_Approval_Concurrent_Assignment::decode_values( $assignment['factories'] );
+	$concurrent_rows[] = array(
+		'employee'    => $person ? $person['employee_code'] . ' - ' . $person['full_name'] : 'Hồ sơ #' . $profile_id . ' (không còn hoạt động)',
+		'main_role'   => $person && $person['job_position'] !== '' ? $person['job_position'] : '-',
+		'extra_role'  => $assignment['role_code'],
+		'departments' => implode( ', ', $stored_departments ),
+		'factories'   => $stored_factories ? implode( ', ', $stored_factories ) : 'Tất cả nhà máy',
+		'note'        => $assignment['note'],
+		'status'      => (int) $assignment['is_active'] === 1 ? 'Đang sử dụng' : 'Ngừng sử dụng',
+		'actions'     => '<a href="' . esc_url( $edit_url . '#ums-approval-concurrent-form' ) . '">Sửa</a> | <a href="' . esc_url( $delete_url ) . '" class="ums-delete-link" data-confirm="Xóa chức danh kiêm nhiệm này?">Xóa</a>',
+	);
+}
+$concurrent_columns = array(
+	array( 'text' => 'Người kiêm nhiệm', 'datafield' => 'employee', 'width' => '20%' ),
+	array( 'text' => 'Chức danh chính', 'datafield' => 'main_role', 'width' => '10%' ),
+	array( 'text' => 'Chức danh kiêm nhiệm', 'datafield' => 'extra_role', 'width' => '13%' ),
+	array( 'text' => 'Phòng ban kiêm nhiệm', 'datafield' => 'departments', 'width' => '20%' ),
+	array( 'text' => 'Nhà máy', 'datafield' => 'factories', 'width' => '13%' ),
+	array( 'text' => 'Ghi chú', 'datafield' => 'note', 'width' => '12%' ),
+	array( 'text' => 'Trạng thái', 'datafield' => 'status', 'width' => '10%' ),
+	array( 'text' => 'Thao tác', 'datafield' => 'actions', 'width' => '10%', 'filterable' => false, 'sortable' => false, 'cellsrenderer' => 'html' ),
+);
 ?>
 
 <div class="wrap ums-admin-wrap">
@@ -280,6 +313,72 @@ $delegation_columns = array(
             </p>
         </form>
     </div>
+
+	<div class="ums-panel">
+		<h2>Kiêm nhiệm tổ chức</h2>
+		<p class="description">Bổ sung phòng ban và chức danh kiêm nhiệm mà không thay đổi vị trí chính trong Sơ đồ tổ chức TVN. Người kiêm nhiệm được tham gia duyệt đúng chức danh, phòng ban và nhà máy đã cấu hình.</p>
+		<div
+			id="ums-approval-concurrent-grid"
+			class="ums-jqx-grid"
+			data-rows="<?php echo esc_attr( wp_json_encode( $concurrent_rows ) ); ?>"
+			data-columns="<?php echo esc_attr( wp_json_encode( $concurrent_columns ) ); ?>"
+		></div>
+	</div>
+
+	<div class="ums-panel" id="ums-approval-concurrent-form">
+		<h2><?php echo $editing_concurrent ? 'Cập nhật chức danh kiêm nhiệm' : 'Thêm chức danh kiêm nhiệm'; ?></h2>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ums-profile-form">
+			<?php wp_nonce_field( 'ums_save_approval_concurrent_assignment' ); ?>
+			<input type="hidden" name="action" value="ums_save_approval_concurrent_assignment">
+			<input type="hidden" name="ums_approval_concurrent[is_edit]" value="<?php echo $editing_concurrent ? '1' : '0'; ?>">
+			<input type="hidden" name="ums_approval_concurrent[assignment_id]" value="<?php echo esc_attr( $concurrent_values['assignment_id'] ); ?>">
+			<div class="ums-form-grid">
+				<label>
+					<span>Người kiêm nhiệm <b>*</b></span>
+					<select name="ums_approval_concurrent[profile_id]" required>
+						<option value="">Chọn người từ Sơ đồ tổ chức</option>
+						<?php foreach ( $approvers as $approver ) : ?>
+							<option value="<?php echo esc_attr( $approver['profile_id'] ); ?>" <?php selected( (int) $concurrent_values['profile_id'], (int) $approver['profile_id'] ); ?>>
+								<?php echo esc_html( $approver['employee_code'] . ' - ' . $approver['full_name'] . ' | ' . $approver['department'] . ' | ' . $approver['job_position'] ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</label>
+				<label>
+					<span>Chức danh kiêm nhiệm <b>*</b></span>
+					<input type="text" name="ums_approval_concurrent[role_code]" value="<?php echo esc_attr( $concurrent_values['role_code'] ); ?>" list="ums-position-options" placeholder="VD: MG" required>
+				</label>
+				<label>
+					<span>Phòng ban kiêm nhiệm <b>*</b></span>
+					<select name="ums_approval_concurrent[departments][]" multiple size="7" required>
+						<?php foreach ( $departments as $department ) : ?>
+							<?php if ( (int) $department['department_id'] === 0 ) { continue; } ?>
+							<option value="<?php echo esc_attr( $department['department_name'] ); ?>" <?php selected( in_array( $department['department_name'], $concurrent_values['departments'], true ) ); ?>><?php echo esc_html( $department['department_name'] ); ?></option>
+						<?php endforeach; ?>
+					</select>
+					<p class="description">Giữ Ctrl để chọn nhiều phòng ban.</p>
+				</label>
+				<label>
+					<span>Nhà máy áp dụng</span>
+					<select name="ums_approval_concurrent[factories][]" multiple size="4">
+						<?php foreach ( $factory_options as $factory ) : ?>
+							<option value="<?php echo esc_attr( $factory ); ?>" <?php selected( in_array( $factory, $concurrent_values['factories'], true ) ); ?>><?php echo esc_html( $factory ); ?></option>
+						<?php endforeach; ?>
+					</select>
+					<p class="description">Không chọn nghĩa là áp dụng tại tất cả nhà máy.</p>
+				</label>
+				<label>
+					<span>Ghi chú</span>
+					<input type="text" name="ums_approval_concurrent[note]" value="<?php echo esc_attr( $concurrent_values['note'] ); ?>" placeholder="VD: Kiêm nhiệm quản lý bộ phận Casting 2">
+				</label>
+			</div>
+			<fieldset class="ums-checkboxes"><legend>Trạng thái</legend><label><input type="checkbox" name="ums_approval_concurrent[is_active]" value="1" <?php checked( (int) $concurrent_values['is_active'], 1 ); ?>> Đang sử dụng</label></fieldset>
+			<p class="submit">
+				<button type="submit" class="button button-primary"><?php echo $editing_concurrent ? 'Cập nhật kiêm nhiệm' : 'Thêm kiêm nhiệm'; ?></button>
+				<?php if ( $editing_concurrent ) : ?><a href="<?php echo esc_url( $page_url . '#ums-approval-concurrent-form' ); ?>" class="button">Hủy sửa</a><?php endif; ?>
+			</p>
+		</form>
+	</div>
 
 	<div class="ums-panel">
 		<h2>Ủy quyền và người duyệt thay thế</h2>

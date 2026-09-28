@@ -193,7 +193,9 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		}
 
 		$delegated_ids = UMS_DB_Approval_Delegation::get_active_profile_ids( $positions, $department, $factory );
-		$ids = array_merge( $ids, array_values( array_intersect( $delegated_ids, $active_profile_ids ) ) );
+		$concurrent_ids = UMS_DB_Approval_Concurrent_Assignment::get_active_profile_ids( $positions, $department, $factory );
+		$additional_ids = array_merge( $delegated_ids, $concurrent_ids );
+		$ids = array_merge( $ids, array_values( array_intersect( $additional_ids, $active_profile_ids ) ) );
 
 		return array_values( array_unique( array_filter( $ids ) ) );
 	}

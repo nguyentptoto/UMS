@@ -95,6 +95,22 @@ CREATE TABLE `wp_uniform_approval_delegations` (
     KEY `idx_effective` (`is_active`, `start_date`, `end_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 5C. BANG CHUC DANH / PHONG BAN KIEM NHIEM
+CREATE TABLE `wp_uniform_approval_concurrent_assignments` (
+    `assignment_id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `profile_id` BIGINT(20) UNSIGNED NOT NULL,
+    `role_code` VARCHAR(50) NOT NULL,
+    `departments` LONGTEXT NULL,
+    `factories` LONGTEXT NULL,
+    `note` VARCHAR(255) NOT NULL DEFAULT '',
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`assignment_id`),
+    KEY `idx_profile` (`profile_id`),
+    KEY `idx_role_active` (`role_code`, `is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 6. BANG HO SO NHAN SU MO RONG
 CREATE TABLE `wp_uniform_user_profiles` (
     `profile_id` INT AUTO_INCREMENT NOT NULL,

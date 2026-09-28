@@ -20,6 +20,8 @@ class UMS_Admin {
         add_action( 'admin_post_ums_delete_approval_flow', array( __CLASS__, 'handle_delete_approval_flow' ) );
 		add_action( 'admin_post_ums_save_approval_delegation', array( __CLASS__, 'handle_save_approval_delegation' ) );
 		add_action( 'admin_post_ums_delete_approval_delegation', array( __CLASS__, 'handle_delete_approval_delegation' ) );
+		add_action( 'admin_post_ums_save_approval_concurrent_assignment', array( __CLASS__, 'handle_save_approval_concurrent_assignment' ) );
+		add_action( 'admin_post_ums_delete_approval_concurrent_assignment', array( __CLASS__, 'handle_delete_approval_concurrent_assignment' ) );
         add_action( 'admin_post_ums_save_product_category', array( __CLASS__, 'handle_save_product_category' ) );
         add_action( 'admin_post_ums_delete_product_category', array( __CLASS__, 'handle_delete_product_category' ) );
         add_action( 'admin_post_ums_save_inventory_item', array( __CLASS__, 'handle_save_inventory_item' ) );
@@ -386,6 +388,10 @@ class UMS_Admin {
 		$edit_delegation_id = isset( $_GET['edit_delegation_id'] ) ? absint( $_GET['edit_delegation_id'] ) : 0;
 		$editing_delegation = $edit_delegation_id ? UMS_DB_Approval_Delegation::get_by_id( $edit_delegation_id ) : null;
 		$delegation_values  = self::get_default_approval_delegation_values( $editing_delegation );
+		$concurrent_assignments = UMS_DB_Approval_Concurrent_Assignment::get_all();
+		$edit_concurrent_id = isset( $_GET['edit_concurrent_id'] ) ? absint( $_GET['edit_concurrent_id'] ) : 0;
+		$editing_concurrent = $edit_concurrent_id ? UMS_DB_Approval_Concurrent_Assignment::get_by_id( $edit_concurrent_id ) : null;
+		$concurrent_values  = self::get_default_approval_concurrent_values( $editing_concurrent );
         $notice         = self::get_notice();
         $form_values    = self::get_default_approval_flow_values( $editing_flow );
 
@@ -1468,6 +1474,49 @@ class UMS_Admin {
 		self::redirect_to_approval_flows( array( 'notice' => false === $result ? 'db_error' : 'approval_delegation_deleted' ) );
 	}
 
+	/**
+	 * Save a permanent additional organization role without changing the Sheet source.
+	 */
+	public static function handle_save_approval_concurrent_assignment() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		check_admin_referer( 'ums_save_approval_concurrent_assignment' );
+		$raw     = isset( $_POST['ums_approval_concurrent'] ) && is_array( $_POST['ums_approval_concurrent'] ) ? wp_unslash( $_POST['ums_approval_concurrent'] ) : array();
+		$data    = self::sanitize_approval_concurrent_data( $raw );
+		$is_edit = ! empty( $raw['is_edit'] );
+		$errors  = self::validate_approval_concurrent_data( $data, $is_edit );
+		if ( $errors ) {
+			self::redirect_to_approval_flows(
+				array(
+					'notice'             => 'validation_error',
+					'notice_extra'       => implode( ' ', $errors ),
+					'edit_concurrent_id' => $is_edit ? $data['assignment_id'] : null,
+				)
+			);
+		}
+
+		$id = $data['assignment_id'];
+		unset( $data['assignment_id'] );
+		$result = $is_edit
+			? UMS_DB_Approval_Concurrent_Assignment::update( $id, $data )
+			: UMS_DB_Approval_Concurrent_Assignment::insert( $data );
+		if ( false === $result ) {
+			self::redirect_to_approval_flows( array( 'notice' => 'db_error', 'notice_extra' => UMS_DB_Approval_Concurrent_Assignment::get_last_error() ) );
+		}
+		self::redirect_to_approval_flows( array( 'notice' => $is_edit ? 'approval_concurrent_updated' : 'approval_concurrent_created' ) );
+	}
+
+	public static function handle_delete_approval_concurrent_assignment() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		$id = isset( $_GET['assignment_id'] ) ? absint( $_GET['assignment_id'] ) : 0;
+		check_admin_referer( 'ums_delete_approval_concurrent_assignment_' . $id );
+		$result = $id > 0 ? UMS_DB_Approval_Concurrent_Assignment::delete( $id ) : false;
+		self::redirect_to_approval_flows( array( 'notice' => false === $result ? 'db_error' : 'approval_concurrent_deleted' ) );
+	}
+
     /**
      * Lưu danh mục sản phẩm cha-con.
      */
@@ -2473,6 +2522,25 @@ class UMS_Admin {
 		);
 	}
 
+	private static function sanitize_approval_concurrent_data( $raw ) {
+		$departments = isset( $raw['departments'] ) && is_array( $raw['departments'] )
+			? array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $raw['departments'] ) ) ) )
+			: array();
+		$factories = isset( $raw['factories'] ) && is_array( $raw['factories'] )
+			? array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $raw['factories'] ) ) ) )
+			: array();
+
+		return array(
+			'assignment_id' => isset( $raw['assignment_id'] ) ? absint( $raw['assignment_id'] ) : 0,
+			'profile_id'    => isset( $raw['profile_id'] ) ? absint( $raw['profile_id'] ) : 0,
+			'role_code'     => isset( $raw['role_code'] ) ? UMS_DB_Approval_Delegation::normalize_role( $raw['role_code'] ) : '',
+			'departments'   => wp_json_encode( $departments ),
+			'factories'     => $factories ? wp_json_encode( $factories ) : '',
+			'note'          => isset( $raw['note'] ) ? sanitize_text_field( $raw['note'] ) : '',
+			'is_active'     => ! empty( $raw['is_active'] ) ? 1 : 0,
+		);
+	}
+
     private static function sanitize_product_category_data( $raw ) {
         return array(
             'category_id'   => isset( $raw['category_id'] ) ? absint( $raw['category_id'] ) : 0,
@@ -2770,6 +2838,24 @@ class UMS_Admin {
 		}
 		if ( $data['end_date'] && ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $data['end_date'] ) || $data['end_date'] < $data['start_date'] ) ) {
 			$errors[] = 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.';
+		}
+		return array_unique( $errors );
+	}
+
+	private static function validate_approval_concurrent_data( $data, $is_edit ) {
+		$errors = array();
+		if ( $is_edit && $data['assignment_id'] <= 0 ) {
+			$errors[] = 'Không tìm thấy cấu hình kiêm nhiệm cần cập nhật.';
+		}
+		if ( ! UMS_DB_Organization::get_approval_option_by_profile_id( $data['profile_id'] ) ) {
+			$errors[] = 'Người kiêm nhiệm không còn hoạt động hoặc chưa có tài khoản UMS.';
+		}
+		if ( $data['role_code'] === '' ) {
+			$errors[] = 'Vui lòng nhập chức danh kiêm nhiệm.';
+		}
+		$departments = UMS_DB_Approval_Concurrent_Assignment::decode_values( $data['departments'] );
+		if ( empty( $departments ) ) {
+			$errors[] = 'Vui lòng chọn ít nhất một phòng ban kiêm nhiệm.';
 		}
 		return array_unique( $errors );
 	}
@@ -3318,6 +3404,26 @@ class UMS_Admin {
 		return $values;
 	}
 
+	private static function get_default_approval_concurrent_values( $assignment = null ) {
+		$defaults = array(
+			'assignment_id' => 0,
+			'profile_id'    => 0,
+			'role_code'     => '',
+			'departments'   => array(),
+			'factories'     => array(),
+			'note'          => '',
+			'is_active'     => 1,
+		);
+		$values = $assignment ? wp_parse_args( $assignment, $defaults ) : $defaults;
+		if ( is_string( $values['departments'] ) ) {
+			$values['departments'] = UMS_DB_Approval_Concurrent_Assignment::decode_values( $values['departments'] );
+		}
+		if ( is_string( $values['factories'] ) ) {
+			$values['factories'] = UMS_DB_Approval_Concurrent_Assignment::decode_values( $values['factories'] );
+		}
+		return $values;
+	}
+
     private static function get_default_product_category_values( $category = null ) {
         $defaults = array(
             'category_id'   => 0,
@@ -3503,6 +3609,9 @@ class UMS_Admin {
 			'approval_delegation_created' => array( 'success', 'Đã thêm quyền duyệt thay thế.' ),
 			'approval_delegation_updated' => array( 'success', 'Đã cập nhật quyền duyệt thay thế.' ),
 			'approval_delegation_deleted' => array( 'success', 'Đã xóa quyền duyệt thay thế.' ),
+			'approval_concurrent_created' => array( 'success', 'Đã thêm chức danh kiêm nhiệm.' ),
+			'approval_concurrent_updated' => array( 'success', 'Đã cập nhật chức danh kiêm nhiệm.' ),
+			'approval_concurrent_deleted' => array( 'success', 'Đã xóa chức danh kiêm nhiệm.' ),
             'product_category_created' => array( 'success', 'Đã thêm danh mục sản phẩm mới.' ),
             'product_category_updated' => array( 'success', 'Đã cập nhật danh mục sản phẩm.' ),
             'product_category_deleted' => array( 'success', 'Đã xóa danh mục sản phẩm.' ),

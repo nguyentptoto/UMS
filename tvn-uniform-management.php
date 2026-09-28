@@ -82,6 +82,7 @@ function run_tvn_uniform_management() {
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-base.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-approval-flow.php';
 	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-approval-delegation.php';
+	require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-approval-concurrent-assignment.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-department.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-position.php';
     require_once UMS_PLUGIN_DIR . 'includes/db/class-ums-db-factory-location.php';
@@ -122,6 +123,7 @@ function run_tvn_uniform_management() {
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-calculator.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-export.php';
 	UMS_DB_Approval_Delegation::ensure_schema();
+	UMS_DB_Approval_Concurrent_Assignment::ensure_schema();
     UMS_Sheet_User_Sync::init();
     UMS_Organization_Sync::init();
     UMS_Auto_Sync_Bridge::init();
