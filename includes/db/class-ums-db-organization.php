@@ -175,32 +175,27 @@ class UMS_DB_Organization extends UMS_DB_Base {
 		$options = self::get_approval_options();
 		$active_profile_ids = array_map( 'absint', array_column( $options, 'profile_id' ) );
 
-		// Position order is priority order: use the first role that has at least one eligible person.
-		foreach ( $positions as $position_role ) {
-			$ids = array();
-			foreach ( $options as $employee ) {
-				$position = UMS_DB_Approval_Delegation::normalize_role( $employee['job_position'] );
-				if ( $position !== $position_role ) {
-					continue;
-				}
-				if ( $department_key !== '' && self::normalize_approval_scope( $employee['department'] ) !== $department_key ) {
-					continue;
-				}
-				if ( $factory_key !== '' && self::normalize_approval_scope( $employee['factory'] ) !== $factory_key ) {
-					continue;
-				}
-				$ids[] = absint( $employee['profile_id'] );
+		// Comma-separated positions form one peer approval group. Any eligible
+		// person in any listed position can complete this approval step.
+		$ids = array();
+		foreach ( $options as $employee ) {
+			$position = UMS_DB_Approval_Delegation::normalize_role( $employee['job_position'] );
+			if ( ! in_array( $position, $positions, true ) ) {
+				continue;
 			}
-
-			$delegated_ids = UMS_DB_Approval_Delegation::get_active_profile_ids( array( $position_role ), $department, $factory );
-			$ids = array_merge( $ids, array_values( array_intersect( $delegated_ids, $active_profile_ids ) ) );
-			$ids = array_values( array_unique( array_filter( $ids ) ) );
-			if ( ! empty( $ids ) ) {
-				return $ids;
+			if ( $department_key !== '' && self::normalize_approval_scope( $employee['department'] ) !== $department_key ) {
+				continue;
 			}
+			if ( $factory_key !== '' && self::normalize_approval_scope( $employee['factory'] ) !== $factory_key ) {
+				continue;
+			}
+			$ids[] = absint( $employee['profile_id'] );
 		}
 
-		return array();
+		$delegated_ids = UMS_DB_Approval_Delegation::get_active_profile_ids( $positions, $department, $factory );
+		$ids = array_merge( $ids, array_values( array_intersect( $delegated_ids, $active_profile_ids ) ) );
+
+		return array_values( array_unique( array_filter( $ids ) ) );
 	}
 
 	public static function filter_approval_profile_ids_by_factory( $profile_ids, $factory ) {

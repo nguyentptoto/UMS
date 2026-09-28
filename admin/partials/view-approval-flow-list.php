@@ -62,7 +62,7 @@ foreach ( $approval_flows as $flow ) {
 		if ( ! empty( $flow['resolver_factory'] ) ) {
 			$scope .= ' / ' . $flow['resolver_factory'];
 		}
-		$approver_labels[] = implode( ' → ', $positions ) . ' (' . $scope . ')';
+		$approver_labels[] = implode( ' hoặc ', $positions ) . ' (' . $scope . ')';
 	} else {
 		foreach ( $approver_ids as $approver_id ) {
 			if ( isset( $approver_map[ $approver_id ] ) ) {
@@ -244,7 +244,7 @@ $delegation_columns = array(
 				<label data-ums-resolver-section="position">
 					<span>Nhóm chức danh duyệt</span>
 					<input type="text" name="ums_approval_flow[approver_positions]" value="<?php echo esc_attr( implode( ', ', $form_values['approver_positions'] ) ); ?>" list="ums-position-options" placeholder="VD: DMG, MG">
-					<p class="description">Nhập theo thứ tự ưu tiên, ngăn cách bằng dấu phẩy. Ví dụ: DMG, MG hoặc DGM, GM, DR.</p>
+					<p class="description">Các chức danh cách nhau bằng dấu phẩy đều có quyền duyệt cùng bước. Ví dụ: DMG, MG.</p>
 				</label>
 
 				<label data-ums-resolver-section="position">
