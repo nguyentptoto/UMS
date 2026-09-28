@@ -437,9 +437,9 @@ class UMS_User {
 
         if ( $current_page === 'request' ) {
             $teammates       = $is_admin_view ? UMS_DB_User::get_all( array( 'status' => 'active' ) ) : self::get_active_teammates( $profile );
-			$inventory_items = UMS_DB_Inventory::get_all(
-				array( 'stock' => 'available', 'factory_code' => self::get_factory_code_for_profile( $profile ) )
-			);
+            $inventory_items = UMS_DB_Inventory::get_all(
+                array( 'factory_code' => self::get_factory_code_for_profile( $profile ) )
+            );
             $category_tree   = self::get_active_product_category_tree();
             $editing_request = self::get_editing_request_for_form( $current_user_id );
         }

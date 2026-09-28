@@ -25,10 +25,13 @@ $get_inventory_product_data = static function ( $item ) {
         $label = ! empty( $item['category_name'] ) ? trim( (string) $item['category_name'] ) : trim( (string) ( $item['item_type'] ?? '' ) );
     }
 
+    $parent_id = ! empty( $item['parent_category_id'] ) ? (int) $item['parent_category_id'] : $category_id;
+    $identity  = UMS_DB_Inventory::normalize_product_identity( $label );
+
     return array(
-        'key'         => $category_id . ':' . md5( $variant !== '' ? $variant : $label ),
+        'key'         => $parent_id . ':' . md5( $identity ),
         'category_id' => $category_id,
-        'parent_id'   => ! empty( $item['parent_category_id'] ) ? (int) $item['parent_category_id'] : $category_id,
+        'parent_id'   => $parent_id,
         'variant'     => $variant,
         'label'       => $label,
     );
@@ -70,6 +73,19 @@ $render_request_item_row = function ( $index, $is_template = false, $selected_de
         if ( (int) $inventory_item['item_id'] === $selected_item_id ) {
             $selected_product_key = $get_inventory_product_data( $inventory_item )['key'];
             break;
+        }
+    }
+
+    $request_inventory_items = array();
+    foreach ( $inventory_items as $inventory_item ) {
+        $product_data = $get_inventory_product_data( $inventory_item );
+        $size_key     = $product_data['key'] . ':' . md5( UMS_DB_Inventory::normalize_product_identity( $inventory_item['size'] ?? '' ) );
+        $is_selected  = (int) $inventory_item['item_id'] === $selected_item_id;
+        $has_more_stock = isset( $request_inventory_items[ $size_key ] )
+            && (int) $inventory_item['stock_qty'] > (int) $request_inventory_items[ $size_key ]['stock_qty'];
+
+        if ( ! isset( $request_inventory_items[ $size_key ] ) || $is_selected || $has_more_stock ) {
+            $request_inventory_items[ $size_key ] = $inventory_item;
         }
     }
     if ( $is_template ) {
@@ -118,7 +134,7 @@ $render_request_item_row = function ( $index, $is_template = false, $selected_de
                 <span>Size</span>
                 <select name="<?php echo esc_attr( $prefix ); ?>[size]" data-ums-size-select required>
                     <option value="">Chọn size</option>
-                    <?php foreach ( $inventory_items as $item ) : ?>
+                    <?php foreach ( $request_inventory_items as $item ) : ?>
                         <?php
                         $product_data = $get_inventory_product_data( $item );
                         $size_label   = $item['size'] . ' - Tồn ' . (int) $item['stock_qty'];
@@ -233,7 +249,7 @@ $render_request_item_row = function ( $index, $is_template = false, $selected_de
 
         <?php if ( empty( $category_tree ) || empty( $inventory_items ) ) : ?>
             <div class="ums-user-empty-inline">
-                Chưa có danh mục sản phẩm hoặc sản phẩm tồn kho khả dụng để tạo yêu cầu.
+                Chưa có danh mục hoặc dữ liệu sản phẩm kho để tạo yêu cầu.
             </div>
         <?php endif; ?>
 
