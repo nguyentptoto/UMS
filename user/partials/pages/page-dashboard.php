@@ -80,7 +80,7 @@ $dashboard_stats = wp_parse_args(
         <h3>Luồng duyệt hiện tại</h3>
         <?php if ( ! empty( $approval_flows ) ) : ?>
             <ol class="ums-user-flow ums-user-flow-compact">
-                <?php foreach ( array_slice( $approval_flows, 0, 3 ) as $flow ) : ?>
+                <?php foreach ( $approval_flows as $flow ) : ?>
                     <li>
                         <span><?php echo esc_html( (int) $flow['step_order'] ); ?></span>
                         <div>
