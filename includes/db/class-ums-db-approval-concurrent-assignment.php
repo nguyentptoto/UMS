@@ -110,6 +110,40 @@ class UMS_DB_Approval_Concurrent_Assignment extends UMS_DB_Base {
 		return array_values( array_unique( array_filter( $ids ) ) );
 	}
 
+	/**
+	 * Keep explicitly selected approvers when a concurrent assignment covers the request factory.
+	 */
+	public static function filter_profile_ids_by_factory( $profile_ids, $factory ) {
+		$profile_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $profile_ids ) ) ) );
+		$factory_key = UMS_DB_Organization::normalize_approval_factory_code( $factory );
+		if ( empty( $profile_ids ) || $factory_key === '' ) {
+			return $profile_ids;
+		}
+
+		$placeholders = implode( ',', array_fill( 0, count( $profile_ids ), '%d' ) );
+		$rows = self::db()->get_results(
+			self::db()->prepare(
+				'SELECT profile_id, factories FROM ' . self::table() .
+				" WHERE is_active = 1 AND profile_id IN ($placeholders)",
+				$profile_ids
+			),
+			ARRAY_A
+		);
+
+		$allowed = array();
+		foreach ( $rows as $row ) {
+			$factories = array_values( array_unique( array_filter( array_map(
+				array( 'UMS_DB_Organization', 'normalize_approval_factory_code' ),
+				self::decode_values( $row['factories'] )
+			) ) ) );
+			if ( empty( $factories ) || in_array( $factory_key, $factories, true ) ) {
+				$allowed[] = absint( $row['profile_id'] );
+			}
+		}
+
+		return array_values( array_unique( array_filter( $allowed ) ) );
+	}
+
 	public static function insert( $data ) {
 		return self::db()->insert( self::table(), $data, self::formats_for( $data ) );
 	}

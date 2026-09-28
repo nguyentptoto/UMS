@@ -212,7 +212,9 @@ class UMS_DB_Organization extends UMS_DB_Base {
 			return $profile_ids;
 		}
 		$allowed = array();
-		foreach ( self::get_approval_options() as $employee ) {
+		$options = self::get_approval_options();
+		$active_profile_ids = array_map( 'absint', array_column( $options, 'profile_id' ) );
+		foreach ( $options as $employee ) {
 			$employee_factory = self::normalize_approval_factory_code(
 				$employee['factory'] ?? '',
 				$employee['department'] ?? '',
@@ -222,6 +224,9 @@ class UMS_DB_Organization extends UMS_DB_Base {
 				$allowed[] = absint( $employee['profile_id'] );
 			}
 		}
+
+		$concurrent_ids = UMS_DB_Approval_Concurrent_Assignment::filter_profile_ids_by_factory( $profile_ids, $factory_key );
+		$allowed = array_merge( $allowed, array_values( array_intersect( $concurrent_ids, $active_profile_ids ) ) );
 		return array_values( array_unique( $allowed ) );
 	}
 

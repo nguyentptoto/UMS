@@ -1369,8 +1369,8 @@ class UMS_User {
     }
 
 	/**
-	 * A shared position-based template resolves approvers inside the request's own factory.
-	 * Explicit approvers must remain exactly as configured, regardless of their primary factory.
+	 * A shared template resolves approvers inside the request's own factory. Explicit
+	 * approvers may match through either their primary organization or a concurrent assignment.
 	 */
 	private static function apply_request_organization_scope( $approval_flows, $profile ) {
 		if ( ! is_array( $profile ) ) {
@@ -1388,7 +1388,7 @@ class UMS_User {
 			)
 			: '';
 		foreach ( (array) $approval_flows as $index => $flow ) {
-			if ( ( $flow['resolver_type'] ?? 'specific' ) === 'position' && empty( $flow['resolver_factory'] ) ) {
+			if ( empty( $flow['resolver_factory'] ) ) {
 				$approval_flows[ $index ]['resolver_factory'] = $factory;
 			}
 		}
