@@ -183,6 +183,22 @@ class UMS_Admin {
         if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
             return;
         }
+		$is_approval_flow_page = strpos( $hook, 'tvn-ums-approval-flows' ) !== false;
+		if ( $is_approval_flow_page ) {
+			wp_enqueue_style(
+				'ums-select2-css',
+				UMS_PLUGIN_URL . 'assets/css/select2.min.css',
+				array(),
+				'4.1.0'
+			);
+			wp_enqueue_script(
+				'ums-select2-js',
+				UMS_PLUGIN_URL . 'assets/js/select2.min.js',
+				array( 'jquery' ),
+				'4.1.0',
+				true
+			);
+		}
 
         wp_enqueue_style(
             'ums-jqx-base-css',
@@ -191,12 +207,15 @@ class UMS_Admin {
             '1.0.0'
         );
 
+		$admin_css_path = UMS_PLUGIN_DIR . 'admin/css/ums-admin.css';
+		$admin_css_version = file_exists( $admin_css_path ) ? (string) filemtime( $admin_css_path ) : '1.2.0';
+
         // Nạp file CSS riêng sau jqx để override icon/theme khi cần.
         wp_enqueue_style( 
             'ums-admin-css', 
             UMS_PLUGIN_URL . 'admin/css/ums-admin.css', 
             array( 'ums-jqx-energyblue-css' ), 
-            '1.2.0'
+			$admin_css_version
         );
 
         wp_enqueue_style(
@@ -224,10 +243,15 @@ class UMS_Admin {
         $admin_js_version = file_exists( $admin_js_path ) ? (string) filemtime( $admin_js_path ) : '1.3.1';
 
         // Nạp file Javascript
+		$admin_js_dependencies = array( 'jquery', 'ums-jqx-all' );
+		if ( $is_approval_flow_page ) {
+			$admin_js_dependencies[] = 'ums-select2-js';
+		}
+
         wp_enqueue_script( 
             'ums-admin-js', 
             UMS_PLUGIN_URL . 'admin/js/ums-admin.js', 
-            array( 'jquery', 'ums-jqx-all' ),
+			$admin_js_dependencies,
             $admin_js_version,
             true 
         );

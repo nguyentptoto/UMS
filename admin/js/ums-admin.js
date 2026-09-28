@@ -41,6 +41,30 @@
 		refreshResolverFields();
 	}
 
+	function initializeSearchableSelects() {
+		if (typeof $.fn.select2 !== 'function') {
+			return;
+		}
+
+		$('.ums-search-select').each(function () {
+			var $select = $(this);
+			if ($select.hasClass('select2-hidden-accessible')) {
+				return;
+			}
+
+			$select.select2({
+				width: '100%',
+				placeholder: $select.attr('data-placeholder') || 'Tìm và chọn',
+				allowClear: !$select.prop('multiple') && !$select.prop('required'),
+				closeOnSelect: !$select.prop('multiple'),
+				language: {
+					noResults: function () { return 'Không tìm thấy dữ liệu'; },
+					searching: function () { return 'Đang tìm...'; }
+				}
+			});
+		});
+	}
+
     function initializeOrganizationGrid() {
         $('.ums-jqx-remote-grid').each(function () {
             var $grid = $(this);
@@ -307,6 +331,7 @@
     $(function () {
         initializeApprovalStepOrder();
 		initializeApprovalResolverFields();
+		initializeSearchableSelects();
         initializeOrganizationGrid();
         initializeSheetSyncBridge();
 

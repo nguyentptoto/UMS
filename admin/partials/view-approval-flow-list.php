@@ -225,7 +225,7 @@ $concurrent_columns = array(
             <div class="ums-form-grid">
 				<label>
 					<span>Phạm vi phòng ban của mẫu <b>*</b></span>
-                    <select name="ums_approval_flow[department_id]" required>
+                    <select name="ums_approval_flow[department_id]" class="ums-search-select" data-placeholder="Tìm phòng ban" required>
 						<option value="">Chọn phạm vi</option>
 						<option value="0" <?php selected( (int) $form_values['department_id'], 0 ); ?>>Tất cả phòng ban (mẫu chung)</option>
                         <?php foreach ( $departments as $department ) : ?>
@@ -256,7 +256,7 @@ $concurrent_columns = array(
 
 				<label data-ums-resolver-section="specific">
 					<span>Người duyệt cụ thể</span>
-                    <select name="ums_approval_flow[approver_profile_ids][]" multiple size="8">
+                    <select name="ums_approval_flow[approver_profile_ids][]" class="ums-search-select" data-placeholder="Tìm mã CNV hoặc họ tên" multiple size="8">
                         <?php foreach ( $approvers as $approver ) : ?>
                             <option value="<?php echo esc_attr( $approver['profile_id'] ); ?>" <?php selected( in_array( (int) $approver['profile_id'], $form_values['approver_profile_ids'], true ) ); ?>>
 								<?php
@@ -282,7 +282,7 @@ $concurrent_columns = array(
 
 				<label data-ums-resolver-section="position">
 					<span>Phòng ban áp dụng vai trò</span>
-					<select name="ums_approval_flow[resolver_department]">
+					<select name="ums_approval_flow[resolver_department]" class="ums-search-select" data-placeholder="Tìm phòng ban áp dụng">
 						<option value="">Phòng ban của phiếu yêu cầu</option>
 						<?php foreach ( $departments as $department ) : ?>
 							<option value="<?php echo esc_attr( $department['department_name'] ); ?>" <?php selected( $form_values['resolver_department'], $department['department_name'] ); ?>><?php echo esc_html( $department['department_name'] ); ?></option>
@@ -335,7 +335,7 @@ $concurrent_columns = array(
 			<div class="ums-form-grid">
 				<label>
 					<span>Người kiêm nhiệm <b>*</b></span>
-					<select name="ums_approval_concurrent[profile_id]" required>
+					<select name="ums_approval_concurrent[profile_id]" class="ums-search-select" data-placeholder="Tìm mã CNV hoặc họ tên" required>
 						<option value="">Chọn người từ Sơ đồ tổ chức</option>
 						<?php foreach ( $approvers as $approver ) : ?>
 							<option value="<?php echo esc_attr( $approver['profile_id'] ); ?>" <?php selected( (int) $concurrent_values['profile_id'], (int) $approver['profile_id'] ); ?>>
@@ -350,7 +350,7 @@ $concurrent_columns = array(
 				</label>
 				<label>
 					<span>Phòng ban kiêm nhiệm <b>*</b></span>
-					<select name="ums_approval_concurrent[departments][]" multiple size="7" required>
+					<select name="ums_approval_concurrent[departments][]" class="ums-search-select" data-placeholder="Tìm và chọn phòng ban" multiple size="7" required>
 						<?php foreach ( $departments as $department ) : ?>
 							<?php if ( (int) $department['department_id'] === 0 ) { continue; } ?>
 							<option value="<?php echo esc_attr( $department['department_name'] ); ?>" <?php selected( in_array( $department['department_name'], $concurrent_values['departments'], true ) ); ?>><?php echo esc_html( $department['department_name'] ); ?></option>
@@ -360,7 +360,7 @@ $concurrent_columns = array(
 				</label>
 				<label>
 					<span>Nhà máy áp dụng</span>
-					<select name="ums_approval_concurrent[factories][]" multiple size="4">
+					<select name="ums_approval_concurrent[factories][]" class="ums-search-select" data-placeholder="Tìm và chọn nhà máy" multiple size="4">
 						<?php foreach ( $factory_options as $factory ) : ?>
 							<option value="<?php echo esc_attr( $factory ); ?>" <?php selected( in_array( $factory, $concurrent_values['factories'], true ) ); ?>><?php echo esc_html( $factory ); ?></option>
 						<?php endforeach; ?>
@@ -401,7 +401,7 @@ $concurrent_columns = array(
 			<div class="ums-form-grid">
 				<label>
 					<span>Người nhận quyền <b>*</b></span>
-					<select name="ums_approval_delegation[delegate_profile_id]" required>
+					<select name="ums_approval_delegation[delegate_profile_id]" class="ums-search-select" data-placeholder="Tìm mã CNV hoặc họ tên" required>
 						<option value="">Chọn người từ Sơ đồ tổ chức</option>
 						<?php foreach ( $approvers as $approver ) : ?>
 							<option value="<?php echo esc_attr( $approver['profile_id'] ); ?>" <?php selected( (int) $delegation_values['delegate_profile_id'], (int) $approver['profile_id'] ); ?>>
@@ -416,7 +416,7 @@ $concurrent_columns = array(
 				</label>
 				<label>
 					<span>Phòng ban</span>
-					<select name="ums_approval_delegation[department]">
+					<select name="ums_approval_delegation[department]" class="ums-search-select" data-placeholder="Tìm phòng ban">
 						<option value="">Tất cả phòng ban</option>
 						<?php foreach ( $departments as $department ) : ?>
 							<option value="<?php echo esc_attr( $department['department_name'] ); ?>" <?php selected( $delegation_values['department'], $department['department_name'] ); ?>><?php echo esc_html( $department['department_name'] ); ?></option>
@@ -425,7 +425,7 @@ $concurrent_columns = array(
 				</label>
 				<label>
 					<span>Nhà máy</span>
-					<select name="ums_approval_delegation[factories][]" multiple size="4">
+					<select name="ums_approval_delegation[factories][]" class="ums-search-select" data-placeholder="Tìm và chọn nhà máy" multiple size="4">
 						<option value="" <?php selected( empty( $delegation_values['factories'] ) ); ?>>Tất cả nhà máy</option>
 						<?php foreach ( $factory_options as $factory ) : ?>
 							<option value="<?php echo esc_attr( $factory ); ?>" <?php selected( in_array( $factory, $delegation_values['factories'], true ) ); ?>><?php echo esc_html( $factory ); ?></option>
