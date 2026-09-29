@@ -402,7 +402,7 @@ CREATE TABLE `wp_uniform_requests` (
     `request_type` VARCHAR(50) NOT NULL DEFAULT 'Yêu cầu cấp đồng phục',
     `reason_type` TINYINT(1) NOT NULL COMMENT '1: Thay doi vi tri, 2: Do cong viec, 3: Loi ca nhan/khac',
     `reason_detail` TEXT DEFAULT NULL,
-    `payment_method` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0: Mien phi, 1: Khau tru luong, 2: Tien mat/Chuyen khoan',
+    `payment_method` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0: Khong ap dung, 1: Khau tru luong, 2: Tien mat/Chuyen khoan, 3: Tam ung ky tiep theo',
     `current_status` VARCHAR(50) NOT NULL DEFAULT 'pending_step_1',
 	`approval_flow_snapshot` LONGTEXT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

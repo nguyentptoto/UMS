@@ -666,7 +666,8 @@ class UMS_Employee_Allowance_Report {
 				FROM ' . UMS_DB_Request::table() . ' requests
 				INNER JOIN ' . UMS_DB_Inventory_Movement::table() . " movement
 					ON movement.request_id = requests.request_id AND movement.movement_type = 'out'
-				WHERE requests.current_status = 'completed' AND requests.reason_type IN (1, 2)
+				WHERE requests.current_status = 'completed'
+				AND (requests.reason_type = 1 OR (requests.reason_type = 3 AND requests.payment_method = 3))
 				AND movement.created_at >= %s AND movement.created_at <= %s
 				AND requests.target_user_id IN ($user_placeholders)
 				AND movement.item_id IN ($item_placeholders)";

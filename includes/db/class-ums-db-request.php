@@ -470,7 +470,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 		$where  = array(
 			'requests.target_user_id = %d',
 			"requests.current_status = 'completed'",
-			'requests.reason_type IN (1, 2)',
+			'(requests.reason_type = 1 OR (requests.reason_type = 3 AND requests.payment_method = 3))',
 			'requests.created_at >= %s',
 			'requests.created_at <= %s',
 		);

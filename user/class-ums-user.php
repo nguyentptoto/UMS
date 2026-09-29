@@ -198,6 +198,8 @@ class UMS_User {
                 $payment_method = 1;
             } elseif ( $raw_payment === 'direct' ) {
                 $payment_method = 2;
+            } elseif ( $raw_payment === 'advance' ) {
+                $payment_method = 3;
             } else {
                 self::redirect_with_notice( $redirect_url, 'request_invalid_payment' );
             }
@@ -1485,11 +1487,22 @@ class UMS_User {
 
     private static function build_approval_notification_html( $request_id, $request, $flow, $target_profile, $approver, $details, $detail_url ) {
         $reason_labels = array(
-            1 => 'Ứng trước do thay đổi vị trí hoặc công việc',
-            2 => 'Ứng trước do đồng phục hư hỏng trong công việc',
-            3 => 'Mua thêm đồng phục',
+            1 => 'Cấp trước, trừ vào định mức kỳ tiếp theo',
+            2 => 'Cấp do hư hỏng trong công việc, không trừ định mức',
+            3 => 'Cấp ngoài định mức',
         );
         $reason = $reason_labels[ absint( $request['reason_type'] ?? 0 ) ] ?? 'Yêu cầu cấp đồng phục';
+        if ( absint( $request['reason_type'] ?? 0 ) === 3 ) {
+            $payment_labels = array(
+                1 => 'Thanh toán qua lương tháng phát sinh, không trừ định mức',
+                2 => 'Trực tiếp thanh toán cho Công ty, không trừ định mức',
+                3 => 'Tạm ứng trước kỳ cấp phát tiếp theo, trừ vào định mức',
+            );
+            $payment_method = absint( $request['payment_method'] ?? 0 );
+            if ( isset( $payment_labels[ $payment_method ] ) ) {
+                $reason .= ' - ' . $payment_labels[ $payment_method ];
+            }
+        }
         $recipient_name = trim( (string) ( $approver['full_name'] ?? '' ) );
         $employee_code  = is_array( $target_profile ) ? (string) ( $target_profile['employee_code'] ?? '' ) : '';
         $employee_name  = is_array( $target_profile ) ? (string) ( $target_profile['full_name'] ?? '' ) : '';

@@ -30,6 +30,10 @@ $payment_label = function ( $payment_method ) {
 		return 'Trực tiếp thanh toán bằng tiền mặt hoặc chuyển khoản';
 	}
 
+	if ( (int) $payment_method === 3 ) {
+		return 'Tạm ứng trước kỳ cấp phát tiếp theo';
+	}
+
 	return 'Không áp dụng';
 };
 
@@ -209,7 +213,7 @@ foreach ( $details as $detail ) {
 			<input type="radio" disabled <?php checked( (int) $detail_request['reason_type'], 1 ); ?>>
 			<span>
 				<strong>Lý do 1</strong>
-				Do thay đổi vị trí công việc: chuyển công việc, bộ phận, vị trí, làm việc ngoài trời...
+				Do thay đổi vị trí công việc: chuyển công việc, bộ phận, vị trí, làm việc ngoài trời... Số lượng cấp sẽ trừ vào định mức kỳ cấp phát tiếp theo.
 			</span>
 		</label>
 
@@ -217,7 +221,7 @@ foreach ( $details as $detail ) {
 			<input type="radio" disabled <?php checked( (int) $detail_request['reason_type'], 2 ); ?>>
 			<span>
 				<strong>Lý do 2</strong>
-				Đồng phục rách/hỏng/bẩn do nguyên nhân trực tiếp từ việc thực thi công việc đảm nhiệm.
+				Đồng phục rách/hỏng/bẩn do nguyên nhân trực tiếp từ việc thực thi công việc đảm nhiệm. Số lượng cấp không trừ vào định mức kỳ tiếp theo.
 			</span>
 		</label>
 
@@ -238,10 +242,11 @@ foreach ( $details as $detail ) {
 	<?php if ( (int) $detail_request['reason_type'] === 3 ) : ?>
 		<div class="ums-payment-panel">
 			<div class="ums-payment-context">
-				<p>Trong trường hợp xin cấp đồng phục mới do đồng phục mất/hỏng/rách do lỗi CNV hoặc do nguyên nhân không vì thực hiện công việc hoặc yêu cầu cấp đồng phục ngoài thời gian định mức sử dụng theo quy định, CNV đồng ý lựa chọn một trong hai hình thức thanh toán sau:</p>
+				<p>Trong trường hợp xin cấp đồng phục mới do đồng phục mất/hỏng/rách do lỗi CNV, nguyên nhân không vì thực hiện công việc hoặc yêu cầu cấp ngoài thời gian định mức sử dụng, CNV lựa chọn một trong ba hình thức xử lý sau:</p>
 				<ul>
-					<li>(1) Thanh toán qua lương tháng phát sinh.</li>
-					<li>(2) Trực tiếp thanh toán cho Công ty bằng tiền mặt hoặc chuyển khoản.</li>
+					<li>(1) Thanh toán qua lương tháng phát sinh: không trừ định mức.</li>
+					<li>(2) Trực tiếp thanh toán cho Công ty bằng tiền mặt hoặc chuyển khoản: không trừ định mức.</li>
+					<li>(3) Tạm ứng trước kỳ cấp phát tiếp theo: trừ vào định mức kỳ tiếp theo.</li>
 				</ul>
 				<strong>Điều khoản ràng buộc đi kèm:</strong>
 				<ul>
@@ -250,7 +255,7 @@ foreach ( $details as $detail ) {
 				</ul>
 			</div>
 
-			<span class="ums-user-label">Phương thức thanh toán chi phí</span>
+			<span class="ums-user-label">Hình thức xử lý chi phí / định mức</span>
 			<div class="ums-payment-options">
 				<label>
 					<input type="radio" disabled <?php checked( (int) $detail_request['payment_method'], 1 ); ?>>
@@ -259,6 +264,10 @@ foreach ( $details as $detail ) {
 				<label>
 					<input type="radio" disabled <?php checked( (int) $detail_request['payment_method'], 2 ); ?>>
 					<span>Hình thức 2: Trực tiếp thanh toán cho Công ty bằng tiền mặt hoặc chuyển khoản.</span>
+				</label>
+				<label>
+					<input type="radio" disabled <?php checked( (int) $detail_request['payment_method'], 3 ); ?>>
+					<span>Hình thức 3: Tạm ứng trước kỳ cấp phát tiếp theo, trừ vào định mức kỳ tiếp theo.</span>
 				</label>
 			</div>
 		</div>
