@@ -1451,29 +1451,126 @@ class UMS_User {
             $portal_url
         );
 
-        $subject = '[UMS] Phiếu #' . absint( $request_id ) . ' đang chờ bạn duyệt';
-        $message = "Xin chào,\n\n";
-        $message .= 'Phiếu yêu cầu cấp đồng phục #' . absint( $request_id ) . ' đã chuyển đến bước "' . $flow['step_name'] . "\".\n";
-        if ( $target_profile ) {
-            $message .= 'Người nhận: ' . $target_profile['employee_code'] . ' - ' . $target_profile['full_name'] . "\n";
-            $message .= 'Phòng ban: ' . $target_profile['department'] . "\n";
-        }
-        $message .= "\nVui lòng truy cập liên kết sau để xem chi tiết và duyệt phiếu:\n" . esc_url_raw( $detail_url ) . "\n\n";
-        $message .= 'UMS - Uniform Management System';
+        $subject = '[UMS] Phiếu #' . absint( $request_id ) . ' đang chờ duyệt';
+        $details = UMS_DB_Request::get_details( $request_id );
+        $headers = array( 'Content-Type: text/html; charset=UTF-8' );
 
+        $sent_emails = array();
         foreach ( array_unique( array_map( 'absint', $approver_ids ) ) as $approver_profile_id ) {
             $approver = self::get_cached_profile_by_id( $approver_profile_id );
             if ( ! $approver || empty( $approver['user_id'] ) ) {
                 continue;
             }
 
-            $wp_user = get_userdata( (int) $approver['user_id'] );
-            if ( ! $wp_user || empty( $wp_user->user_email ) || ! is_email( $wp_user->user_email ) ) {
+            $email = self::get_approval_notification_email( $approver );
+            $email_key = strtolower( $email );
+            if ( $email === '' || isset( $sent_emails[ $email_key ] ) ) {
                 continue;
             }
 
-            wp_mail( $wp_user->user_email, $subject, $message );
+            $message = self::build_approval_notification_html(
+                $request_id,
+                $request,
+                $flow,
+                $target_profile,
+                $approver,
+                $details,
+                $detail_url
+            );
+            if ( wp_mail( $email, $subject, $message, $headers ) ) {
+                $sent_emails[ $email_key ] = true;
+            }
         }
+    }
+
+    private static function build_approval_notification_html( $request_id, $request, $flow, $target_profile, $approver, $details, $detail_url ) {
+        $reason_labels = array(
+            1 => 'Ứng trước do thay đổi vị trí hoặc công việc',
+            2 => 'Ứng trước do đồng phục hư hỏng trong công việc',
+            3 => 'Mua thêm đồng phục',
+        );
+        $reason = $reason_labels[ absint( $request['reason_type'] ?? 0 ) ] ?? 'Yêu cầu cấp đồng phục';
+        $recipient_name = trim( (string) ( $approver['full_name'] ?? '' ) );
+        $employee_code  = is_array( $target_profile ) ? (string) ( $target_profile['employee_code'] ?? '' ) : '';
+        $employee_name  = is_array( $target_profile ) ? (string) ( $target_profile['full_name'] ?? '' ) : '';
+        $department     = is_array( $target_profile ) ? (string) ( $target_profile['department'] ?? '' ) : '';
+        $item_rows      = '';
+
+        foreach ( (array) $details as $detail ) {
+            $product = trim( (string) ( $detail['item_variant'] ?? '' ) );
+            if ( $product === '' ) {
+                $product = trim( (string) ( $detail['category_name'] ?? $detail['item_type'] ?? 'Đồng phục' ) );
+            }
+            $size = trim( (string) ( $detail['size'] ?? '' ) );
+            $item_rows .= '<tr>'
+                . '<td style="padding:11px 14px;border-bottom:1px solid #d9e2ec;color:#243447;">' . esc_html( $product ) . '</td>'
+                . '<td style="padding:11px 14px;border-bottom:1px solid #d9e2ec;color:#243447;text-align:center;">' . esc_html( $size !== '' ? $size : '-' ) . '</td>'
+                . '<td style="padding:11px 14px;border-bottom:1px solid #d9e2ec;color:#243447;text-align:center;font-weight:700;">' . esc_html( number_format_i18n( absint( $detail['quantity'] ?? 0 ) ) ) . '</td>'
+                . '</tr>';
+        }
+        if ( $item_rows === '' ) {
+            $item_rows = '<tr><td colspan="3" style="padding:14px;color:#65758b;text-align:center;">Không có dữ liệu sản phẩm</td></tr>';
+        }
+
+        $employee_label = trim( $employee_code . ( $employee_code !== '' && $employee_name !== '' ? ' - ' : '' ) . $employee_name );
+        return '<!doctype html><html><body style="margin:0;padding:0;background:#eef2f6;font-family:Arial,Helvetica,sans-serif;color:#172033;">'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2f6;padding:28px 12px;"><tr><td align="center">'
+            . '<table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid #d9e2ec;border-collapse:separate;">'
+            . '<tr><td style="background:#0b4f8a;padding:24px 30px;color:#ffffff;">'
+            . '<div style="font-size:13px;font-weight:700;text-transform:uppercase;color:#cfe8ff;margin-bottom:8px;">UMS · Quản lý đồng phục</div>'
+            . '<div style="font-size:24px;font-weight:700;line-height:1.3;">Phiếu yêu cầu đang chờ duyệt</div>'
+            . '<div style="font-size:14px;color:#dceeff;margin-top:8px;">Phiếu #' . esc_html( absint( $request_id ) ) . ' · Bước ' . esc_html( absint( $flow['step_order'] ?? 0 ) ) . '</div>'
+            . '</td></tr>'
+            . '<tr><td style="padding:28px 30px 10px;">'
+            . '<p style="margin:0 0 16px;font-size:16px;line-height:1.6;">Kính gửi <strong>' . esc_html( $recipient_name !== '' ? $recipient_name : 'Anh/Chị' ) . '</strong>,</p>'
+            . '<p style="margin:0 0 22px;font-size:15px;line-height:1.65;color:#46566a;">Một phiếu yêu cầu cấp đồng phục đã được chuyển tới bước <strong style="color:#172033;">' . esc_html( $flow['step_name'] ?? '' ) . '</strong> và đang chờ Anh/Chị xử lý.</p>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f7fa;border-left:4px solid #16a36a;margin-bottom:24px;">'
+            . '<tr><td style="padding:16px 18px;font-size:14px;line-height:1.7;">'
+            . '<strong>Người nhận:</strong> ' . esc_html( $employee_label !== '' ? $employee_label : '-' ) . '<br>'
+            . '<strong>Phòng ban:</strong> ' . esc_html( $department !== '' ? $department : '-' ) . '<br>'
+            . '<strong>Lý do:</strong> ' . esc_html( $reason )
+            . '</td></tr></table>'
+            . '<div style="font-size:16px;font-weight:700;margin:0 0 10px;">Chi tiết đồng phục</div>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #d9e2ec;border-collapse:collapse;font-size:14px;">'
+            . '<tr style="background:#e8f1f8;">'
+            . '<th align="left" style="padding:11px 14px;color:#173b5e;">Loại sản phẩm</th>'
+            . '<th style="padding:11px 14px;color:#173b5e;width:90px;">Size</th>'
+            . '<th style="padding:11px 14px;color:#173b5e;width:70px;">SL</th>'
+            . '</tr>' . $item_rows . '</table>'
+            . '<div style="text-align:center;padding:28px 0 20px;">'
+            . '<a href="' . esc_url( $detail_url ) . '" style="display:inline-block;background:#1769d2;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:13px 24px;border-radius:4px;">Mở phiếu và duyệt</a>'
+            . '</div>'
+            . '<p style="margin:0 0 18px;font-size:12px;line-height:1.6;color:#77869a;text-align:center;">Nếu nút không hoạt động, vui lòng mở liên kết: <a href="' . esc_url( $detail_url ) . '" style="color:#1769d2;word-break:break-all;">' . esc_html( $detail_url ) . '</a></p>'
+            . '</td></tr>'
+            . '<tr><td style="background:#f4f7fa;border-top:1px solid #d9e2ec;padding:16px 30px;font-size:12px;color:#77869a;text-align:center;">Email được gửi tự động từ UMS. Vui lòng không trả lời email này.</td></tr>'
+            . '</table></td></tr></table></body></html>';
+    }
+
+    /**
+     * Organization email is authoritative for synchronized employees.
+     */
+    private static function get_approval_notification_email( $approver ) {
+        $user_id       = absint( $approver['user_id'] ?? 0 );
+        $employee_code = trim( (string) ( $approver['employee_code'] ?? '' ) );
+        $organization  = UMS_DB_Organization::get_by_wp_user_id( $user_id, $employee_code );
+        $candidates    = array(
+            is_array( $organization ) ? ( $organization['email'] ?? '' ) : '',
+            $approver['email'] ?? '',
+        );
+
+        $wp_user = $user_id > 0 ? get_userdata( $user_id ) : null;
+        if ( $wp_user instanceof WP_User ) {
+            $candidates[] = $wp_user->user_email;
+        }
+
+        foreach ( $candidates as $candidate ) {
+            $email = sanitize_email( (string) $candidate );
+            if ( $email !== '' && is_email( $email ) ) {
+                return $email;
+            }
+        }
+
+        return '';
     }
 
     private static function get_flow_by_step( $approval_flows, $step_order ) {
