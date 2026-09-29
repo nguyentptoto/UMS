@@ -186,7 +186,7 @@ foreach ( $details as $detail ) {
 						</label>
 						<label>
 							<span>Giá</span>
-							<input type="text" value="<?php echo esc_attr( number_format( $total, 0, '.', '' ) ); ?>" readonly>
+							<input type="text" value="<?php echo esc_attr( number_format( $total, 0, '.', ',' ) ); ?>" readonly>
 						</label>
 						<input type="hidden" value="<?php echo esc_attr( number_format( $unit_price, 0, '.', '' ) ); ?>">
 					</div>
