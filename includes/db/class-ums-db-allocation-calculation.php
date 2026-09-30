@@ -3,12 +3,58 @@
  * Luu ket qua tinh so luong cap phat da chot de lam dau vao cho PR.
  */
 class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
+	const SCHEMA_VERSION = '2.0.0';
+
 	public static function table() {
 		return self::prefix() . 'uniform_allocation_calculation_batches';
 	}
 
 	public static function detail_table() {
 		return self::prefix() . 'uniform_allocation_calculation_details';
+	}
+
+	public static function ensure_schema() {
+		if ( get_option( 'ums_allocation_calculation_schema_version' ) === self::SCHEMA_VERSION || ! self::is_ready() ) {
+			return;
+		}
+
+		$db = self::db();
+		$table = self::table();
+		$columns = array(
+			'factory_code'     => "VARCHAR(10) NOT NULL DEFAULT 'ALL' AFTER period_month",
+			'source_type'      => "VARCHAR(30) NOT NULL DEFAULT 'excel' AFTER file_hash",
+			'source_ref'       => "VARCHAR(255) NOT NULL DEFAULT '' AFTER source_type",
+			'source_sheet'     => "VARCHAR(255) NOT NULL DEFAULT '' AFTER source_ref",
+			'source_synced_at' => 'DATETIME NULL AFTER source_sheet',
+		);
+		foreach ( $columns as $column => $definition ) {
+			if ( ! self::has_column( $column ) ) {
+				$db->query( "ALTER TABLE $table ADD COLUMN $column $definition" );
+			}
+		}
+		$index_exists = $db->get_var(
+			$db->prepare(
+				"SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = 'idx_period_factory_active' LIMIT 1",
+				$table
+			)
+		);
+		if ( ! $index_exists ) {
+			$db->query( "ALTER TABLE $table ADD KEY idx_period_factory_active (calculation_year, period_month, factory_code, is_active)" );
+		}
+
+		if ( self::has_column( 'factory_code' ) && self::has_column( 'source_type' ) && self::has_column( 'source_ref' ) && self::has_column( 'source_sheet' ) && self::has_column( 'source_synced_at' ) ) {
+			update_option( 'ums_allocation_calculation_schema_version', self::SCHEMA_VERSION, false );
+		}
+	}
+
+	public static function supports_factory_sources() {
+		return self::is_ready() && self::has_column( 'factory_code' ) && self::has_column( 'source_type' );
+	}
+
+	private static function has_column( $column ) {
+		return self::db()->get_var(
+			self::db()->prepare( 'SHOW COLUMNS FROM ' . self::table() . ' LIKE %s', $column )
+		) === $column;
 	}
 
 	public static function is_ready() {
@@ -32,8 +78,13 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 			array(
 				'calculation_year' => absint( $preview['year'] ),
 				'period_month'     => absint( $preview['month'] ),
+				'factory_code'     => self::normalize_batch_factory( $preview['factory_code'] ?? '' ),
 				'file_name'        => sanitize_file_name( $preview['file_name'] ),
 				'file_hash'        => sanitize_text_field( $preview['file_hash'] ),
+				'source_type'      => sanitize_key( (string) ( $preview['source_type'] ?? 'excel' ) ),
+				'source_ref'       => sanitize_text_field( (string) ( $preview['source_ref'] ?? '' ) ),
+				'source_sheet'     => sanitize_text_field( (string) ( $preview['source_sheet'] ?? '' ) ),
+				'source_synced_at' => self::normalize_datetime( $preview['source_synced_at'] ?? '' ),
 				'employee_count'   => absint( $preview['employee_count'] ),
 				'detail_count'     => count( $preview['details'] ),
 				'requested_qty'    => absint( $preview['requested_quantity'] ?? 0 ),
@@ -44,7 +95,7 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 				'calculated_by'    => absint( $user_id ),
 				'created_at'       => current_time( 'mysql' ),
 			),
-			array( '%d', '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%s' )
+			array( '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%s', '%d', '%d', '%s' )
 		);
 		if ( false === $inserted ) {
 			$db->query( 'ROLLBACK' );
@@ -73,8 +124,8 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 
 		$deactivated = $db->query(
 			$db->prepare(
-				'UPDATE ' . self::table() . ' SET is_active = 0 WHERE calculation_year = %d AND period_month = %d AND batch_id <> %d AND is_active = 1',
-				absint( $preview['year'] ), absint( $preview['month'] ), $batch_id
+				'UPDATE ' . self::table() . ' SET is_active = 0 WHERE calculation_year = %d AND period_month = %d AND factory_code = %s AND batch_id <> %d AND is_active = 1',
+				absint( $preview['year'] ), absint( $preview['month'] ), self::normalize_batch_factory( $preview['factory_code'] ?? '' ), $batch_id
 			)
 		);
 		if ( false === $deactivated ) {
@@ -91,9 +142,13 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 			return array();
 		}
 		$factory_code = $factory_code !== '' ? UMS_DB_Inventory::normalize_factory_code( $factory_code ) : '';
+		$batch = self::get_active_batch( $year, $period_month, $factory_code );
+		if ( ! $batch ) {
+			return array();
+		}
 		$organization_join = '';
 		$factory_where = '';
-		if ( $factory_code !== '' ) {
+		if ( $factory_code !== '' && (string) ( $batch['factory_code'] ?? 'ALL' ) === 'ALL' ) {
 			$organization_join = ' LEFT JOIN ' . UMS_DB_Organization::table() . ' organization ON organization.employee_no = details.employee_no';
 			if ( $factory_code === 'DA' ) {
 				$factory_where = " AND LEFT(REPLACE(organization.cost_center, '-', ''), 4) = '1300'";
@@ -109,10 +164,10 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 				FROM ' . self::detail_table() . ' details
 				INNER JOIN ' . self::table() . ' batches ON batches.batch_id = details.batch_id
 				' . $organization_join . '
-				WHERE batches.calculation_year = %d AND batches.period_month = %d AND batches.is_active = 1
+				WHERE batches.batch_id = %d AND batches.is_active = 1
 				' . $factory_where . '
 				GROUP BY details.item_id',
-				absint( $year ), absint( $period_month )
+				absint( $batch['batch_id'] )
 			),
 			ARRAY_A
 		);
@@ -161,13 +216,26 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 		return self::db()->get_results( self::db()->prepare( $sql, $params ), ARRAY_A );
 	}
 
-	public static function get_active_batch( $year, $period_month ) {
+	public static function get_active_batch( $year, $period_month, $factory_code = '' ) {
 		if ( ! self::is_ready() ) {
 			return null;
 		}
+		$where = 'calculation_year = %d AND period_month = %d AND is_active = 1';
+		$params = array( absint( $year ), absint( $period_month ) );
+		if ( $factory_code !== '' ) {
+			$where .= ' AND factory_code = %s';
+			$params[] = UMS_DB_Inventory::normalize_factory_code( $factory_code );
+		}
+		$batch = self::db()->get_row(
+			self::db()->prepare( 'SELECT * FROM ' . self::table() . ' WHERE ' . $where . ' ORDER BY batch_id DESC LIMIT 1', $params ),
+			ARRAY_A
+		);
+		if ( $batch || $factory_code === '' ) {
+			return $batch;
+		}
 		return self::db()->get_row(
 			self::db()->prepare(
-				'SELECT * FROM ' . self::table() . ' WHERE calculation_year = %d AND period_month = %d AND is_active = 1 ORDER BY batch_id DESC LIMIT 1',
+				'SELECT * FROM ' . self::table() . " WHERE calculation_year = %d AND period_month = %d AND factory_code = 'ALL' AND is_active = 1 ORDER BY batch_id DESC LIMIT 1",
 				absint( $year ), absint( $period_month )
 			),
 			ARRAY_A
@@ -212,5 +280,15 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 			),
 			ARRAY_A
 		);
+	}
+
+	private static function normalize_batch_factory( $factory_code ) {
+		$factory_code = strtoupper( sanitize_key( (string) $factory_code ) );
+		return array_key_exists( $factory_code, UMS_DB_Inventory::get_factory_options() ) ? $factory_code : 'ALL';
+	}
+
+	private static function normalize_datetime( $value ) {
+		$value = trim( sanitize_text_field( (string) $value ) );
+		return preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value ) ? $value : current_time( 'mysql' );
 	}
 }

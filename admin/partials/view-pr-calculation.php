@@ -33,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<select name="allocation_batch_id" onchange="this.form.submit()">
 						<?php foreach ( $allocation_batches as $batch ) : ?>
 							<option value="<?php echo esc_attr( $batch['batch_id'] ); ?>" <?php selected( $selected_batch_id, $batch['batch_id'] ); ?>>
-								<?php echo esc_html( sprintf( 'T%d/%d - %s', $batch['period_month'], $batch['calculation_year'], $batch['file_name'] ) ); ?>
+								<?php echo esc_html( sprintf( '%s - T%d/%d - %s', $factories[ $batch['factory_code'] ?? '' ] ?? 'Dữ liệu chung cũ', $batch['period_month'], $batch['calculation_year'], $batch['file_name'] ) ); ?>
 							</option>
 						<?php endforeach; ?>
 					</select>
@@ -43,7 +43,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 			<?php if ( $selected_batch ) : ?>
 				<p>
-					<strong><?php echo esc_html( sprintf( 'Kỳ T%d/%d', $selected_batch['period_month'], $selected_batch['calculation_year'] ) ); ?></strong>
+					<strong><?php echo esc_html( sprintf( '%s · Kỳ T%d/%d', $factories[ $selected_batch['factory_code'] ?? '' ] ?? 'Dữ liệu chung cũ', $selected_batch['period_month'], $selected_batch['calculation_year'] ) ); ?></strong>
 					<?php echo esc_html( sprintf(
 						' | File: %s | %s CNV | Đăng ký: %s | Cấp phát: %s | Chốt lúc: %s%s',
 						$selected_batch['file_name'],
@@ -89,7 +89,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					<span>Kho nhà máy *</span>
 					<select name="factory_code" required>
 						<?php foreach ( $factories as $factory_code => $factory_name ) : ?>
-							<option value="<?php echo esc_attr( $factory_code ); ?>">Kho <?php echo esc_html( $factory_name ); ?></option>
+							<option value="<?php echo esc_attr( $factory_code ); ?>" <?php selected( $default_factory, $factory_code ); ?>>Kho <?php echo esc_html( $factory_name ); ?></option>
 						<?php endforeach; ?>
 					</select>
 				</label>

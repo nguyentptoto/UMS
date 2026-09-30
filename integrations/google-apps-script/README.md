@@ -64,6 +64,10 @@ Trong file `Mã.gs`, tìm hàm `doGet(e)` hiện tại và thêm nhánh này ở
 
 ```javascript
 function doGet(e) {
+	if (e && e.parameter && e.parameter.ums_module === 'tvn_allocation') {
+		return umsTvnAllocationDoGet(e);
+	}
+
   if (e && e.parameter && e.parameter.ums_module === 'tvn_org') {
     return umsTvnOrgDoGet(e);
   }
@@ -72,10 +76,20 @@ function doGet(e) {
 }
 ```
 
+Để đồng bộ đăng ký cấp phát theo 3 nhà máy và hai kỳ T4/T9, tạo thêm file
+`ums-allocation-sync.gs` từ thư mục này rồi deploy lại Web App. UMS sẽ truyền
+Spreadsheet ID, tab `Câu trả lời biểu mẫu 1`, nhà máy, năm và kỳ đã chọn vào popup.
+Có thể khai báo thêm Script Property `UMS_TVN_ALLOCATION_ENDPOINT`; nếu bỏ trống,
+script tự suy ra endpoint này từ `UMS_TVN_ORG_ENDPOINT`.
+
 Nếu `doGet(e)` hiện tại đang không có tham số `e`, đổi thành:
 
 ```javascript
 function doGet(e) {
+	if (e && e.parameter && e.parameter.ums_module === 'tvn_allocation') {
+		return umsTvnAllocationDoGet(e);
+	}
+
   if (e && e.parameter && e.parameter.ums_module === 'tvn_org') {
     return umsTvnOrgDoGet(e);
   }

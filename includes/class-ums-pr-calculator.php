@@ -25,9 +25,9 @@ class UMS_PR_Calculator {
 		if ( ! UMS_DB_Allocation_Calculation::is_ready() ) {
 			throw new RuntimeException( 'Chưa có cấu trúc lưu kết quả tính số lượng cấp phát. Hãy cập nhật file ums.sql.' );
 		}
-		$allocation_batch = UMS_DB_Allocation_Calculation::get_active_batch( $year, $period_month );
+		$allocation_batch = UMS_DB_Allocation_Calculation::get_active_batch( $year, $period_month, $factory_code );
 		if ( ! $allocation_batch ) {
-			throw new RuntimeException( sprintf( 'Chưa chốt kết quả tính số lượng cấp phát cho kỳ T%d/%d.', $period_month, $year ) );
+			throw new RuntimeException( sprintf( 'Chưa chốt kết quả tính số lượng cấp phát cho nhà máy %s, kỳ T%d/%d.', UMS_DB_Inventory::get_factory_options()[ $factory_code ], $period_month, $year ) );
 		}
 
 		$reserve  = self::read_reserve_file( $file_path );

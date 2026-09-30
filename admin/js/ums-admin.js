@@ -328,12 +328,157 @@
         }
     }
 
+	function initializeAllocationSheetSync() {
+		var $button = $('#ums-start-allocation-sheet-sync');
+		var $log = $('#ums-allocation-sheet-log');
+		var activePopup = null;
+		var posting = false;
+
+		if (!$button.length || !$log.length) {
+			return;
+		}
+
+		function appendLog(message, type) {
+			$('<div/>', {
+				class: 'ums-sync-log-line' + (type ? ' ums-sync-log-line-' + type : ''),
+				text: '[' + new Date().toLocaleTimeString() + '] ' + message
+			}).appendTo($log);
+			$log.scrollTop($log.prop('scrollHeight'));
+		}
+
+		function restoreButton() {
+			posting = false;
+			$button.prop('disabled', false).text('Đọc dữ liệu từ Google Sheet');
+		}
+
+		function postFromAdmin(payload, batchSize) {
+			var rows = payload && Array.isArray(payload.rows) ? payload.rows : [];
+			var size = parseInt(batchSize, 10) || 200;
+			var endpoint = String($button.attr('data-rest-endpoint') || '').trim();
+			var token = String($button.attr('data-sync-token') || '').trim();
+			var previewUrl = '';
+
+			if (!rows.length || !endpoint || !token) {
+				appendLog('Không nhận được dữ liệu đăng ký hợp lệ từ Google Sheet.', 'error');
+				restoreButton();
+				return;
+			}
+
+			posting = true;
+			function sendBatch(offset) {
+				var batch = rows.slice(offset, offset + size);
+				var body = $.extend({}, payload, {
+					rows: batch,
+					batch_offset: offset,
+					batch_size: batch.length,
+					finalize: offset + batch.length >= rows.length
+				});
+				appendLog('Đang gửi dòng ' + (offset + 1) + '-' + (offset + batch.length) + ' về UMS...', 'info');
+				return window.fetch(endpoint, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-Sync-Token': token },
+					body: JSON.stringify(body)
+				}).then(function (response) {
+					return response.text().then(function (text) {
+						var decoded;
+						try { decoded = JSON.parse(text); } catch (error) {
+							throw new Error('UMS trả về dữ liệu không hợp lệ. HTTP ' + response.status + ': ' + text);
+						}
+						if (response.status < 200 || response.status >= 300) {
+							throw new Error(decoded.message || ('UMS từ chối dữ liệu. HTTP ' + response.status));
+						}
+						previewUrl = decoded.preview_url || previewUrl;
+						return offset + batch.length < rows.length ? sendBatch(offset + batch.length) : decoded;
+					});
+				});
+			}
+
+			sendBatch(0).then(function () {
+				appendLog('Đã đọc xong Google Sheet. Đang mở kết quả kiểm tra...', 'success');
+				if (previewUrl) {
+					window.location.href = previewUrl;
+					return;
+				}
+				restoreButton();
+			}).catch(function (error) {
+				appendLog(error.message || String(error), 'error');
+				restoreButton();
+			});
+		}
+
+		window.addEventListener('message', function (event) {
+			var data = event.data || {};
+			if (!data || data.source !== 'ums-sheet-sync' || (activePopup && event.source && event.source !== activePopup)) {
+				return;
+			}
+			if (data.action === 'admin-post' && data.mode === 'allocation') {
+				appendLog('Đang chuyển dữ liệu qua kết nối nội bộ UMS...', 'warning');
+				postFromAdmin(data.payload || {}, data.batchSize || 200);
+				return;
+			}
+			if (data.message) {
+				appendLog(data.message, data.status || 'info');
+			}
+			if (data.done && data.payload && data.payload.preview_url) {
+				window.location.href = data.payload.preview_url;
+			} else if (data.done && !posting) {
+				restoreButton();
+			}
+		});
+
+		$button.on('click', function () {
+			var factoryCode = String($('#ums-allocation-factory').val() || '');
+			var month = String($('#ums-allocation-month').val() || '');
+			var year = String($('#ums-allocation-year').val() || '');
+			var sources = $button.attr('data-sources') || '{}';
+			try { sources = JSON.parse(sources); } catch (error) { sources = {}; }
+			var source = sources[factoryCode] && sources[factoryCode][month] ? sources[factoryCode][month] : null;
+			var appsScriptUrl = String($button.attr('data-apps-script-url') || '').trim();
+			if (!source || !source.spreadsheet_id) {
+				window.alert('Chưa cấu hình link Google Sheet cho nhà máy và kỳ đã chọn.');
+				return;
+			}
+			if (!appsScriptUrl) {
+				window.alert('Chưa cấu hình Google Apps Script Web App URL.');
+				return;
+			}
+
+			$log.empty();
+			appendLog('Đang mở Google Sheet đã cấu hình...', 'info');
+			var query = $.param({
+				ums_module: 'tvn_allocation',
+				mode: 'allocation',
+				spreadsheet_id: source.spreadsheet_id,
+				sheet_name: source.sheet_name,
+				factory_code: factoryCode,
+				period_month: month,
+				calculation_year: year
+			});
+			activePopup = window.open(appsScriptUrl + (appsScriptUrl.indexOf('?') >= 0 ? '&' : '?') + query, 'umsAllocationSheetPopup', 'width=860,height=720,menubar=no,toolbar=no,location=yes,status=yes,scrollbars=yes,resizable=yes');
+			if (!activePopup) {
+				appendLog('Trình duyệt đã chặn popup. Hãy cho phép popup cho trang UMS.', 'error');
+				return;
+			}
+			$button.prop('disabled', true).text('Đang đọc Google Sheet...');
+			var popupCheck = window.setInterval(function () {
+				if (activePopup && activePopup.closed) {
+					window.clearInterval(popupCheck);
+					activePopup = null;
+					if (!posting) {
+						restoreButton();
+					}
+				}
+			}, 1000);
+		});
+	}
+
     $(function () {
         initializeApprovalStepOrder();
 		initializeApprovalResolverFields();
 		initializeSearchableSelects();
         initializeOrganizationGrid();
         initializeSheetSyncBridge();
+		initializeAllocationSheetSync();
 
         $(document).on('click', '.ums-delete-link', function (event) {
             var message = $(this).data('confirm') || 'Bạn có chắc muốn xóa hồ sơ này?';

@@ -327,8 +327,13 @@ CREATE TABLE IF NOT EXISTS `wp_uniform_allocation_calculation_batches` (
     `batch_id` BIGINT(20) UNSIGNED AUTO_INCREMENT NOT NULL,
     `calculation_year` SMALLINT UNSIGNED NOT NULL,
     `period_month` TINYINT UNSIGNED NOT NULL COMMENT '4 hoac 9',
+	`factory_code` VARCHAR(10) NOT NULL DEFAULT 'ALL' COMMENT 'HY, DA, VP; ALL la du lieu cu',
     `file_name` VARCHAR(255) NOT NULL,
     `file_hash` CHAR(64) NOT NULL,
+	`source_type` VARCHAR(30) NOT NULL DEFAULT 'excel',
+	`source_ref` VARCHAR(255) NOT NULL DEFAULT '',
+	`source_sheet` VARCHAR(255) NOT NULL DEFAULT '',
+	`source_synced_at` DATETIME NULL,
     `employee_count` INT NOT NULL DEFAULT 0,
     `detail_count` INT NOT NULL DEFAULT 0,
     `requested_qty` INT NOT NULL DEFAULT 0,
@@ -340,6 +345,7 @@ CREATE TABLE IF NOT EXISTS `wp_uniform_allocation_calculation_batches` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`batch_id`),
     KEY `idx_period_active` (`calculation_year`, `period_month`, `is_active`),
+	KEY `idx_period_factory_active` (`calculation_year`, `period_month`, `factory_code`, `is_active`),
     KEY `idx_file_hash` (`file_hash`),
     KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

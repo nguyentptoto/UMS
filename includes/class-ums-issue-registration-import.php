@@ -6,9 +6,7 @@ class UMS_Allocation_Calculation {
 	const PREVIEW_PREFIX = 'ums_allocation_calculation_preview_';
 	const PREVIEW_TTL    = 2 * HOUR_IN_SECONDS;
 
-	public static function analyze( $file_path, $file_name, $year, $month ) {
-		$year  = min( 2100, max( 2000, absint( $year ) ) );
-		$month = in_array( absint( $month ), array( 4, 9 ), true ) ? absint( $month ) : 9;
+	public static function analyze( $file_path, $file_name, $year, $month, $factory_code = '' ) {
 		$reader = new UMS_XLSX_Reader( $file_path );
 		$sheet  = 'Câu trả lời biểu mẫu';
 		if ( ! $reader->has_sheet( $sheet ) ) {
@@ -16,6 +14,52 @@ class UMS_Allocation_Calculation {
 		}
 
 		$source_rows = $reader->read_sheet( $sheet );
+		return self::analyze_source_rows(
+			$source_rows,
+			$file_name,
+			hash_file( 'sha256', $file_path ),
+			$year,
+			$month,
+			$factory_code,
+			array( 'source_type' => 'excel', 'source_ref' => sanitize_file_name( $file_name ), 'source_sheet' => $sheet )
+		);
+	}
+
+	public static function analyze_sheet_rows( $headers, $rows, $source, $year, $month, $factory_code ) {
+		$source_rows = array( 1 => is_array( $headers ) ? $headers : array() );
+		foreach ( (array) $rows as $index => $row ) {
+			$source_rows[ $index + 2 ] = is_array( $row ) ? $row : array();
+		}
+
+		$source = is_array( $source ) ? $source : array();
+		$source_name = trim( (string) ( $source['source_name'] ?? '' ) );
+		if ( $source_name === '' ) {
+			$source_name = sprintf( 'Google Sheet %s T%d', strtoupper( (string) $factory_code ), absint( $month ) );
+		}
+		$encoded = wp_json_encode( array( 'headers' => $headers, 'rows' => $rows ), JSON_UNESCAPED_UNICODE );
+
+		return self::analyze_source_rows(
+			$source_rows,
+			$source_name,
+			hash( 'sha256', (string) $encoded ),
+			$year,
+			$month,
+			$factory_code,
+			array(
+				'source_type'      => 'google_sheet',
+				'source_ref'       => sanitize_text_field( (string) ( $source['spreadsheet_id'] ?? '' ) ),
+				'source_sheet'     => sanitize_text_field( (string) ( $source['sheet_name'] ?? '' ) ),
+				'source_synced_at' => current_time( 'mysql' ),
+			)
+		);
+	}
+
+	private static function analyze_source_rows( $source_rows, $file_name, $file_hash, $year, $month, $factory_code, $source_meta ) {
+		$year  = min( 2100, max( 2000, absint( $year ) ) );
+		$month = in_array( absint( $month ), array( 4, 9 ), true ) ? absint( $month ) : 9;
+		$factory_code = trim( (string) $factory_code ) !== ''
+			? UMS_DB_Inventory::normalize_factory_code( $factory_code )
+			: '';
 		self::validate_headers( $source_rows[1] ?? array() );
 		$parsed      = array();
 		$errors      = array();
@@ -42,17 +86,35 @@ class UMS_Allocation_Calculation {
 
 		$employee_nos = array_keys( $code_rows );
 		$requested_quantity = 0;
-		foreach ( $parsed as $entry ) {
-			$requested_quantity += array_sum( array_column( $entry['requests'], 'quantity' ) );
-		}
 		$organization = UMS_DB_Organization::get_by_employee_nos( $employee_nos );
+		$eligible_employee_nos = array();
 		foreach ( $employee_nos as $employee_no ) {
 			if ( ! isset( $organization[ $employee_no ] ) ) {
 				$warnings[] = sprintf( 'Mã nhân viên %s không tồn tại trong Sơ đồ tổ chức TVN nên không được cấp; các CNV hợp lệ khác vẫn được xử lý.', $employee_no );
+				continue;
+			}
+			if ( $factory_code !== '' ) {
+				$employee_factory = UMS_DB_Inventory::resolve_factory_code_for_employee( $organization[ $employee_no ] );
+				if ( $employee_factory !== $factory_code ) {
+					$warnings[] = sprintf(
+						'Mã nhân viên %s thuộc nhà máy %s trên Sơ đồ tổ chức nên không được tính vào dữ liệu nhà máy %s.',
+						$employee_no,
+						UMS_DB_Inventory::get_factory_options()[ $employee_factory ] ?? $employee_factory,
+						UMS_DB_Inventory::get_factory_options()[ $factory_code ] ?? $factory_code
+					);
+					continue;
+				}
+			}
+			$eligible_employee_nos[] = $employee_no;
+		}
+		$eligible_lookup = array_fill_keys( $eligible_employee_nos, true );
+		foreach ( $parsed as $entry ) {
+			if ( isset( $eligible_lookup[ $entry['employee_no'] ] ) && count( $code_rows[ $entry['employee_no'] ] ?? array() ) === 1 ) {
+				$requested_quantity += array_sum( array_column( $entry['requests'], 'quantity' ) );
 			}
 		}
 
-		$allowance_map = UMS_Employee_Allowance_Report::build_employee_allocations( $employee_nos, $year, $month );
+		$allowance_map = UMS_Employee_Allowance_Report::build_employee_allocations( $eligible_employee_nos, $year, $month );
 		$inventory     = UMS_DB_Inventory::get_all();
 		$inventory_by_id = array();
 		foreach ( $inventory as $item ) {
@@ -132,17 +194,21 @@ class UMS_Allocation_Calculation {
 			}
 		}
 
-		$file_hash = hash_file( 'sha256', $file_path );
 		if ( empty( $details ) && empty( $errors ) ) {
 			$warnings[] = 'File không có dòng cấp phát hợp lệ để chốt kết quả tính.';
 		}
 
 		return array(
 			'file_name' => sanitize_file_name( $file_name ), 'file_hash' => $file_hash,
-			'year' => $year, 'month' => $month, 'employee_count' => count( $employee_nos ),
+			'year' => $year, 'month' => $month, 'factory_code' => $factory_code,
+			'employee_count' => count( $eligible_employee_nos ),
 			'requested_quantity' => $requested_quantity,
 			'details' => $details, 'total_quantity' => array_sum( array_column( $details, 'quantity' ) ),
 			'errors' => array_values( array_unique( $errors ) ), 'warnings' => array_values( array_unique( $warnings ) ),
+			'source_type' => sanitize_key( (string) ( $source_meta['source_type'] ?? 'excel' ) ),
+			'source_ref' => sanitize_text_field( (string) ( $source_meta['source_ref'] ?? '' ) ),
+			'source_sheet' => sanitize_text_field( (string) ( $source_meta['source_sheet'] ?? '' ) ),
+			'source_synced_at' => sanitize_text_field( (string) ( $source_meta['source_synced_at'] ?? '' ) ),
 		);
 	}
 

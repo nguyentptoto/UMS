@@ -34,6 +34,7 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_confirm_newcomer_inventory_out', array( __CLASS__, 'handle_confirm_newcomer_inventory_out' ) );
 		add_action( 'admin_post_ums_preview_allocation_calculation', array( __CLASS__, 'handle_preview_allocation_calculation' ) );
 		add_action( 'admin_post_ums_save_allocation_calculation', array( __CLASS__, 'handle_save_allocation_calculation' ) );
+		add_action( 'admin_post_ums_save_allocation_sheet_sources', array( __CLASS__, 'handle_save_allocation_sheet_sources' ) );
 		add_action( 'admin_post_ums_repair_inventory_prices', array( __CLASS__, 'handle_repair_inventory_prices' ) );
 		add_action( 'admin_post_ums_preview_uniform_material_import', array( __CLASS__, 'handle_preview_uniform_material_import' ) );
 		add_action( 'admin_post_ums_confirm_uniform_material_import', array( __CLASS__, 'handle_confirm_uniform_material_import' ) );
@@ -462,6 +463,10 @@ class UMS_Admin {
 		$allocation_calculation_ready = UMS_DB_Allocation_Calculation::is_ready();
 		$allocation_preview_token = isset( $_GET['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['allocation_preview_token'] ) ) : '';
 		$allocation_preview = $allocation_preview_token !== '' ? UMS_Allocation_Calculation::get_preview( $allocation_preview_token ) : null;
+		$allocation_sheet_sources = UMS_Allocation_Sheet_Sync::get_sources();
+		$allocation_sheet_apps_script_url = (string) get_option( 'ums_sheet_sync_apps_script_url', '' );
+		$allocation_sheet_rest_endpoint = rest_url( UMS_Allocation_Sheet_Sync::REST_NAMESPACE . UMS_Allocation_Sheet_Sync::REST_ROUTE );
+		$allocation_sheet_sync_token = UMS_Sheet_User_Sync::get_sync_token();
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php';
@@ -532,6 +537,9 @@ class UMS_Admin {
 			$default_year      = absint( $selected_batch['calculation_year'] );
 		}
 		$default_month = $selected_batch ? absint( $selected_batch['period_month'] ) : 9;
+		$default_factory = $selected_batch && array_key_exists( (string) ( $selected_batch['factory_code'] ?? '' ), $factories )
+			? (string) $selected_batch['factory_code']
+			: UMS_DB_Inventory::DEFAULT_FACTORY;
 		$allocation_summary_rows = $selected_batch
 			? UMS_DB_Allocation_Calculation::get_batch_summary_rows( $selected_batch_id )
 			: array();
@@ -2013,7 +2021,8 @@ class UMS_Admin {
 			$preview = UMS_Allocation_Calculation::analyze(
 				$file['tmp_name'], $file['name'],
 				isset( $_POST['allocation_year'] ) ? absint( $_POST['allocation_year'] ) : current_time( 'Y' ),
-				isset( $_POST['allocation_month'] ) ? absint( $_POST['allocation_month'] ) : 9
+				isset( $_POST['allocation_month'] ) ? absint( $_POST['allocation_month'] ) : 9,
+				isset( $_POST['factory_code'] ) ? UMS_DB_Inventory::normalize_factory_code( wp_unslash( $_POST['factory_code'] ) ) : UMS_DB_Inventory::DEFAULT_FACTORY
 			);
 			$token = UMS_Allocation_Calculation::store_preview( $preview );
 			self::redirect_to_inventory( array(
@@ -2023,6 +2032,18 @@ class UMS_Admin {
 		} catch ( Throwable $error ) {
 			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_invalid_file', 'notice_extra' => $error->getMessage() ) );
 		}
+	}
+
+	public static function handle_save_allocation_sheet_sources() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
+		}
+		check_admin_referer( 'ums_save_allocation_sheet_sources' );
+		$result = UMS_Allocation_Sheet_Sync::save_sources( $_POST['allocation_sheet_sources'] ?? array() );
+		if ( is_wp_error( $result ) ) {
+			self::redirect_to_inventory( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $result->get_error_message() ) );
+		}
+		self::redirect_to_inventory( array( 'notice' => 'allocation_sheet_settings_saved' ) );
 	}
 
 	public static function handle_save_allocation_calculation() {
@@ -3657,6 +3678,8 @@ class UMS_Admin {
 			'allocation_calculation_expired' => array( 'error', 'Kết quả tính tạm thời đã hết hạn. Hãy tải lại file.' ),
 			'allocation_calculation_save_failed' => array( 'error', 'Không chốt được kết quả tính số lượng cấp phát.' ),
 			'allocation_calculation_saved' => array( 'success', 'Đã chốt kết quả tính số lượng cấp phát để sử dụng khi lập PR.' ),
+			'allocation_sheet_settings_saved' => array( 'success', 'Đã lưu 6 nguồn Google Sheet cấp phát theo nhà máy và kỳ.' ),
+			'allocation_sheet_settings_error' => array( 'error', 'Không lưu được cấu hình Google Sheet cấp phát.' ),
 			'uniform_material_preview_ready' => array( 'success', 'Đã đọc sheet Mã đồng phục. Hãy kiểm tra dữ liệu trước khi xác nhận.' ),
 			'uniform_material_preview_error' => array( 'error', 'File GA có lỗi dữ liệu và chưa thể import.' ),
 			'uniform_material_invalid_file' => array( 'error', 'File GA không hợp lệ hoặc không đọc được sheet Mã đồng phục.' ),

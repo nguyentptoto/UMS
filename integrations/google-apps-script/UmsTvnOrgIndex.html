@@ -89,7 +89,7 @@
         const body = Object.assign({}, payload, {
           batch_offset: offset,
           batch_size: items.length,
-          finalize: mode === 'organization' && offset + items.length >= totalItems
+		  finalize: offset + items.length >= totalItems
         });
         body[itemKey] = items;
 
@@ -129,6 +129,7 @@
           failed: 0
         };
         const errors = [];
+		let previewUrl = '';
 
         const items = payload[itemKey] || [];
         for (let offset = 0; offset < items.length; offset += batchSize) {
@@ -141,13 +142,14 @@
           total.updated += Number(result.updated || result.summary?.updated || 0);
           total.failed += Number(result.failed || result.summary?.failed || 0);
           total.deleted = Number(total.deleted || 0) + Number(result.deleted || 0);
+		  previewUrl = result.preview_url || previewUrl;
 
           (result.errors || []).forEach(function (error) {
             errors.push(error);
           });
         }
 
-        const summary = Object.assign({}, total, { errors: errors.slice(0, 20) });
+		const summary = Object.assign({}, total, { errors: errors.slice(0, 20), preview_url: previewUrl });
         document.getElementById('status').innerHTML = '<span class="ok">Hoàn tất đồng bộ.</span>';
         finish('Hoàn tất đồng bộ Google Sheet.', total.failed > 0 ? 'warning' : 'success', summary);
       }
