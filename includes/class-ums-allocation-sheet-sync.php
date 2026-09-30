@@ -6,6 +6,7 @@ class UMS_Allocation_Sheet_Sync {
 	const REST_NAMESPACE = 'ums/v1';
 	const REST_ROUTE = '/sync-allocation-registration';
 	const SOURCES_OPTION = 'ums_allocation_sheet_sources';
+	const APPS_SCRIPT_OPTION = 'ums_allocation_sheet_apps_script_url';
 	const STAGING_PREFIX = 'ums_allocation_sheet_stage_';
 	const DEFAULT_SHEET_NAME = 'Câu trả lời biểu mẫu 1';
 	const BATCH_SIZE = 200;
@@ -41,6 +42,19 @@ class UMS_Allocation_Sheet_Sync {
 			}
 		}
 		return $sources;
+	}
+
+	public static function get_apps_script_url() {
+		return esc_url_raw( (string) get_option( self::APPS_SCRIPT_OPTION, '' ) );
+	}
+
+	public static function save_apps_script_url( $url ) {
+		$url = esc_url_raw( wp_unslash( (string) $url ) );
+		if ( $url !== '' && strpos( $url, 'script.google.com/' ) === false ) {
+			return new WP_Error( 'allocation_apps_script_url_invalid', 'Google Apps Script Web App URL cấp phát không hợp lệ.' );
+		}
+		update_option( self::APPS_SCRIPT_OPTION, $url, false );
+		return true;
 	}
 
 	public static function save_sources( $input ) {

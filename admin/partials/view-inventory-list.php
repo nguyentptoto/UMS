@@ -389,6 +389,23 @@ unset( $section );
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<?php wp_nonce_field( 'ums_save_allocation_sheet_sources' ); ?>
 				<input type="hidden" name="action" value="ums_save_allocation_sheet_sources">
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="ums-allocation-apps-script-url">Apps Script Web App URL cấp phát</label></th>
+						<td>
+							<input type="url" id="ums-allocation-apps-script-url" name="allocation_apps_script_url" class="large-text code" value="<?php echo esc_attr( $allocation_sheet_apps_script_url ); ?>" placeholder="https://script.google.com/macros/s/.../exec">
+							<p class="description">URL này chỉ dùng cho sáu Sheet cấp phát, tách riêng với URL đồng bộ Sơ đồ tổ chức.</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">REST Endpoint cấp phát</th>
+						<td><input type="text" class="large-text code" readonly value="<?php echo esc_attr( $allocation_sheet_rest_endpoint ); ?>"></td>
+					</tr>
+					<tr>
+						<th scope="row">X-Sync-Token</th>
+						<td><input type="text" class="large-text code" readonly value="<?php echo esc_attr( $allocation_sheet_sync_token ); ?>"></td>
+					</tr>
+				</table>
 				<table class="widefat striped">
 					<thead><tr><th>Nhà máy</th><th>Kỳ</th><th>Link Google Sheet</th><th>Tên tab</th></tr></thead>
 					<tbody>

@@ -34,8 +34,8 @@
   </head>
   <body>
     <div class="box">
-      <h2>UMS Sheet Sync</h2>
-      <p id="status">Đang chuẩn bị dữ liệu...</p>
+      <h2>UMS - Đồng bộ số lượng cấp phát</h2>
+      <p id="status">Đang chuẩn bị dữ liệu đăng ký...</p>
       <div class="log" id="log"></div>
     </div>
 
@@ -45,8 +45,6 @@
       const payload = <?!= payload ?>;
       const totalRows = Number('<?= totalRows ?>') || 0;
       const batchSize = Number('<?= batchSize ?>') || 200;
-      const mode = '<?= mode ?>';
-      const itemKey = '<?= itemKey ?>';
 
       function notify(message, status, extra) {
         const data = {
@@ -58,7 +56,6 @@
         if (extra) {
           data.payload = extra;
         }
-
         if (window.opener) {
           window.opener.postMessage(data, '*');
         }
@@ -68,31 +65,27 @@
         document.getElementById('log').appendChild(line);
       }
 
-      function finish(message, status, extra) {
-        notify(message, status, extra);
+      function finish(message, status, summary) {
+        notify(message, status, summary);
         if (window.opener) {
           window.opener.postMessage({
             source: 'ums-sheet-sync',
             message: message,
             status: status || 'info',
-            payload: extra || null,
+            payload: summary || null,
             done: true
           }, '*');
         }
-
-        window.setTimeout(function () {
-          window.close();
-        }, 1800);
+        window.setTimeout(function () { window.close(); }, 1800);
       }
 
-      async function postBatch(items, offset, totalItems) {
+      async function postBatch(rows, offset, totalItems) {
         const body = Object.assign({}, payload, {
+          rows: rows,
           batch_offset: offset,
-          batch_size: items.length,
-		  finalize: mode === 'organization' && offset + items.length >= totalItems
+          batch_size: rows.length,
+          finalize: offset + rows.length >= totalItems
         });
-        body[itemKey] = items;
-
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -101,81 +94,61 @@
           },
           body: JSON.stringify(body)
         });
-
         const text = await response.text();
         let decoded;
 
         try {
           decoded = JSON.parse(text);
         } catch (error) {
-          throw new Error('WordPress trả về dữ liệu không phải JSON. HTTP ' + response.status + ': ' + text);
+          throw new Error('UMS trả về dữ liệu không hợp lệ. HTTP ' + response.status + ': ' + text);
         }
-
         if (response.status < 200 || response.status >= 300) {
-          throw new Error('WordPress từ chối batch. HTTP ' + response.status + ': ' + JSON.stringify(decoded));
+          throw new Error(decoded.message || ('UMS từ chối dữ liệu. HTTP ' + response.status));
         }
-
         return decoded;
       }
 
       async function run() {
-        document.getElementById('status').textContent = 'Đang gửi dữ liệu về UMS...';
-        notify('Đã đọc ' + totalRows + ' dòng từ Google Sheet.', 'info');
+        document.getElementById('status').textContent = 'Đang gửi dữ liệu cấp phát về UMS...';
+        notify('Đã đọc ' + totalRows + ' dòng đăng ký từ Google Sheet.', 'info');
 
-        const total = {
-          count: 0,
-          created: 0,
-          updated: 0,
-          failed: 0
-        };
-        const errors = [];
-
-        const items = payload[itemKey] || [];
-        for (let offset = 0; offset < items.length; offset += batchSize) {
-          const batch = items.slice(offset, offset + batchSize);
-          notify('Đang gửi batch ' + (offset + 1) + '-' + (offset + batch.length) + '...', 'info');
-
-          const result = await postBatch(batch, offset, items.length);
-          total.count += Number(result.count || result.summary?.received || 0);
-          total.created += Number(result.created || result.summary?.created || 0);
-          total.updated += Number(result.updated || result.summary?.updated || 0);
-          total.failed += Number(result.failed || result.summary?.failed || 0);
-          total.deleted = Number(total.deleted || 0) + Number(result.deleted || 0);
-
-          (result.errors || []).forEach(function (error) {
-            errors.push(error);
-          });
+        const rows = payload.rows || [];
+        const summary = { count: 0, failed: 0, preview_url: '' };
+        for (let offset = 0; offset < rows.length; offset += batchSize) {
+          const batch = rows.slice(offset, offset + batchSize);
+          notify('Đang gửi dòng ' + (offset + 1) + '-' + (offset + batch.length) + '...', 'info');
+          const result = await postBatch(batch, offset, rows.length);
+          summary.count += Number(result.count || 0);
+          summary.failed += Number(result.failed || 0);
+          summary.preview_url = result.preview_url || summary.preview_url;
+          summary.error_count = Number(result.error_count || summary.error_count || 0);
+          summary.warning_count = Number(result.warning_count || summary.warning_count || 0);
         }
 
-        const summary = Object.assign({}, total, { errors: errors.slice(0, 20) });
-        document.getElementById('status').innerHTML = '<span class="ok">Hoàn tất đồng bộ.</span>';
-        finish('Hoàn tất đồng bộ Google Sheet.', total.failed > 0 ? 'warning' : 'success', summary);
+        document.getElementById('status').innerHTML = '<span class="ok">Đã đọc xong dữ liệu cấp phát.</span>';
+        finish('Hoàn tất đọc Google Sheet cấp phát.', summary.error_count > 0 ? 'warning' : 'success', summary);
       }
 
       run().catch(function (error) {
         notify('Popup không POST trực tiếp được: ' + (error.message || String(error)), 'warning');
-
         if (window.opener) {
           window.opener.postMessage({
             source: 'ums-sheet-sync',
             action: 'admin-post',
-            message: 'Chuyển dữ liệu về trang Admin để POST cùng-origin.',
+            message: 'Chuyển dữ liệu cấp phát về trang Admin để POST cùng-origin.',
             status: 'warning',
             payload: payload,
             batchSize: batchSize,
-            mode: mode,
+            mode: 'allocation',
             done: false
           }, '*');
-
           document.getElementById('status').innerHTML = '<span class="ok">Đã chuyển dữ liệu về trang Admin.</span>';
-          window.setTimeout(function () {
-            window.close();
-          }, 1200);
+          window.setTimeout(function () { window.close(); }, 1200);
           return;
         }
 
         document.getElementById('status').innerHTML = '<span class="error">Đồng bộ thất bại.</span>';
-        finish(error.message || String(error), 'error');
+        finish(error.message || String(error), 'error', null);
       });
     </script>
   </body>

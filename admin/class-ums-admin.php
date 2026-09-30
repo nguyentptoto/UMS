@@ -464,7 +464,7 @@ class UMS_Admin {
 		$allocation_preview_token = isset( $_GET['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['allocation_preview_token'] ) ) : '';
 		$allocation_preview = $allocation_preview_token !== '' ? UMS_Allocation_Calculation::get_preview( $allocation_preview_token ) : null;
 		$allocation_sheet_sources = UMS_Allocation_Sheet_Sync::get_sources();
-		$allocation_sheet_apps_script_url = (string) get_option( 'ums_sheet_sync_apps_script_url', '' );
+		$allocation_sheet_apps_script_url = UMS_Allocation_Sheet_Sync::get_apps_script_url();
 		$allocation_sheet_rest_endpoint = rest_url( UMS_Allocation_Sheet_Sync::REST_NAMESPACE . UMS_Allocation_Sheet_Sync::REST_ROUTE );
 		$allocation_sheet_sync_token = UMS_Sheet_User_Sync::get_sync_token();
 
@@ -2039,6 +2039,10 @@ class UMS_Admin {
 			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
 		}
 		check_admin_referer( 'ums_save_allocation_sheet_sources' );
+		$apps_script_result = UMS_Allocation_Sheet_Sync::save_apps_script_url( $_POST['allocation_apps_script_url'] ?? '' );
+		if ( is_wp_error( $apps_script_result ) ) {
+			self::redirect_to_inventory( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $apps_script_result->get_error_message() ) );
+		}
 		$result = UMS_Allocation_Sheet_Sync::save_sources( $_POST['allocation_sheet_sources'] ?? array() );
 		if ( is_wp_error( $result ) ) {
 			self::redirect_to_inventory( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $result->get_error_message() ) );

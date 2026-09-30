@@ -22,7 +22,7 @@ function umsTvnAllocationDoGet(e) {
     rows: data.rows
   };
 
-  const template = HtmlService.createTemplateFromFile('UmsTvnOrgIndex');
+  const template = HtmlService.createTemplateFromFile('UmsTvnAllocationIndex');
   template.endpoint = config.endpoint;
   template.token = config.token;
   template.payload = JSON.stringify(payload);
@@ -38,11 +38,9 @@ function umsTvnAllocationDoGet(e) {
 
 function umsTvnAllocationGetConfig_(params) {
   const properties = PropertiesService.getScriptProperties();
-  const organizationEndpoint = String(properties.getProperty('UMS_TVN_ORG_ENDPOINT') || '').trim();
-  const endpoint = String(properties.getProperty('UMS_TVN_ALLOCATION_ENDPOINT') || organizationEndpoint.replace(/\/sync-organization\/?$/, '/sync-allocation-registration')).trim();
   const config = {
-    endpoint: endpoint,
-    token: String(properties.getProperty('UMS_TVN_ORG_SYNC_TOKEN') || '').trim(),
+	endpoint: String(properties.getProperty('UMS_TVN_ALLOCATION_ENDPOINT') || '').trim(),
+	token: String(properties.getProperty('UMS_TVN_ALLOCATION_SYNC_TOKEN') || '').trim(),
     spreadsheetId: String(params.spreadsheet_id || '').trim(),
     sheetName: String(params.sheet_name || 'Câu trả lời biểu mẫu 1').trim(),
     factoryCode: String(params.factory_code || '').trim().toUpperCase(),

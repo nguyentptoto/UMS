@@ -77,10 +77,19 @@ function doGet(e) {
 ```
 
 Để đồng bộ đăng ký cấp phát theo 3 nhà máy và hai kỳ T4/T9, tạo thêm file
-`ums-allocation-sync.gs` từ thư mục này rồi deploy lại Web App. UMS sẽ truyền
+`ums-allocation-sync.gs` và một file HTML riêng có tên `UmsTvnAllocationIndex`
+từ nội dung `UmsTvnAllocationIndex.html`, rồi deploy lại Web App. Luồng cấp phát
+không sử dụng chung `UmsTvnOrgIndex`. UMS sẽ truyền
 Spreadsheet ID, tab `Câu trả lời biểu mẫu 1`, nhà máy, năm và kỳ đã chọn vào popup.
-Có thể khai báo thêm Script Property `UMS_TVN_ALLOCATION_ENDPOINT`; nếu bỏ trống,
-script tự suy ra endpoint này từ `UMS_TVN_ORG_ENDPOINT`.
+Cần khai báo hai Script Property riêng cho project Apps Script cấp phát:
+
+```text
+UMS_TVN_ALLOCATION_ENDPOINT=endpoint-cap-phat-hien-thi-tren-UMS
+UMS_TVN_ALLOCATION_SYNC_TOKEN=token-hien-thi-tren-UMS
+```
+
+Deploy project này thành Web App riêng và lưu URL tại phần **Cấu hình 6 nguồn
+Google Sheet**. URL này không dùng chung với Web App của Sơ đồ tổ chức.
 
 Nếu `doGet(e)` hiện tại đang không có tham số `e`, đổi thành:
 
