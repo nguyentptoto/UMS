@@ -520,6 +520,63 @@
 		});
 	}
 
+	function initializeDistributionEmail() {
+		var $form = $('#ums-distribution-compose-form');
+		var $table = $('#ums-email-schedule-table');
+		if (!$form.length || !$table.length) {
+			return;
+		}
+
+		var nextIndex = $table.find('tbody tr').length;
+		function markPreviewStale() {
+			var $sendButton = $('#ums-distribution-send-form button[type="submit"]');
+			if ($sendButton.length) {
+				$sendButton.prop('disabled', true);
+				$('#ums-distribution-preview-stale').prop('hidden', false);
+			}
+		}
+
+		$form.on('input change', 'input, textarea', markPreviewStale);
+		$('#ums-email-add-slot').on('click', function () {
+			if ($table.find('tbody tr').length >= 30) {
+				return;
+			}
+			var index = nextIndex++;
+			var $row = $('<tr/>');
+			$('<td/>').append($('<input/>', {
+				type: 'text', name: 'ums_distribution_email[schedule][' + index + '][time]',
+				placeholder: '9:00 - 10:00'
+			})).appendTo($row);
+			$('<td/>').append($('<input/>', {
+				type: 'text', name: 'ums_distribution_email[schedule][' + index + '][department]',
+				placeholder: 'Multi, HP'
+			})).appendTo($row);
+			$('<td/>').append($('<button/>', {
+				type: 'button', class: 'button-link ums-email-remove-slot',
+				title: 'Xóa khung giờ', 'aria-label': 'Xóa khung giờ'
+			}).append($('<span/>', { class: 'dashicons dashicons-no-alt', 'aria-hidden': 'true' }))).appendTo($row);
+			$table.find('tbody').append($row);
+			markPreviewStale();
+			$row.find('input').first().trigger('focus');
+		});
+		$table.on('click', '.ums-email-remove-slot', function () {
+			var $rows = $table.find('tbody tr');
+			if ($rows.length === 1) {
+				$rows.find('input').val('');
+			} else {
+				$(this).closest('tr').remove();
+			}
+			markPreviewStale();
+		});
+		$('#ums-distribution-send-form').on('submit', function () {
+			if (!window.confirm('Gửi lịch cấp phát tới toàn bộ người nhận To và CC đang hiển thị?')) {
+				return false;
+			}
+			$(this).find('button[type="submit"]').prop('disabled', true);
+			return true;
+		});
+	}
+
     $(function () {
         initializeApprovalStepOrder();
 		initializeApprovalResolverFields();
@@ -527,6 +584,7 @@
         initializeOrganizationGrid();
         initializeSheetSyncBridge();
 		initializeAllocationSheetSync();
+		initializeDistributionEmail();
 
         $(document).on('click', '.ums-delete-link', function (event) {
             var message = $(this).data('confirm') || 'Bạn có chắc muốn xóa hồ sơ này?';

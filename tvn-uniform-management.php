@@ -120,6 +120,7 @@ function run_tvn_uniform_management() {
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-newcomer-inventory-out-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-issue-registration-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-allocation-sheet-sync.php';
+	require_once UMS_PLUGIN_DIR . 'includes/class-ums-distribution-email.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-uniform-material-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-calculator.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-export.php';

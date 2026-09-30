@@ -35,6 +35,9 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_preview_allocation_calculation', array( __CLASS__, 'handle_preview_allocation_calculation' ) );
 		add_action( 'admin_post_ums_save_allocation_calculation', array( __CLASS__, 'handle_save_allocation_calculation' ) );
 		add_action( 'admin_post_ums_save_allocation_sheet_sources', array( __CLASS__, 'handle_save_allocation_sheet_sources' ) );
+		add_action( 'admin_post_ums_import_distribution_recipients', array( __CLASS__, 'handle_import_distribution_recipients' ) );
+		add_action( 'admin_post_ums_preview_distribution_email', array( __CLASS__, 'handle_preview_distribution_email' ) );
+		add_action( 'admin_post_ums_send_distribution_email', array( __CLASS__, 'handle_send_distribution_email' ) );
 		add_action( 'admin_post_ums_repair_inventory_prices', array( __CLASS__, 'handle_repair_inventory_prices' ) );
 		add_action( 'admin_post_ums_preview_uniform_material_import', array( __CLASS__, 'handle_preview_uniform_material_import' ) );
 		add_action( 'admin_post_ums_confirm_uniform_material_import', array( __CLASS__, 'handle_confirm_uniform_material_import' ) );
@@ -119,6 +122,15 @@ class UMS_Admin {
 			array( __CLASS__, 'render_allocation_calculation_page' )
 		);
 
+		add_submenu_page(
+			'tvn-uniform-management',
+			'Gửi lịch cấp phát đồng phục',
+			'Gửi email',
+			'manage_options',
+			'tvn-ums-distribution-email',
+			array( __CLASS__, 'render_distribution_email_page' )
+		);
+
         add_submenu_page(
             'tvn-uniform-management',
             'Quản lý Danh mục Sản phẩm',
@@ -191,7 +203,7 @@ class UMS_Admin {
 			$hook = 'tvn-uniform-management';
 		}
         // Chỉ nạp CSS/JS khi Admin đang đứng đúng trong trang của plugin UMS
-        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-allocation-calculation' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
+        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-allocation-calculation' ) === false && strpos( $hook, 'tvn-ums-distribution-email' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
             return;
         }
 		$is_approval_flow_page = strpos( $hook, 'tvn-ums-approval-flows' ) !== false;
@@ -518,6 +530,14 @@ class UMS_Admin {
 		}
 
 		echo '<div class="notice notice-error"><p>Không tìm thấy giao diện tính số lượng cấp phát.</p></div>';
+	}
+
+	public static function render_distribution_email_page() {
+		$notice = self::get_notice();
+		$recipients = UMS_Distribution_Email::get_recipients( get_current_user_id() );
+		$draft_token = isset( $_GET['draft_token'] ) ? sanitize_text_field( wp_unslash( $_GET['draft_token'] ) ) : '';
+		$draft = $draft_token !== '' ? UMS_Distribution_Email::get_draft( get_current_user_id(), $draft_token ) : null;
+		include UMS_PLUGIN_DIR . 'admin/partials/view-distribution-email.php';
 	}
 
 	public static function render_uniform_material_page() {
@@ -2110,6 +2130,71 @@ class UMS_Admin {
 		$client_sync_id = isset( $_POST['client_sync_id'] ) ? sanitize_key( wp_unslash( $_POST['client_sync_id'] ) ) : '';
 		$status = UMS_Allocation_Sheet_Sync::get_sync_status( $client_sync_id );
 		wp_send_json_success( $status ?: array( 'state' => 'pending' ) );
+	}
+
+	public static function handle_import_distribution_recipients() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền import người nhận email.' );
+		}
+		check_admin_referer( 'ums_import_distribution_recipients' );
+		try {
+			$recipients = UMS_Distribution_Email::import_recipients( $_FILES['ums_distribution_recipients_file'] ?? array() );
+			if ( ! UMS_Distribution_Email::save_recipients( get_current_user_id(), $recipients ) ) {
+				throw new RuntimeException( 'Không lưu được danh sách người nhận tạm thời.' );
+			}
+			self::redirect_to_distribution_email( array(
+				'notice' => 'distribution_recipients_ready',
+				'notice_extra' => sprintf( '%d To, %d CC.', count( $recipients['to'] ), count( $recipients['cc'] ) ),
+			) );
+		} catch ( Throwable $error ) {
+			self::redirect_to_distribution_email( array( 'notice' => 'distribution_recipients_error', 'notice_extra' => $error->getMessage() ) );
+		}
+	}
+
+	public static function handle_preview_distribution_email() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền xem trước email.' );
+		}
+		check_admin_referer( 'ums_preview_distribution_email' );
+		try {
+			$input = isset( $_POST['ums_distribution_email'] ) && is_array( $_POST['ums_distribution_email'] )
+				? wp_unslash( $_POST['ums_distribution_email'] ) : array();
+			$draft = UMS_Distribution_Email::build_draft( $input );
+			$token = UMS_Distribution_Email::store_draft( get_current_user_id(), $draft );
+			self::redirect_to_distribution_email( array(
+				'notice' => empty( $draft['errors'] ) ? 'distribution_email_preview_ready' : 'distribution_email_preview_error',
+				'draft_token' => $token,
+			) );
+		} catch ( Throwable $error ) {
+			self::redirect_to_distribution_email( array( 'notice' => 'distribution_email_preview_error', 'notice_extra' => $error->getMessage() ) );
+		}
+	}
+
+	public static function handle_send_distribution_email() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Bạn không có quyền gửi email.' );
+		}
+		check_admin_referer( 'ums_send_distribution_email' );
+		$token = isset( $_POST['draft_token'] ) ? sanitize_text_field( wp_unslash( $_POST['draft_token'] ) ) : '';
+		$draft = UMS_Distribution_Email::get_draft( get_current_user_id(), $token );
+		if ( ! $draft ) {
+			self::redirect_to_distribution_email( array( 'notice' => 'distribution_email_expired' ) );
+		}
+		if ( ! empty( $draft['errors'] ) ) {
+			self::redirect_to_distribution_email( array( 'notice' => 'distribution_email_preview_error', 'draft_token' => $token ) );
+		}
+		try {
+			if ( ! UMS_Distribution_Email::send( $draft ) ) {
+				throw new RuntimeException( 'Hệ thống mail chưa chấp nhận email. Hãy kiểm tra cấu hình SMTP của WordPress.' );
+			}
+			UMS_Distribution_Email::delete_draft( get_current_user_id(), $token );
+			self::redirect_to_distribution_email( array(
+				'notice' => 'distribution_email_sent',
+				'notice_extra' => sprintf( '%d To, %d CC.', count( $draft['to'] ), count( $draft['cc'] ) ),
+			) );
+		} catch ( Throwable $error ) {
+			self::redirect_to_distribution_email( array( 'notice' => 'distribution_email_send_failed', 'draft_token' => $token, 'notice_extra' => $error->getMessage() ) );
+		}
 	}
 
 	public static function handle_repair_inventory_prices() {
@@ -3720,6 +3805,13 @@ class UMS_Admin {
 			'allocation_calculation_saved' => array( 'success', 'Đã chốt kết quả tính số lượng cấp phát để sử dụng khi lập PR.' ),
 			'allocation_sheet_settings_saved' => array( 'success', 'Đã lưu 6 nguồn Google Sheet cấp phát theo nhà máy và kỳ.' ),
 			'allocation_sheet_settings_error' => array( 'error', 'Không lưu được cấu hình Google Sheet cấp phát.' ),
+			'distribution_recipients_ready' => array( 'success', 'Đã đọc danh sách người nhận.' ),
+			'distribution_recipients_error' => array( 'error', 'Không đọc được danh sách người nhận.' ),
+			'distribution_email_preview_ready' => array( 'success', 'Đã tạo bản xem trước email. Hãy kiểm tra trước khi gửi.' ),
+			'distribution_email_preview_error' => array( 'error', 'Nội dung email còn lỗi; chưa thể gửi.' ),
+			'distribution_email_expired' => array( 'error', 'Bản xem trước email đã hết hạn. Hãy xem trước lại.' ),
+			'distribution_email_sent' => array( 'success', 'Hệ thống mail đã chấp nhận email lịch cấp phát.' ),
+			'distribution_email_send_failed' => array( 'error', 'Không gửi được email lịch cấp phát.' ),
 			'uniform_material_preview_ready' => array( 'success', 'Đã đọc sheet Mã đồng phục. Hãy kiểm tra dữ liệu trước khi xác nhận.' ),
 			'uniform_material_preview_error' => array( 'error', 'File GA có lỗi dữ liệu và chưa thể import.' ),
 			'uniform_material_invalid_file' => array( 'error', 'File GA không hợp lệ hoặc không đọc được sheet Mã đồng phục.' ),
@@ -4052,6 +4144,18 @@ class UMS_Admin {
         wp_safe_redirect( $url );
         exit;
     }
+
+	private static function redirect_to_distribution_email( $args = array() ) {
+		$url = add_query_arg(
+			array_filter(
+				array_merge( array( 'page' => 'tvn-ums-distribution-email' ), $args ),
+				function( $value ) { return $value !== null && $value !== ''; }
+			),
+			admin_url( 'admin.php' )
+		);
+		wp_safe_redirect( $url );
+		exit;
+	}
 
 	private static function redirect_to_allocation_calculation( $args = array() ) {
 		if ( empty( $args['factory_code'] ) && ! empty( $_POST['factory_code'] ) ) {

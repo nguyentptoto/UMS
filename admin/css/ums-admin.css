@@ -499,3 +499,80 @@
 .ums-exit-items td {
 	vertical-align: middle;
 }
+
+.ums-email-recipient-grid,
+.ums-email-fields-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+	margin: 18px 0;
+}
+
+.ums-email-fields-grid {
+	grid-template-columns: repeat(4, minmax(170px, 1fr));
+}
+
+.ums-email-recipient-grid label,
+.ums-email-fields-grid label {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 6px;
+	font-weight: 600;
+}
+
+.ums-email-recipient-grid textarea,
+.ums-email-fields-grid input {
+	width: 100%;
+	max-width: none;
+	font-weight: 400;
+}
+
+.ums-email-schedule-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.ums-email-schedule-heading .dashicons {
+	vertical-align: middle;
+}
+
+.ums-email-schedule-table {
+	min-width: 560px;
+}
+
+.ums-email-schedule-table th:first-child {
+	width: 180px;
+}
+
+.ums-email-schedule-table input {
+	width: 100%;
+	max-width: none;
+}
+
+.ums-email-remove-column,
+.ums-email-schedule-table td:last-child {
+	width: 44px;
+	text-align: center;
+}
+
+.ums-email-preview-body {
+	overflow-x: auto;
+	border-top: 1px solid #d8dee9;
+	padding: 20px 0 4px;
+}
+
+@media (max-width: 1100px) {
+	.ums-email-fields-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 700px) {
+	.ums-email-recipient-grid,
+	.ums-email-fields-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
