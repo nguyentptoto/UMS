@@ -8,6 +8,7 @@ class UMS_Allocation_Sheet_Sync {
 	const SOURCES_OPTION = 'ums_allocation_sheet_sources';
 	const APPS_SCRIPT_OPTION = 'ums_allocation_sheet_apps_script_url';
 	const STAGING_PREFIX = 'ums_allocation_sheet_stage_';
+	const STATUS_PREFIX = 'ums_allocation_sheet_status_';
 	const DEFAULT_SHEET_NAME = 'Câu trả lời biểu mẫu 1';
 	const BATCH_SIZE = 200;
 
@@ -83,6 +84,15 @@ class UMS_Allocation_Sheet_Sync {
 			return $matches[1];
 		}
 		return '';
+	}
+
+	public static function get_sync_status( $client_sync_id ) {
+		$client_sync_id = sanitize_key( (string) $client_sync_id );
+		if ( strlen( $client_sync_id ) < 16 || strlen( $client_sync_id ) > 100 ) {
+			return null;
+		}
+		$status = get_transient( self::STATUS_PREFIX . md5( $client_sync_id ) );
+		return is_array( $status ) ? $status : null;
 	}
 
 	public static function handle_sync( WP_REST_Request $request ) {
@@ -169,7 +179,15 @@ class UMS_Allocation_Sheet_Sync {
 					'allocation_preview_token' => $preview_token,
 				),
 				admin_url( 'admin.php' )
-			) . '#ums-allocation-calculation';
+			) . '#ums-allocation-preview';
+			$client_sync_id = sanitize_key( (string) ( $payload['client_sync_id'] ?? '' ) );
+			if ( strlen( $client_sync_id ) >= 16 && strlen( $client_sync_id ) <= 100 ) {
+				set_transient(
+					self::STATUS_PREFIX . md5( $client_sync_id ),
+					array( 'preview_url' => $preview_url, 'error_count' => count( $preview['errors'] ) ),
+					UMS_Allocation_Calculation::PREVIEW_TTL
+				);
+			}
 
 			return new WP_REST_Response(
 				array(
@@ -184,6 +202,14 @@ class UMS_Allocation_Sheet_Sync {
 				empty( $preview['errors'] ) ? 200 : 207
 			);
 		} catch ( Throwable $error ) {
+			$client_sync_id = sanitize_key( (string) ( $payload['client_sync_id'] ?? '' ) );
+			if ( strlen( $client_sync_id ) >= 16 && strlen( $client_sync_id ) <= 100 ) {
+				set_transient(
+					self::STATUS_PREFIX . md5( $client_sync_id ),
+					array( 'error' => $error->getMessage() ),
+					30 * MINUTE_IN_SECONDS
+				);
+			}
 			return new WP_Error( 'allocation_analysis_failed', $error->getMessage(), array( 'status' => 422 ) );
 		}
 	}

@@ -47,6 +47,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				data-apps-script-url="<?php echo esc_attr( $allocation_sheet_apps_script_url ); ?>"
 				data-rest-endpoint="<?php echo esc_attr( $allocation_sheet_rest_endpoint ); ?>"
 				data-sync-token="<?php echo esc_attr( $allocation_sheet_sync_token ); ?>"
+				data-sync-session="<?php echo esc_attr( wp_generate_password( 24, false, false ) ); ?>"
 				data-sources="<?php echo esc_attr( wp_json_encode( $allocation_sheet_sources ) ); ?>"
 				<?php disabled( ! $allocation_calculation_ready || $allocation_sheet_apps_script_url === '' ); ?>
 			>Đọc dữ liệu từ Google Sheet</button>
@@ -112,7 +113,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	</div>
 
 	<?php if ( is_array( $allocation_preview ) ) : ?>
-		<div class="ums-panel ums-allocation-calculation-preview">
+		<div class="ums-panel ums-allocation-calculation-preview" id="ums-allocation-preview">
 			<h2>Kết quả tính số lượng cấp phát: <?php echo esc_html( $allocation_preview['file_name'] ); ?></h2>
 			<?php $source_preview = is_array( $allocation_preview['source_preview'] ?? null ) ? $allocation_preview['source_preview'] : array(); ?>
 			<?php if ( empty( $allocation_preview['errors'] ) ) : ?>

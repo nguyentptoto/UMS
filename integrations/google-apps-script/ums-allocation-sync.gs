@@ -21,6 +21,7 @@ function umsTvnAllocationDoGet(e) {
     source: 'google-sheet-popup-bridge',
     sync_mode: 'allocation',
     sync_token: Utilities.getUuid().replace(/-/g, ''),
+    client_sync_id: config.clientSyncId,
     spreadsheet_id: config.spreadsheetId,
     sheet_name: config.sheetName,
     factory_code: config.factoryCode,
@@ -54,7 +55,8 @@ function umsTvnAllocationGetConfig_(params) {
     sheetName: String(params.sheet_name || 'Câu trả lời biểu mẫu 1').trim(),
     factoryCode: String(params.factory_code || '').trim().toUpperCase(),
     periodMonth: Number(params.period_month || 0),
-    calculationYear: Number(params.calculation_year || 0)
+    calculationYear: Number(params.calculation_year || 0),
+    clientSyncId: String(params.client_sync_id || '').trim()
   };
 
   if (!config.endpoint || !config.token || !config.spreadsheetId || !config.sheetName) {

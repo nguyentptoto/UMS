@@ -91,6 +91,8 @@ Deploy project này thành Web App riêng và lưu URL `/exec` tại phần **C�
 6 nguồn Google Sheet**. Sau khi sửa mã, vào **Deploy > Manage deployments > Edit**,
 chọn phiên bản mới và bấm **Deploy**. Mở URL `/exec` trực tiếp sẽ hiện thông báo
 Web App sẵn sàng; để đọc dữ liệu, bấm nút **Đọc dữ liệu từ Google Sheet** trong UMS.
+Khi dữ liệu được đọc xong, trang UMS sẽ tự mở bảng xem trước. Tính năng theo dõi
+trạng thái này cần phiên bản mới của `ums-allocation-sync.gs` trên Web App cấp phát.
 
 ## Script Properties
 

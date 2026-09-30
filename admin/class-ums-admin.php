@@ -57,6 +57,7 @@ class UMS_Admin {
         add_action( 'wp_ajax_ums_sync_user_password', array( __CLASS__, 'handle_sync_user_password' ) );
         add_action( 'wp_ajax_ums_get_organization_employees', array( __CLASS__, 'handle_get_organization_employees' ) );
 		add_action( 'wp_ajax_ums_calculate_pr', array( __CLASS__, 'handle_calculate_pr' ) );
+		add_action( 'wp_ajax_ums_allocation_sync_status', array( __CLASS__, 'handle_allocation_sync_status' ) );
     }
 
     /**
@@ -272,6 +273,7 @@ class UMS_Admin {
             array(
                 'ajaxUrl'           => admin_url( 'admin-ajax.php' ),
                 'passwordSyncNonce' => wp_create_nonce( 'ums_sync_user_password' ),
+				'allocationSyncNonce' => wp_create_nonce( 'ums_allocation_sync_status' ),
             )
         );
 
@@ -2098,6 +2100,16 @@ class UMS_Admin {
 			'allocation_batch_id' => absint( $result['batch_id'] ),
 			'notice_extra' => sprintf( 'Đã chốt %s sản phẩm qua %d dòng chi tiết.', number_format_i18n( $result['total'] ), $result['detail_count'] ),
 		) );
+	}
+
+	public static function handle_allocation_sync_status() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'Bạn không có quyền xem kết quả đồng bộ.' ), 403 );
+		}
+		check_ajax_referer( 'ums_allocation_sync_status', 'security' );
+		$client_sync_id = isset( $_POST['client_sync_id'] ) ? sanitize_key( wp_unslash( $_POST['client_sync_id'] ) ) : '';
+		$status = UMS_Allocation_Sheet_Sync::get_sync_status( $client_sync_id );
+		wp_send_json_success( $status ?: array( 'state' => 'pending' ) );
 	}
 
 	public static function handle_repair_inventory_prices() {

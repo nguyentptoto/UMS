@@ -333,6 +333,9 @@
 		var $log = $('#ums-allocation-sheet-log');
 		var activePopup = null;
 		var posting = false;
+		var statusPoll = null;
+		var statusCheckInFlight = false;
+		var syncId = '';
 
 		if (!$button.length || !$log.length) {
 			return;
@@ -346,9 +349,49 @@
 			$log.scrollTop($log.prop('scrollHeight'));
 		}
 
+		function stopStatusPoll() {
+			if (statusPoll) {
+				window.clearInterval(statusPoll);
+				statusPoll = null;
+			}
+		}
+
 		function restoreButton() {
+			stopStatusPoll();
 			posting = false;
 			$button.prop('disabled', false).text('Đọc dữ liệu từ Google Sheet');
+		}
+
+		function startStatusPoll() {
+			var deadline = Date.now() + 10 * 60 * 1000;
+			function checkStatus() {
+				if (statusCheckInFlight) {
+					return;
+				}
+				if (Date.now() > deadline) {
+					appendLog('Hết thời gian chờ bản xem trước. Hãy kiểm tra popup rồi thử đọc lại.', 'error');
+					restoreButton();
+					return;
+				}
+				statusCheckInFlight = true;
+				$.post(umsAdmin.ajaxUrl, {
+					action: 'ums_allocation_sync_status',
+					security: umsAdmin.allocationSyncNonce,
+					client_sync_id: syncId
+				}).done(function (response) {
+					if (response.success && response.data && response.data.preview_url) {
+						stopStatusPoll();
+						window.location.href = response.data.preview_url;
+					} else if (response.success && response.data && response.data.error) {
+						appendLog(response.data.error, 'error');
+						restoreButton();
+					}
+				}).always(function () {
+					statusCheckInFlight = false;
+				});
+			}
+			statusPoll = window.setInterval(checkStatus, 2000);
+			checkStatus();
 		}
 
 		function postFromAdmin(payload, batchSize) {
@@ -396,6 +439,7 @@
 			sendBatch(0).then(function () {
 				appendLog('Đã đọc xong Google Sheet. Đang mở kết quả kiểm tra...', 'success');
 				if (previewUrl) {
+					stopStatusPoll();
 					window.location.href = previewUrl;
 					return;
 				}
@@ -420,6 +464,7 @@
 				appendLog(data.message, data.status || 'info');
 			}
 			if (data.done && data.payload && data.payload.preview_url) {
+				stopStatusPoll();
 				window.location.href = data.payload.preview_url;
 			} else if (data.done && !posting) {
 				restoreButton();
@@ -445,6 +490,7 @@
 
 			$log.empty();
 			appendLog('Đang mở Google Sheet đã cấu hình...', 'info');
+			syncId = String($button.attr('data-sync-session') || '') + '_' + Date.now().toString(36);
 			var query = $.param({
 				ums_module: 'tvn_allocation',
 				mode: 'allocation',
@@ -452,7 +498,8 @@
 				sheet_name: source.sheet_name,
 				factory_code: factoryCode,
 				period_month: month,
-				calculation_year: year
+				calculation_year: year,
+				client_sync_id: syncId
 			});
 			activePopup = window.open(appsScriptUrl + (appsScriptUrl.indexOf('?') >= 0 ? '&' : '?') + query, 'umsAllocationSheetPopup', 'width=860,height=720,menubar=no,toolbar=no,location=yes,status=yes,scrollbars=yes,resizable=yes');
 			if (!activePopup) {
@@ -460,11 +507,12 @@
 				return;
 			}
 			$button.prop('disabled', true).text('Đang đọc Google Sheet...');
+			startStatusPoll();
 			var popupCheck = window.setInterval(function () {
 				if (activePopup && activePopup.closed) {
 					window.clearInterval(popupCheck);
 					activePopup = null;
-					if (!posting) {
+					if (!posting && !statusPoll) {
 						restoreButton();
 					}
 				}
