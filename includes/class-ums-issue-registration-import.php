@@ -60,7 +60,25 @@ class UMS_Allocation_Calculation {
 		$factory_code = trim( (string) $factory_code ) !== ''
 			? UMS_DB_Inventory::normalize_factory_code( $factory_code )
 			: '';
-		self::validate_headers( $source_rows[1] ?? array() );
+		$header_errors = self::validate_headers( $source_rows[1] ?? array(), $month );
+		$source_preview = array(
+			'headers' => $source_rows[1] ?? array(),
+			'rows' => array_slice( $source_rows, 1, null, true ),
+		);
+		if ( ! empty( $header_errors ) ) {
+			return array(
+				'file_name' => sanitize_file_name( $file_name ), 'file_hash' => $file_hash,
+				'year' => $year, 'month' => $month, 'factory_code' => $factory_code,
+				'employee_count' => 0, 'requested_quantity' => 0,
+				'details' => array(), 'total_quantity' => 0,
+				'errors' => $header_errors, 'warnings' => array(),
+				'source_preview' => $source_preview,
+				'source_type' => sanitize_key( (string) ( $source_meta['source_type'] ?? 'excel' ) ),
+				'source_ref' => sanitize_text_field( (string) ( $source_meta['source_ref'] ?? '' ) ),
+				'source_sheet' => sanitize_text_field( (string) ( $source_meta['source_sheet'] ?? '' ) ),
+				'source_synced_at' => sanitize_text_field( (string) ( $source_meta['source_synced_at'] ?? '' ) ),
+			);
+		}
 		$parsed      = array();
 		$errors      = array();
 		$warnings    = array();
@@ -75,7 +93,7 @@ class UMS_Allocation_Calculation {
 				continue;
 			}
 			$code_rows[ $employee_no ][] = $row_number;
-			$parsed[] = self::parse_row( $row_number, $row, $employee_no, $warnings );
+			$parsed[] = self::parse_row( $row_number, $row, $employee_no, $month, $warnings );
 		}
 
 		foreach ( $code_rows as $employee_no => $row_numbers ) {
@@ -205,6 +223,7 @@ class UMS_Allocation_Calculation {
 			'requested_quantity' => $requested_quantity,
 			'details' => $details, 'total_quantity' => array_sum( array_column( $details, 'quantity' ) ),
 			'errors' => array_values( array_unique( $errors ) ), 'warnings' => array_values( array_unique( $warnings ) ),
+			'source_preview' => $source_preview,
 			'source_type' => sanitize_key( (string) ( $source_meta['source_type'] ?? 'excel' ) ),
 			'source_ref' => sanitize_text_field( (string) ( $source_meta['source_ref'] ?? '' ) ),
 			'source_sheet' => sanitize_text_field( (string) ( $source_meta['source_sheet'] ?? '' ) ),
@@ -212,7 +231,7 @@ class UMS_Allocation_Calculation {
 		);
 	}
 
-	private static function parse_row( $row_number, $row, $employee_no, &$warnings ) {
+	private static function parse_row( $row_number, $row, $employee_no, $month, &$warnings ) {
 		$requests = array();
 		self::add_request( $requests, 'hat', '', $row['G'] ?? '', '0', $row_number, $warnings );
 		self::add_request( $requests, 'shoes', '', $row['H'] ?? '', $row['I'] ?? '', $row_number, $warnings );
@@ -220,6 +239,8 @@ class UMS_Allocation_Calculation {
 		$shirt_qty = self::quantity( $row['N'] ?? '', $row_number, 'áo', $warnings );
 		if ( $shirt_qty === 1 ) {
 			self::add_request( $requests, 'shirt', (string) ( $row['P'] ?? '' ), 1, $row['O'] ?? '', $row_number, $warnings );
+		} elseif ( $shirt_qty === 2 && $month === 4 ) {
+			self::add_request( $requests, 'shirt', '', 2, $row['O'] ?? '', $row_number, $warnings );
 		} elseif ( $shirt_qty === 2 ) {
 			$type = trim( (string) ( $row['R'] ?? '' ) );
 			if ( strpos( self::normalize( $type ), '1 ao dai tay 1 ao coc tay' ) !== false ) {
@@ -231,8 +252,10 @@ class UMS_Allocation_Calculation {
 		} elseif ( $shirt_qty > 0 ) {
 			$warnings[] = sprintf( 'Dòng %d: số lượng áo %d không có nhánh size/loại hợp lệ trong biểu mẫu nên áo không được cấp.', $row_number, $shirt_qty );
 		}
-		self::add_request( $requests, 'jacket', '', $row['T'] ?? '', $row['U'] ?? '', $row_number, $warnings );
-		self::add_request( $requests, 'coat', '', $row['W'] ?? '', $row['X'] ?? '', $row_number, $warnings );
+		if ( $month === 9 ) {
+			self::add_request( $requests, 'jacket', '', $row['T'] ?? '', $row['U'] ?? '', $row_number, $warnings );
+			self::add_request( $requests, 'coat', '', $row['W'] ?? '', $row['X'] ?? '', $row_number, $warnings );
+		}
 		return array( 'source_row' => $row_number, 'employee_no' => $employee_no, 'requests' => $requests );
 	}
 
@@ -341,16 +364,25 @@ class UMS_Allocation_Calculation {
 		$value = strtolower( remove_accents( preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) ) );
 		return preg_replace( '/[^a-z0-9]+/', ' ', $value );
 	}
-	private static function validate_headers( $headers ) {
+	private static function validate_headers( $headers, $month ) {
 		$expected = array(
-			'C' => 'ma nhan vien', 'G' => 'mu', 'H' => 'giay', 'K' => 'quan',
-			'N' => 'ao', 'T' => 'ao khoac', 'W' => 'ao phao',
+			'C' => 'ma nhan vien', 'G' => 'mu', 'H' => 'giay', 'K' => 'quan', 'N' => 'ao',
 		);
+		if ( $month === 9 ) {
+			$expected['T'] = 'ao khoac';
+			$expected['W'] = 'ao phao';
+		}
+		$errors = array();
 		foreach ( $expected as $column => $needle ) {
 			if ( strpos( self::normalize( $headers[ $column ] ?? '' ), $needle ) === false ) {
-				throw new RuntimeException( sprintf( 'Cột %s không đúng cấu trúc file Google Form đăng ký.', $column ) );
+				$actual = trim( (string) ( $headers[ $column ] ?? '' ) );
+				$errors[] = sprintf(
+					'Cột %s cần có tiêu đề chứa "%s"; tiêu đề hiện tại: "%s". Hãy kiểm tra lại thứ tự cột của tab đăng ký.',
+					$column, $needle, $actual !== '' ? $actual : '(trống)'
+				);
 			}
 		}
+		return $errors;
 	}
 	private static function row_is_empty( $row ) { return trim( implode( '', array_map( 'strval', (array) $row ) ) ) === ''; }
 }

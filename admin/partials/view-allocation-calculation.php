@@ -114,18 +114,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<?php if ( is_array( $allocation_preview ) ) : ?>
 		<div class="ums-panel ums-allocation-calculation-preview">
 			<h2>Kết quả tính số lượng cấp phát: <?php echo esc_html( $allocation_preview['file_name'] ); ?></h2>
-			<p><?php echo esc_html( sprintf(
-				'%s · Kỳ T%d/%d: %d CNV, đăng ký %s, được cấp %s qua %d dòng; %d lỗi và %d cảnh báo.',
-				$factories[ $allocation_preview['factory_code'] ?? '' ] ?? 'Dữ liệu cũ/chưa tách nhà máy',
-				$allocation_preview['month'],
-				$allocation_preview['year'],
-				$allocation_preview['employee_count'],
-				number_format_i18n( $allocation_preview['requested_quantity'] ?? 0 ),
-				number_format_i18n( $allocation_preview['total_quantity'] ),
-				count( $allocation_preview['details'] ),
-				count( $allocation_preview['errors'] ),
-				count( $allocation_preview['warnings'] ?? array() )
-			) ); ?></p>
+			<?php $source_preview = is_array( $allocation_preview['source_preview'] ?? null ) ? $allocation_preview['source_preview'] : array(); ?>
+			<?php if ( empty( $allocation_preview['errors'] ) ) : ?>
+				<p><?php echo esc_html( sprintf(
+					'%s · Kỳ T%d/%d: %d CNV, đăng ký %s, được cấp %s qua %d dòng; %d cảnh báo.',
+					$factories[ $allocation_preview['factory_code'] ?? '' ] ?? 'Dữ liệu cũ/chưa tách nhà máy',
+					$allocation_preview['month'],
+					$allocation_preview['year'],
+					$allocation_preview['employee_count'],
+					number_format_i18n( $allocation_preview['requested_quantity'] ?? 0 ),
+					number_format_i18n( $allocation_preview['total_quantity'] ),
+					count( $allocation_preview['details'] ),
+					count( $allocation_preview['warnings'] ?? array() )
+				) ); ?></p>
+			<?php else : ?>
+				<p>Chưa tính số lượng cấp phát vì cấu trúc cột chưa khớp. Kiểm tra lỗi và dữ liệu nguồn bên dưới.</p>
+			<?php endif; ?>
+			<?php if ( ! empty( $source_preview['rows'] ) ) : ?>
+				<p>Đã đọc <?php echo esc_html( number_format_i18n( count( $source_preview['rows'] ) ) ); ?> dòng nguồn. Dữ liệu chỉ được lưu tạm để kiểm tra; chưa chốt vào PR.</p>
+			<?php endif; ?>
 
 			<?php if ( ! empty( $allocation_preview['errors'] ) ) : ?>
 				<div class="notice notice-error inline"><p><strong>Không thể hoàn tất phép tính:</strong></p></div>
@@ -149,9 +156,45 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</div>
 			<?php endif; ?>
 
+			<?php if ( ! empty( $source_preview['rows'] ) ) : ?>
+				<?php
+				$source_columns = array(
+					array( 'text' => 'Dòng Sheet', 'datafield' => 'source_row', 'width' => 100, 'cellsalign' => 'right' ),
+				);
+				$source_letters = array();
+				foreach ( (array) ( $source_preview['headers'] ?? array() ) as $letter => $heading ) {
+					if ( ! preg_match( '/^[A-Z]+$/', (string) $letter ) ) {
+						continue;
+					}
+					$source_letters[] = $letter;
+					$source_columns[] = array(
+						'text' => $letter . ' - ' . ( trim( (string) $heading ) !== '' ? $heading : '(trống)' ),
+						'datafield' => $letter,
+						'width' => 220,
+					);
+				}
+				$source_grid_rows = array();
+				foreach ( $source_preview['rows'] as $source_row_number => $source_row ) {
+					$grid_row = array( 'source_row' => absint( $source_row_number ) );
+					foreach ( $source_letters as $letter ) {
+						$grid_row[ $letter ] = (string) ( $source_row[ $letter ] ?? '' );
+					}
+					$source_grid_rows[] = $grid_row;
+				}
+				?>
+				<h3>Dữ liệu đăng ký từ nguồn</h3>
+				<div
+					id="ums-allocation-source-grid"
+					class="ums-jqx-grid"
+					data-rows="<?php echo esc_attr( wp_json_encode( $source_grid_rows ) ); ?>"
+					data-columns="<?php echo esc_attr( wp_json_encode( $source_columns ) ); ?>"
+				></div>
+			<?php endif; ?>
+
 			<?php if ( empty( $allocation_preview['errors'] ) && ! empty( $allocation_preview['details'] ) ) : ?>
 				<?php
 				$allocation_summary = array();
+				$allocation_detail_rows = array();
 				foreach ( $allocation_preview['details'] as $detail ) {
 					$key = absint( $detail['item_id'] );
 					if ( ! isset( $allocation_summary[ $key ] ) ) {
@@ -159,8 +202,37 @@ if ( ! defined( 'ABSPATH' ) ) {
 					}
 					$allocation_summary[ $key ]['requested'] += absint( $detail['requested_quantity'] ?? $detail['quantity'] );
 					$allocation_summary[ $key ]['quantity']  += absint( $detail['quantity'] );
+					$allocation_detail_rows[] = array(
+						'source_row' => absint( $detail['source_row'] ),
+						'employee_no' => (string) $detail['employee_no'],
+						'full_name' => (string) $detail['full_name'],
+						'product' => (string) $detail['product'],
+						'size' => (string) $detail['size'],
+						'requested' => absint( $detail['requested_quantity'] ),
+						'quota' => absint( $detail['quota'] ),
+						'remaining' => absint( $detail['remaining'] ),
+						'quantity' => absint( $detail['quantity'] ),
+					);
 				}
 				?>
+				<h3>Chi tiết số lượng được tính</h3>
+				<div
+					id="ums-allocation-detail-grid"
+					class="ums-jqx-grid"
+					data-rows="<?php echo esc_attr( wp_json_encode( $allocation_detail_rows ) ); ?>"
+					data-columns="<?php echo esc_attr( wp_json_encode( array(
+						array( 'text' => 'Dòng Sheet', 'datafield' => 'source_row', 'width' => 95 ),
+						array( 'text' => 'Mã CNV', 'datafield' => 'employee_no', 'width' => 120 ),
+						array( 'text' => 'Họ tên', 'datafield' => 'full_name', 'width' => 190 ),
+						array( 'text' => 'Sản phẩm', 'datafield' => 'product', 'width' => 220 ),
+						array( 'text' => 'Size', 'datafield' => 'size', 'width' => 80 ),
+						array( 'text' => 'SL đăng ký', 'datafield' => 'requested', 'width' => 105 ),
+						array( 'text' => 'Định mức', 'datafield' => 'quota', 'width' => 100 ),
+						array( 'text' => 'Còn được cấp', 'datafield' => 'remaining', 'width' => 120 ),
+						array( 'text' => 'SL cấp phát', 'datafield' => 'quantity', 'width' => 110 ),
+					) ) ); ?>"
+				></div>
+				<h3>Tổng hợp theo sản phẩm</h3>
 				<div class="ums-table-scroll" style="max-height:520px">
 					<table class="widefat striped"><thead><tr><th>Loại sản phẩm</th><th>Size</th><th>SL đăng ký</th><th>SL cấp phát</th></tr></thead><tbody>
 					<?php foreach ( $allocation_summary as $summary_row ) : ?>
