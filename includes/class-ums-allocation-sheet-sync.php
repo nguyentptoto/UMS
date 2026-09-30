@@ -163,7 +163,7 @@ class UMS_Allocation_Sheet_Sync {
 			$preview_token = UMS_Allocation_Calculation::store_preview( $preview );
 			$preview_url = add_query_arg(
 				array(
-					'page' => 'tvn-ums-inventory',
+					'page' => 'tvn-ums-allocation-calculation',
 					'factory_code' => $factory_code,
 					'notice' => empty( $preview['errors'] ) ? 'allocation_calculation_ready' : 'allocation_calculation_error',
 					'allocation_preview_token' => $preview_token,

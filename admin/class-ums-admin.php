@@ -109,6 +109,15 @@ class UMS_Admin {
             array( __CLASS__, 'render_inventory_page' )
         );
 
+		add_submenu_page(
+			'tvn-uniform-management',
+			'Tính số lượng cấp phát',
+			'Tính số lượng cấp phát',
+			'manage_options',
+			'tvn-ums-allocation-calculation',
+			array( __CLASS__, 'render_allocation_calculation_page' )
+		);
+
         add_submenu_page(
             'tvn-uniform-management',
             'Quản lý Danh mục Sản phẩm',
@@ -181,7 +190,7 @@ class UMS_Admin {
 			$hook = 'tvn-uniform-management';
 		}
         // Chỉ nạp CSS/JS khi Admin đang đứng đúng trong trang của plugin UMS
-        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
+        if ( strpos( $hook, 'tvn-uniform-management' ) === false && strpos( $hook, 'tvn-ums-contract-types' ) === false && strpos( $hook, 'tvn-ums-approval-flows' ) === false && strpos( $hook, 'tvn-ums-inventory' ) === false && strpos( $hook, 'tvn-ums-allocation-calculation' ) === false && strpos( $hook, 'tvn-ums-product-categories' ) === false && strpos( $hook, 'tvn-ums-uniform-materials' ) === false && strpos( $hook, 'tvn-ums-pr-calculation' ) === false && strpos( $hook, 'tvn-ums-inventory-movements' ) === false && strpos( $hook, 'tvn-ums-annual-allowances' ) === false && strpos( $hook, 'tvn-ums-sheet-sync' ) === false ) {
             return;
         }
 		$is_approval_flow_page = strpos( $hook, 'tvn-ums-approval-flows' ) !== false;
@@ -460,14 +469,6 @@ class UMS_Admin {
 			&& UMS_DB_Inventory_Movement::has_target_snapshot_columns();
 		$newcomer_out_preview_token = isset( $_GET['newcomer_out_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['newcomer_out_preview_token'] ) ) : '';
 		$newcomer_out_preview = $newcomer_out_preview_token !== '' ? UMS_Newcomer_Inventory_Out_Import::get_preview( $newcomer_out_preview_token ) : null;
-		$allocation_calculation_ready = UMS_DB_Allocation_Calculation::is_ready();
-		$allocation_preview_token = isset( $_GET['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['allocation_preview_token'] ) ) : '';
-		$allocation_preview = $allocation_preview_token !== '' ? UMS_Allocation_Calculation::get_preview( $allocation_preview_token ) : null;
-		$allocation_sheet_sources = UMS_Allocation_Sheet_Sync::get_sources();
-		$allocation_sheet_apps_script_url = UMS_Allocation_Sheet_Sync::get_apps_script_url();
-		$allocation_sheet_rest_endpoint = rest_url( UMS_Allocation_Sheet_Sync::REST_NAMESPACE . UMS_Allocation_Sheet_Sync::REST_ROUTE );
-		$allocation_sheet_sync_token = UMS_Sheet_User_Sync::get_sync_token();
-
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php' ) ) {
             include_once UMS_PLUGIN_DIR . 'admin/partials/view-inventory-list.php';
         } else {
@@ -493,6 +494,29 @@ class UMS_Admin {
             echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-inventory-movement-list.php</p></div>';
         }
     }
+
+	/**
+	 * Hiển thị quy trình đọc đăng ký và tính số lượng cấp phát định kỳ.
+	 */
+	public static function render_allocation_calculation_page() {
+		$factories                        = UMS_DB_Inventory::get_factory_options();
+		$selected_factory_code            = UMS_DB_Inventory::normalize_factory_code( $_GET['factory_code'] ?? '' );
+		$allocation_calculation_ready     = UMS_DB_Allocation_Calculation::supports_factory_sources();
+		$allocation_preview_token         = isset( $_GET['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['allocation_preview_token'] ) ) : '';
+		$allocation_preview               = $allocation_preview_token !== '' ? UMS_Allocation_Calculation::get_preview( $allocation_preview_token ) : null;
+		$allocation_sheet_sources         = UMS_Allocation_Sheet_Sync::get_sources();
+		$allocation_sheet_apps_script_url = UMS_Allocation_Sheet_Sync::get_apps_script_url();
+		$allocation_sheet_rest_endpoint   = rest_url( UMS_Allocation_Sheet_Sync::REST_NAMESPACE . UMS_Allocation_Sheet_Sync::REST_ROUTE );
+		$allocation_sheet_sync_token      = UMS_Sheet_User_Sync::get_sync_token();
+		$notice                           = self::get_notice();
+
+		if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-allocation-calculation.php' ) ) {
+			include UMS_PLUGIN_DIR . 'admin/partials/view-allocation-calculation.php';
+			return;
+		}
+
+		echo '<div class="notice notice-error"><p>Không tìm thấy giao diện tính số lượng cấp phát.</p></div>';
+	}
 
 	public static function render_uniform_material_page() {
 		$table_ready = UMS_DB_Uniform_Material::is_ready();
@@ -2015,7 +2039,7 @@ class UMS_Admin {
 		$file = isset( $_FILES['ums_allocation_file'] ) ? $_FILES['ums_allocation_file'] : array();
 		if ( empty( $file['tmp_name'] ) || ! empty( $file['error'] ) || (int) $file['size'] > 20 * MB_IN_BYTES
 			|| strtolower( pathinfo( $file['name'], PATHINFO_EXTENSION ) ) !== 'xlsx' ) {
-			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_invalid_file' ) );
+			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_calculation_invalid_file' ) );
 		}
 		try {
 			$preview = UMS_Allocation_Calculation::analyze(
@@ -2025,12 +2049,12 @@ class UMS_Admin {
 				isset( $_POST['factory_code'] ) ? UMS_DB_Inventory::normalize_factory_code( wp_unslash( $_POST['factory_code'] ) ) : UMS_DB_Inventory::DEFAULT_FACTORY
 			);
 			$token = UMS_Allocation_Calculation::store_preview( $preview );
-			self::redirect_to_inventory( array(
+			self::redirect_to_allocation_calculation( array(
 				'notice' => empty( $preview['errors'] ) ? 'allocation_calculation_ready' : 'allocation_calculation_error',
 				'allocation_preview_token' => $token,
 			) );
 		} catch ( Throwable $error ) {
-			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_invalid_file', 'notice_extra' => $error->getMessage() ) );
+			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_calculation_invalid_file', 'notice_extra' => $error->getMessage() ) );
 		}
 	}
 
@@ -2041,13 +2065,13 @@ class UMS_Admin {
 		check_admin_referer( 'ums_save_allocation_sheet_sources' );
 		$apps_script_result = UMS_Allocation_Sheet_Sync::save_apps_script_url( $_POST['allocation_apps_script_url'] ?? '' );
 		if ( is_wp_error( $apps_script_result ) ) {
-			self::redirect_to_inventory( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $apps_script_result->get_error_message() ) );
+			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $apps_script_result->get_error_message() ) );
 		}
 		$result = UMS_Allocation_Sheet_Sync::save_sources( $_POST['allocation_sheet_sources'] ?? array() );
 		if ( is_wp_error( $result ) ) {
-			self::redirect_to_inventory( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $result->get_error_message() ) );
+			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $result->get_error_message() ) );
 		}
-		self::redirect_to_inventory( array( 'notice' => 'allocation_sheet_settings_saved' ) );
+		self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_sheet_settings_saved' ) );
 	}
 
 	public static function handle_save_allocation_calculation() {
@@ -2059,14 +2083,14 @@ class UMS_Admin {
 		$token = isset( $_POST['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_POST['allocation_preview_token'] ) ) : '';
 		$preview = UMS_Allocation_Calculation::get_preview( $token );
 		if ( ! is_array( $preview ) ) {
-			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_expired' ) );
+			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_calculation_expired' ) );
 		}
 		if ( ! empty( $preview['errors'] ) ) {
-			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_error', 'allocation_preview_token' => $token ) );
+			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_calculation_error', 'allocation_preview_token' => $token ) );
 		}
 		$result = UMS_Allocation_Calculation::save_calculation( $preview, get_current_user_id() );
 		if ( empty( $result['success'] ) ) {
-			self::redirect_to_inventory( array( 'notice' => 'allocation_calculation_save_failed', 'allocation_preview_token' => $token, 'notice_extra' => implode( ' ', $result['errors'] ) ) );
+			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_calculation_save_failed', 'allocation_preview_token' => $token, 'notice_extra' => implode( ' ', $result['errors'] ) ) );
 		}
 		UMS_Allocation_Calculation::delete_preview( $token );
 		self::redirect_to_pr_calculation( array(
@@ -4016,6 +4040,28 @@ class UMS_Admin {
         wp_safe_redirect( $url );
         exit;
     }
+
+	private static function redirect_to_allocation_calculation( $args = array() ) {
+		if ( empty( $args['factory_code'] ) && ! empty( $_POST['factory_code'] ) ) {
+			$args['factory_code'] = UMS_DB_Inventory::normalize_factory_code( wp_unslash( $_POST['factory_code'] ) );
+		}
+
+		$url = add_query_arg(
+			array_filter(
+				array_merge(
+					array( 'page' => 'tvn-ums-allocation-calculation' ),
+					$args
+				),
+				function( $value ) {
+					return $value !== null && $value !== '';
+				}
+			),
+			admin_url( 'admin.php' )
+		);
+
+		wp_safe_redirect( $url );
+		exit;
+	}
 
 	private static function redirect_to_uniform_materials( $args = array() ) {
 		$url = add_query_arg(
