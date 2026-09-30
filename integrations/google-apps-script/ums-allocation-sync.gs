@@ -4,6 +4,15 @@
  */
 const UMS_TVN_ALLOCATION_BATCH_SIZE = 200;
 
+function doGet(e) {
+  if (!e || !e.parameter || !e.parameter.spreadsheet_id) {
+    return HtmlService.createHtmlOutput(
+      '<meta charset="utf-8"><p>Web App cấp phát đã sẵn sàng. Hãy mở từ nút "Đọc dữ liệu từ Google Sheet" trong UMS.</p>'
+    ).setTitle('UMS Allocation Sheet Sync');
+  }
+  return umsTvnAllocationDoGet(e);
+}
+
 function umsTvnAllocationDoGet(e) {
   const params = e && e.parameter ? e.parameter : {};
   const config = umsTvnAllocationGetConfig_(params);
