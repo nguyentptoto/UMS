@@ -146,6 +146,10 @@ class UMS_Allocation_Calculation {
 				continue;
 			}
 			$allocations = $allowance_map[ $employee_no ]['allocations'];
+			if ( ! empty( $allowance_map[ $employee_no ]['maternity_blocked'] ) ) {
+				$warnings[] = sprintf( 'Dòng %d, CNV %s: khóa toàn bộ kỳ T%d/%d do đã nhận đồng phục bầu; số lượng cấp phát bằng 0.', $entry['source_row'], $employee_no, $month, $year );
+				continue;
+			}
 			$requested_by_rule = array();
 			$accepted_by_rule  = array();
 			foreach ( $entry['requests'] as $request ) {

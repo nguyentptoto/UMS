@@ -1,0 +1,21 @@
+.ums-maternity { color: #183746; }
+.ums-maternity-section { padding: 20px 0; border-bottom: 1px solid #c8d3dc; }
+.ums-maternity-fields { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin: 20px 0; }
+.ums-maternity-fields label { display: flex; flex-direction: column; gap: 8px; min-width: 200px; max-width: 100%; }
+.ums-maternity-fields label:first-of-type { flex: 1 1 340px; max-width: 640px; }
+.ums-maternity input, .ums-maternity select { max-width: 100%; }
+.ums-maternity .ums-table-scroll { overflow-x: auto; }
+.ums-maternity-items { min-width: 900px; table-layout: fixed; }
+.ums-maternity-items th:nth-child(1) { width: 14%; }
+.ums-maternity-items th:nth-child(2) { width: 12%; }
+.ums-maternity-items th:nth-child(3) { width: 9%; }
+.ums-maternity-items th:nth-child(4) { width: 12%; }
+.ums-maternity-items th:nth-child(5) { width: 38%; }
+.ums-maternity-items th:nth-child(6) { width: 15%; }
+.ums-maternity-items input { width: 90px; }
+.ums-maternity .select2-container { max-width: 100%; }
+@media (max-width: 600px) {
+    .ums-maternity-fields { align-items: stretch; }
+    .ums-maternity-fields label { min-width: 0; width: 100%; }
+    .ums-maternity-fields button { white-space: normal; height: auto; }
+}

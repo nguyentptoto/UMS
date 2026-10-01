@@ -349,6 +349,12 @@ class UMS_DB_Request extends UMS_DB_Base {
 
 		if ( $existing_out <= 0 ) {
 			$details = self::get_details( $request_id );
+			$maternity_error = UMS_Maternity::validate_paid_request( $details, $request['reason_type'], $request['payment_method'] );
+			if ( $maternity_error !== '' ) {
+				$wpdb->query( 'ROLLBACK' );
+				$wpdb->last_error = $maternity_error;
+				return false;
+			}
 			foreach ( $details as $detail ) {
 				$item_id   = (int) $detail['item_id'];
 				$quantity  = max( 1, (int) $detail['quantity'] );

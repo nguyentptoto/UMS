@@ -142,7 +142,11 @@ class UMS_Employee_Allowance_Report {
 				self::add_warning( $warnings, $warning_keys, $warning['key'], $warning['message'] );
 			}
 
-			foreach ( $allocation_cache[ $allocation_key ]['allocations'] as $allocation ) {
+			$is_maternity_blocked = UMS_Maternity::is_blocked( $employee_no, $filters['report_year'], $filters['report_month'] );
+			if ( $is_maternity_blocked ) {
+				self::add_warning( $warnings, $warning_keys, 'maternity-' . $employee_no, 'CNV ' . $employee_no . ': khóa toàn bộ kỳ cấp phát do đã nhận đồng phục bầu.' );
+			}
+			foreach ( $is_maternity_blocked ? array() : $allocation_cache[ $allocation_key ]['allocations'] as $allocation ) {
 				$rule     = $allocation['rule'];
 				$quota    = $allocation['quota'];
 				$quantity = $filters['quantity_mode'] === 'remaining'
@@ -234,6 +238,10 @@ class UMS_Employee_Allowance_Report {
 
 		foreach ( $employees as $employee ) {
 			$employee_no  = strtoupper( trim( (string) $employee['employee_no'] ) );
+			if ( UMS_Maternity::is_blocked( $employee_no, $year, $month ) ) {
+				$result[ $employee_no ] = array( 'employee' => $employee, 'allocations' => array(), 'warnings' => array(), 'maternity_blocked' => true );
+				continue;
+			}
 			$position_code = UMS_DB_Annual_Allowance::normalize_position_code( $employee['position'] ?? '' );
 			$position_id   = $position_ids[ $position_code ] ?? 0;
 			$context = array(
@@ -409,6 +417,7 @@ class UMS_Employee_Allowance_Report {
 	private static function get_products() {
 		$groups = array();
 		foreach ( UMS_DB_Inventory::get_all() as $item ) {
+			if ( UMS_Maternity::product_group( $item ) !== '' ) { continue; }
 			$key = absint( $item['category_id'] ) . '|' . UMS_DB_Inventory::normalize_product_identity( $item['item_variant'] );
 			if ( ! isset( $groups[ $key ] ) ) {
 				$groups[ $key ] = array(

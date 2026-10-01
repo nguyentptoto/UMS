@@ -46,6 +46,10 @@ class UMS_DB_Inventory_Movement extends UMS_DB_Base {
             'note'           => '',
         );
         $data = wp_parse_args( $data, $defaults );
+		if ( ! UMS_Maternity::allow_movement( $data ) ) {
+			self::db()->last_error = 'Đồ bầu miễn phí cần xác nhận nhận tại mục Đồng phục bầu; mua thêm phải có phiếu thanh toán đủ 100%.';
+			return false;
+		}
 		$data['factory_code'] = UMS_DB_Inventory::normalize_factory_code( $data['factory_code'] );
 		if ( ! self::has_factory_column() ) {
 			unset( $data['factory_code'] );

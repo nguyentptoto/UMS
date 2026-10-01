@@ -351,7 +351,7 @@ class UMS_Sheet_User_Sync {
 			'date_joined'       => self::incoming_or_existing( $raw, 'date_joined', $existing, '' ),
 			'resignation_date'  => self::nullable_date_value( $raw, 'resignation_date', $existing ),
 			'transfer_date'     => self::nullable_date_value( $raw, 'transfer_date', $existing ),
-			'is_maternity'      => self::boolean_value( $raw, 'is_maternity', $existing ),
+			'is_maternity'      => UMS_Maternity::managed_flag( trim( (string) $raw['employee_code'] ), self::boolean_value( $raw, 'is_maternity', $existing ) ),
 			'is_outdoor_worker' => self::boolean_value( $raw, 'is_outdoor_worker', $existing ),
 			'account_status'    => self::incoming_or_existing(
 				$raw,

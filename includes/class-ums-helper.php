@@ -102,15 +102,12 @@ if ( ! function_exists( 'ums_get_maternity_allowances' ) ) {
 	/**
 	 * Lấy định mức đồng phục thai sản theo nhóm đối tượng.
 	 *
-	 * Giá trị mặc định để trống có chủ đích. Hãy bổ sung bằng filter
-	 * `ums_maternity_allowances` hoặc nguồn dữ liệu DB khi cần.
+	 * Mức trần miễn phí cộng dồn qua các lần cấp trong mỗi thai kỳ.
 	 *
-	 * @return array<string,array{item:string,max_qty:int,has_jacket:int}>
+	 * @return array<string,int>
 	 */
 	function ums_get_maternity_allowances() {
-		$allowances = array();
-
-		return apply_filters( 'ums_maternity_allowances', $allowances );
+		return UMS_Maternity::limits();
 	}
 }
 

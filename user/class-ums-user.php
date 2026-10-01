@@ -206,6 +206,10 @@ class UMS_User {
         }
 
         $edit_request_id = isset( $_POST['request_id'] ) ? absint( $_POST['request_id'] ) : 0;
+		$maternity_error = UMS_Maternity::validate_paid_request( $details, $reason_type, $payment_method );
+		if ( $maternity_error !== '' ) {
+			self::redirect_with_notice( $redirect_url, 'request_allowance_error', array( 'ums_notice_extra' => $maternity_error ) );
+		}
 
 		$flows               = self::apply_request_organization_scope( $flows, $target_profile );
 		$flow_snapshot       = self::build_approval_flow_snapshot( $flows, (int) $profile['profile_id'] );

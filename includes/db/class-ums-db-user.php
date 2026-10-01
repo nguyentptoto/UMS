@@ -219,7 +219,7 @@ class UMS_DB_User extends UMS_DB_Base {
         } else {
             $profile_data['gender']            = stripos( $employee_code, 'F' ) === 0 ? 'Nữ' : 'Nam';
             $profile_data['transfer_date']     = null;
-            $profile_data['is_maternity']      = 0;
+            $profile_data['is_maternity']      = UMS_Maternity::managed_flag( $employee_code, 0 );
             $profile_data['is_outdoor_worker'] = 0;
             $saved = self::insert( $profile_data );
         }

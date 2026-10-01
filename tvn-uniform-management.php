@@ -114,6 +114,7 @@ function run_tvn_uniform_management() {
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-annual-allowance-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-special-work-assignment-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-employee-allowance-report.php';
+	require_once UMS_PLUGIN_DIR . 'includes/class-ums-maternity.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-employee-exit-manager.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-employee-exit-return-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-inventory-import.php';
@@ -127,6 +128,7 @@ function run_tvn_uniform_management() {
 	UMS_DB_Approval_Delegation::ensure_schema();
 	UMS_DB_Approval_Concurrent_Assignment::ensure_schema();
 	UMS_DB_Allocation_Calculation::ensure_schema();
+	UMS_Maternity::ensure_schema();
     UMS_Sheet_User_Sync::init();
     UMS_Organization_Sync::init();
 	UMS_Allocation_Sheet_Sync::init();
@@ -137,6 +139,8 @@ function run_tvn_uniform_management() {
         require_once UMS_PLUGIN_DIR . 'admin/class-ums-admin.php';
         $ums_admin = new UMS_Admin();
         $ums_admin->init();
+		require_once UMS_PLUGIN_DIR . 'admin/class-ums-maternity-admin.php';
+		UMS_Maternity_Admin::init();
     }
 
     require_once UMS_PLUGIN_DIR . 'user/class-ums-user.php';

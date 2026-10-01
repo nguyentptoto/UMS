@@ -67,6 +67,11 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 	}
 
 	public static function save_snapshot( $preview, $user_id ) {
+		foreach ( $preview['details'] as $detail ) {
+			if ( UMS_Maternity::is_blocked( $detail['employee_no'], $preview['year'], $preview['month'] ) && (int) $detail['quantity'] > 0 ) {
+				return new WP_Error( 'maternity_preview_stale', 'CNV ' . $detail['employee_no'] . ' đã bị khóa kỳ do nhận đồ bầu. Vui lòng tính lại trước khi chốt.' );
+			}
+		}
 		if ( ! self::is_ready() ) {
 			return new WP_Error( 'allocation_schema_missing', 'Database chưa có bảng lưu kết quả tính số lượng cấp phát.' );
 		}
@@ -165,6 +170,9 @@ class UMS_DB_Allocation_Calculation extends UMS_DB_Base {
 				INNER JOIN ' . self::table() . ' batches ON batches.batch_id = details.batch_id
 				' . $organization_join . '
 				WHERE batches.batch_id = %d AND batches.is_active = 1
+				AND NOT EXISTS (SELECT 1 FROM ' . UMS_Maternity::table() . ' maternity
+					WHERE maternity.employee_no = details.employee_no AND maternity.received_on IS NOT NULL
+					AND maternity.blocked_year = batches.calculation_year AND maternity.blocked_month = batches.period_month)
 				' . $factory_where . '
 				GROUP BY details.item_id',
 				absint( $batch['batch_id'] )
