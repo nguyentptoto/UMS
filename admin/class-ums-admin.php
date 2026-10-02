@@ -10,7 +10,7 @@ class UMS_Admin {
     public static function init() {
         // Móc hàm tạo Menu vào hệ thống WordPress
         add_action( 'admin_menu', array( __CLASS__, 'add_admin_menu' ) );
-        
+
         // Móc hàm nạp các file CSS/JS vào trang Admin
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_assets' ) );
 
@@ -34,7 +34,6 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_confirm_newcomer_inventory_out', array( __CLASS__, 'handle_confirm_newcomer_inventory_out' ) );
 		add_action( 'admin_post_ums_preview_allocation_calculation', array( __CLASS__, 'handle_preview_allocation_calculation' ) );
 		add_action( 'admin_post_ums_save_allocation_calculation', array( __CLASS__, 'handle_save_allocation_calculation' ) );
-		add_action( 'admin_post_ums_save_allocation_sheet_sources', array( __CLASS__, 'handle_save_allocation_sheet_sources' ) );
 		add_action( 'admin_post_ums_import_distribution_recipients', array( __CLASS__, 'handle_import_distribution_recipients' ) );
 		add_action( 'admin_post_ums_preview_distribution_email', array( __CLASS__, 'handle_preview_distribution_email' ) );
 		add_action( 'admin_post_ums_send_distribution_email', array( __CLASS__, 'handle_send_distribution_email' ) );
@@ -50,8 +49,6 @@ class UMS_Admin {
 		add_action( 'admin_post_ums_preview_special_work_assignment_import', array( __CLASS__, 'handle_preview_special_work_assignment_import' ) );
 		add_action( 'admin_post_ums_confirm_special_work_assignment_import', array( __CLASS__, 'handle_confirm_special_work_assignment_import' ) );
 		add_action( 'admin_post_ums_export_employee_allowances', array( __CLASS__, 'handle_export_employee_allowances' ) );
-        add_action( 'admin_post_ums_sync_organization', array( __CLASS__, 'handle_sync_organization' ) );
-        add_action( 'admin_post_ums_save_sheet_sync_settings', array( __CLASS__, 'handle_save_sheet_sync_settings' ) );
 		add_action( 'admin_post_ums_refresh_employee_exit', array( __CLASS__, 'handle_refresh_employee_exit' ) );
 		add_action( 'admin_post_ums_save_employee_exit_returns', array( __CLASS__, 'handle_save_employee_exit_returns' ) );
 		add_action( 'admin_post_ums_preview_employee_exit_returns', array( __CLASS__, 'handle_preview_employee_exit_returns' ) );
@@ -60,7 +57,6 @@ class UMS_Admin {
         add_action( 'wp_ajax_ums_sync_user_password', array( __CLASS__, 'handle_sync_user_password' ) );
         add_action( 'wp_ajax_ums_get_organization_employees', array( __CLASS__, 'handle_get_organization_employees' ) );
 		add_action( 'wp_ajax_ums_calculate_pr', array( __CLASS__, 'handle_calculate_pr' ) );
-		add_action( 'wp_ajax_ums_allocation_sync_status', array( __CLASS__, 'handle_allocation_sync_status' ) );
     }
 
     /**
@@ -176,14 +172,7 @@ class UMS_Admin {
             array( __CLASS__, 'render_annual_allowance_page' )
         );
 
-        add_submenu_page(
-            'tvn-uniform-management',
-            'Đồng bộ Google Sheet',
-            'Đồng bộ Sheet',
-            'manage_options',
-            'tvn-ums-sheet-sync',
-            array( __CLASS__, 'render_sheet_sync_page' )
-        );
+
 
 		add_submenu_page(
 			'tvn-uniform-management',
@@ -285,7 +274,6 @@ class UMS_Admin {
             array(
                 'ajaxUrl'           => admin_url( 'admin-ajax.php' ),
                 'passwordSyncNonce' => wp_create_nonce( 'ums_sync_user_password' ),
-				'allocationSyncNonce' => wp_create_nonce( 'ums_allocation_sync_status' ),
             )
         );
 
@@ -518,10 +506,6 @@ class UMS_Admin {
 		$allocation_calculation_ready     = UMS_DB_Allocation_Calculation::supports_factory_sources();
 		$allocation_preview_token         = isset( $_GET['allocation_preview_token'] ) ? sanitize_key( wp_unslash( $_GET['allocation_preview_token'] ) ) : '';
 		$allocation_preview               = $allocation_preview_token !== '' ? UMS_Allocation_Calculation::get_preview( $allocation_preview_token ) : null;
-		$allocation_sheet_sources         = UMS_Allocation_Sheet_Sync::get_sources();
-		$allocation_sheet_apps_script_url = UMS_Allocation_Sheet_Sync::get_apps_script_url();
-		$allocation_sheet_rest_endpoint   = rest_url( UMS_Allocation_Sheet_Sync::REST_NAMESPACE . UMS_Allocation_Sheet_Sync::REST_ROUTE );
-		$allocation_sheet_sync_token      = UMS_Sheet_User_Sync::get_sync_token();
 		$notice                           = self::get_notice();
 
 		if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-allocation-calculation.php' ) ) {
@@ -655,13 +639,9 @@ class UMS_Admin {
         $table_ready     = UMS_DB_Organization::table_exists();
         $total_employees = $table_ready ? UMS_DB_Organization::get_count() : 0;
         $last_synced_at  = $table_ready ? UMS_DB_Organization::get_last_synced_at() : null;
-        $cron_result     = get_option( UMS_Organization_Sync::CRON_RESULT_OPTION, array() );
         $divisions       = $table_ready ? UMS_DB_Organization::get_distinct_values( 'division' ) : array();
         $departments     = $table_ready ? UMS_DB_Organization::get_distinct_values( 'department' ) : array();
         $factories       = $table_ready ? UMS_DB_Organization::get_distinct_values( 'factory' ) : array();
-        $apps_script_url = (string) get_option( 'ums_sheet_sync_apps_script_url', '' );
-        $rest_endpoint   = rest_url( UMS_Organization_Sync::REST_NAMESPACE . UMS_Organization_Sync::REST_ROUTE );
-        $sync_token      = UMS_Sheet_User_Sync::get_sync_token();
         $notice          = self::get_notice();
 
         if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-organization-list.php' ) ) {
@@ -671,23 +651,7 @@ class UMS_Admin {
         }
     }
 
-    /**
-     * Trả dữ liệu phân trang cho jqxGrid của sơ đồ tổ chức.
-     */
-    public static function render_sheet_sync_page() {
-        $apps_script_url = (string) get_option( 'ums_sheet_sync_apps_script_url', '' );
-        $rest_endpoint   = rest_url( UMS_Organization_Sync::REST_NAMESPACE . UMS_Organization_Sync::REST_ROUTE );
-        $sync_token      = UMS_Sheet_User_Sync::get_sync_token();
-        $bridge_url      = UMS_Auto_Sync_Bridge::get_bridge_url();
-        $last_log        = UMS_Sheet_User_Sync::get_last_log();
-        $notice          = self::get_notice();
 
-        if ( file_exists( UMS_PLUGIN_DIR . 'admin/partials/view-sheet-sync.php' ) ) {
-            include_once UMS_PLUGIN_DIR . 'admin/partials/view-sheet-sync.php';
-        } else {
-            echo '<div class="notice notice-error"><p>Lỗi: Không tìm thấy file view-sheet-sync.php</p></div>';
-        }
-    }
 
 	public static function render_employee_exit_page() {
 		$table_ready = UMS_DB_Employee_Exit::is_ready() && UMS_DB_Organization::supports_employment_status();
@@ -815,18 +779,7 @@ class UMS_Admin {
 		);
 	}
 
-    public static function handle_save_sheet_sync_settings() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
-        }
 
-        check_admin_referer( 'ums_save_sheet_sync_settings' );
-
-        $apps_script_url = isset( $_POST['apps_script_url'] ) ? esc_url_raw( wp_unslash( $_POST['apps_script_url'] ) ) : '';
-        update_option( 'ums_sheet_sync_apps_script_url', $apps_script_url, false );
-
-        self::redirect_to_sheet_sync( array( 'notice' => 'sheet_sync_settings_saved' ) );
-    }
 
     public static function handle_get_organization_employees() {
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -870,38 +823,7 @@ class UMS_Admin {
         );
     }
 
-    /**
-     * Handler cũ được giữ để tương thích URL cũ; dữ liệu tổ chức nay đồng bộ từ Google Sheet.
-     */
-    public static function handle_sync_organization() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
-        }
 
-        check_admin_referer( 'ums_sync_organization' );
-
-        $result = UMS_Organization_Sync::sync();
-        if ( is_wp_error( $result ) ) {
-            self::redirect_to_organization(
-                array(
-                    'notice'       => 'organization_sync_failed',
-                    'notice_extra' => $result->get_error_message(),
-                )
-            );
-        }
-
-        self::redirect_to_organization(
-            array(
-                'notice'       => 'organization_synced',
-                'notice_extra' => sprintf(
-					'Đã nhận %s nhân sự từ version %s; ghi nhận %s CNV không còn trong sơ đồ là nghỉ việc.',
-                    number_format_i18n( $result['total'] ),
-                    number_format_i18n( $result['source_version'] ),
-                    number_format_i18n( $result['deleted'] )
-                ),
-            )
-        );
-    }
 
     /**
      * Hàm gọi file giao diện quản lý danh mục sản phẩm.
@@ -2080,21 +2002,7 @@ class UMS_Admin {
 		}
 	}
 
-	public static function handle_save_allocation_sheet_sources() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'Bạn không có quyền thực hiện thao tác này.', 'tvn-ums' ) );
-		}
-		check_admin_referer( 'ums_save_allocation_sheet_sources' );
-		$apps_script_result = UMS_Allocation_Sheet_Sync::save_apps_script_url( $_POST['allocation_apps_script_url'] ?? '' );
-		if ( is_wp_error( $apps_script_result ) ) {
-			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $apps_script_result->get_error_message() ) );
-		}
-		$result = UMS_Allocation_Sheet_Sync::save_sources( $_POST['allocation_sheet_sources'] ?? array() );
-		if ( is_wp_error( $result ) ) {
-			self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_sheet_settings_error', 'notice_extra' => $result->get_error_message() ) );
-		}
-		self::redirect_to_allocation_calculation( array( 'notice' => 'allocation_sheet_settings_saved' ) );
-	}
+
 
 	public static function handle_save_allocation_calculation() {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -2122,15 +2030,7 @@ class UMS_Admin {
 		) );
 	}
 
-	public static function handle_allocation_sync_status() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( array( 'message' => 'Bạn không có quyền xem kết quả đồng bộ.' ), 403 );
-		}
-		check_ajax_referer( 'ums_allocation_sync_status', 'security' );
-		$client_sync_id = isset( $_POST['client_sync_id'] ) ? sanitize_key( wp_unslash( $_POST['client_sync_id'] ) ) : '';
-		$status = UMS_Allocation_Sheet_Sync::get_sync_status( $client_sync_id );
-		wp_send_json_success( $status ?: array( 'state' => 'pending' ) );
-	}
+
 
 	public static function handle_import_distribution_recipients() {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -3742,7 +3642,7 @@ class UMS_Admin {
         return false;
     }
 
-    private static function get_notice() {
+    public static function get_notice() {
         $code = isset( $_GET['notice'] ) ? sanitize_key( wp_unslash( $_GET['notice'] ) ) : '';
         if ( $code === '' ) {
             return null;
@@ -3756,7 +3656,6 @@ class UMS_Admin {
 			'newcomer_out_preview_expired' => array( 'error', 'Dữ liệu xem trước cấp phát ngày đầu đã hết hạn. Vui lòng tải lại file.' ),
 			'newcomer_out_failed' => array( 'error', 'Cấp phát ngày đầu không thành công; tồn kho chưa bị thay đổi.' ),
 			'newcomer_out_completed' => array( 'success', 'Đã cấp phát ngày đầu làm việc và ghi nhận lịch sử kho.' ),
-            'sheet_sync_settings_saved' => array( 'success', 'Đã lưu cấu hình đồng bộ Google Sheet.' ),
             'created'          => array( 'success', 'Đã thêm hồ sơ nhân sự mới.' ),
             'updated'          => array( 'success', 'Đã cập nhật hồ sơ nhân sự.' ),
             'deleted'          => array( 'success', 'Đã xóa hồ sơ nhân sự.' ),
@@ -3803,8 +3702,6 @@ class UMS_Admin {
 			'allocation_calculation_expired' => array( 'error', 'Kết quả tính tạm thời đã hết hạn. Hãy tải lại file.' ),
 			'allocation_calculation_save_failed' => array( 'error', 'Không chốt được kết quả tính số lượng cấp phát.' ),
 			'allocation_calculation_saved' => array( 'success', 'Đã chốt kết quả tính số lượng cấp phát để sử dụng khi lập PR.' ),
-			'allocation_sheet_settings_saved' => array( 'success', 'Đã lưu 6 nguồn Google Sheet cấp phát theo nhà máy và kỳ.' ),
-			'allocation_sheet_settings_error' => array( 'error', 'Không lưu được cấu hình Google Sheet cấp phát.' ),
 			'distribution_recipients_ready' => array( 'success', 'Đã đọc danh sách người nhận.' ),
 			'distribution_recipients_error' => array( 'error', 'Không đọc được danh sách người nhận.' ),
 			'distribution_email_preview_ready' => array( 'success', 'Đã tạo bản xem trước email. Hãy kiểm tra trước khi gửi.' ),
@@ -3849,8 +3746,6 @@ class UMS_Admin {
 			'employee_exit_return_preview_expired' => array( 'error', 'Dữ liệu xem trước hoàn trả đã hết hạn. Vui lòng tải lại file.' ),
 			'employee_exit_return_import_failed' => array( 'error', 'Import dữ liệu hoàn trả không thành công.' ),
 			'employee_exit_return_import_completed' => array( 'success', 'Import dữ liệu hoàn trả hoàn tất.' ),
-            'organization_synced' => array( 'success', 'Đồng bộ sơ đồ tổ chức thành công.' ),
-            'organization_sync_failed' => array( 'error', 'Không thể đồng bộ sơ đồ tổ chức.' ),
             'invalid_user'     => array( 'error', 'Không tìm thấy nhân sự cần xử lý.' ),
             'invalid_department' => array( 'error', 'Không tìm thấy phòng ban cần xử lý.' ),
             'invalid_position' => array( 'error', 'Không tìm thấy chức danh cần xử lý.' ),
@@ -3864,6 +3759,7 @@ class UMS_Admin {
             'db_error'         => array( 'error', 'Không thể ghi dữ liệu vào database.' ),
         );
 
+        $messages = apply_filters( 'ums_admin_notice_messages', $messages );
         if ( ! isset( $messages[ $code ] ) ) {
             return null;
         }
@@ -4209,41 +4105,9 @@ class UMS_Admin {
 		exit;
 	}
 
-    private static function redirect_to_organization( $args = array() ) {
-        $url = add_query_arg(
-            array_filter(
-                array_merge(
-                    array( 'page' => 'tvn-uniform-management' ),
-                    $args
-                ),
-                function( $value ) {
-                    return $value !== null && $value !== '';
-                }
-            ),
-            admin_url( 'admin.php' )
-        );
 
-        wp_safe_redirect( $url );
-        exit;
-    }
 
-    private static function redirect_to_sheet_sync( $args = array() ) {
-        $url = add_query_arg(
-            array_filter(
-                array_merge(
-                    array( 'page' => 'tvn-ums-sheet-sync' ),
-                    $args
-                ),
-                function( $value ) {
-                    return $value !== null && $value !== '';
-                }
-            ),
-            admin_url( 'admin.php' )
-        );
 
-        wp_safe_redirect( $url );
-        exit;
-    }
 
 	private static function redirect_to_employee_exits( $args = array() ) {
 		if ( empty( $args['factory_code'] ) && ! empty( $_POST['factory_code'] ) ) {

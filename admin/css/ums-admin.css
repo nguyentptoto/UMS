@@ -217,45 +217,6 @@
     max-width: 240px;
 }
 
-.ums-sync-log {
-    background: #0f172a;
-    border: 1px solid #1e293b;
-    border-radius: 4px;
-    color: #dbeafe;
-    font-family: Consolas, Monaco, monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    max-height: 320px;
-    overflow: auto;
-    padding: 12px;
-}
-
-.ums-sync-log-line {
-    margin: 0 0 6px;
-    white-space: pre-wrap;
-}
-
-.ums-sync-log-line-success {
-    color: #86efac;
-}
-
-.ums-sync-log-line-error {
-    color: #fca5a5;
-}
-
-.ums-sync-log-line-warning {
-    color: #fde68a;
-}
-
-.ums-sync-error-list {
-    margin-left: 18px;
-}
-
-.ums-sheet-sync-page .regular-text.code {
-    max-width: 760px;
-    width: 100%;
-}
-
 @media (max-width: 782px) {
     .ums-panel-heading-row {
         align-items: stretch;

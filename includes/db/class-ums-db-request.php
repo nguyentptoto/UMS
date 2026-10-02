@@ -3,6 +3,9 @@
  * Data layer for uniform issue requests.
  */
 class UMS_DB_Request extends UMS_DB_Base {
+	private static $completion_error = '';
+
+	public static function get_completion_error() { return self::$completion_error; }
 
 	public static function table() {
 		return self::prefix() . 'uniform_requests';
@@ -275,7 +278,7 @@ class UMS_DB_Request extends UMS_DB_Base {
 	}
 
 	private static function request_formats( $request ) {
-		$integer_fields = array( 'creator_id', 'target_user_id', 'reason_type', 'payment_method' );
+		$integer_fields = array( 'creator_id', 'target_user_id', 'reason_type', 'payment_method', 'maternity_episode_id' );
 		return array_map(
 			function ( $field ) use ( $integer_fields ) {
 				return in_array( $field, $integer_fields, true ) ? '%d' : '%s';
@@ -324,10 +327,11 @@ class UMS_DB_Request extends UMS_DB_Base {
 	}
 
 	public static function complete_approved_request( $request_id, $actor_user_id ) {
+		self::$completion_error = '';
 		$wpdb       = self::db();
 		$request_id = absint( $request_id );
 
-		$wpdb->query( 'START TRANSACTION' );
+		if ( $wpdb->query( 'START TRANSACTION' ) === false ) { return false; }
 
 		$request = $wpdb->get_row(
 			$wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE request_id = %d FOR UPDATE', $request_id ),
@@ -337,6 +341,15 @@ class UMS_DB_Request extends UMS_DB_Base {
 			$wpdb->query( 'ROLLBACK' );
 			return false;
 		}
+		if ( $request['current_status'] === 'completed' ) {
+			$wpdb->query( 'COMMIT' );
+			return true;
+		}
+		if ( strpos( $request['current_status'], 'pending_step_' ) !== 0 ) {
+			$wpdb->query( 'ROLLBACK' );
+			return false;
+		}
+		$maternity_code = '';
 		$target_organization = UMS_DB_Organization::get_by_wp_user_id( (int) $request['target_user_id'] );
 		$factory_code = UMS_DB_Inventory::resolve_factory_code_for_employee( is_array( $target_organization ) ? $target_organization : array() );
 
@@ -349,10 +362,21 @@ class UMS_DB_Request extends UMS_DB_Base {
 
 		if ( $existing_out <= 0 ) {
 			$details = self::get_details( $request_id );
-			$maternity_error = UMS_Maternity::validate_paid_request( $details, $request['reason_type'], $request['payment_method'] );
-			if ( $maternity_error !== '' ) {
+			try {
+				$maternity_details = UMS_Maternity::maternity_details( $details );
+				if ( $maternity_details ) {
+					$maternity_code = UMS_Maternity::fulfil_request( $request, $maternity_details, $actor_user_id );
+					if ( ! UMS_Maternity::is_paid_request( $request['reason_type'], $request['payment_method'] ) ) {
+						$maternity_item_ids = array_column( $maternity_details, 'item_id' );
+						$details = array_values( array_filter( $details, function ( $detail ) use ( $maternity_item_ids ) { return ! in_array( $detail['item_id'], $maternity_item_ids ); } ) );
+					}
+				}
+			} catch ( Throwable $error ) {
 				$wpdb->query( 'ROLLBACK' );
-				$wpdb->last_error = $maternity_error;
+				$wpdb->last_error = $error->getMessage();
+				if ( in_array( get_class( $error ), array( 'RuntimeException', 'InvalidArgumentException' ), true ) ) {
+					self::$completion_error = $error->getMessage();
+				}
 				return false;
 			}
 			foreach ( $details as $detail ) {
@@ -413,7 +437,8 @@ class UMS_DB_Request extends UMS_DB_Base {
 			return false;
 		}
 
-		$wpdb->query( 'COMMIT' );
+		if ( $wpdb->query( 'COMMIT' ) === false ) { $wpdb->query( 'ROLLBACK' ); return false; }
+		if ( $maternity_code !== '' ) { UMS_Maternity::after_request_commit( $maternity_code ); }
 		return true;
 	}
 

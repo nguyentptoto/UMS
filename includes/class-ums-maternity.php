@@ -10,6 +10,7 @@ class UMS_Maternity extends UMS_DB_Base {
 	public static function labels() { return array( 'dress' => 'Váy bầu', 'pants' => 'Quần bầu', 'shirt' => 'Áo bầu', 'jacket' => 'Áo khoác bầu' ); }
 
 	public static function ensure_schema() {
+		self::ensure_request_schema();
 		if ( get_option( 'ums_maternity_schema' ) === '1' ) { return; }
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		$db = self::db();
@@ -49,6 +50,19 @@ class UMS_Maternity extends UMS_DB_Base {
 			if ( $db->get_var( $db->prepare( 'SHOW TABLES LIKE %s', $name ) ) !== $name ) { return; }
 		}
 		update_option( 'ums_maternity_schema', '1', false );
+	}
+
+	private static function ensure_request_schema() {
+		if ( get_option( 'ums_maternity_request_schema' ) === '1' ) { return; }
+		$db = self::db();
+		$table = UMS_DB_Request::table();
+		if ( $db->get_var( $db->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) { return; }
+		if ( $db->get_var( "SHOW COLUMNS FROM $table LIKE 'maternity_episode_id'" ) !== 'maternity_episode_id' ) {
+			$db->query( "ALTER TABLE $table ADD COLUMN maternity_episode_id BIGINT(20) UNSIGNED NULL DEFAULT NULL" );
+		}
+		if ( $db->get_var( "SHOW COLUMNS FROM $table LIKE 'maternity_episode_id'" ) === 'maternity_episode_id' ) {
+			update_option( 'ums_maternity_request_schema', '1', false );
+		}
 	}
 
 	public static function date( $value ) {
@@ -141,18 +155,29 @@ class UMS_Maternity extends UMS_DB_Base {
 			if ( $previous && ( ! $previous['returned_on'] || $date <= $previous['returned_on'] ) ) {
 				throw new RuntimeException( 'CNV còn thai kỳ đang mở hoặc ngày ghi nhận trùng lịch sử thai kỳ trước.' );
 			}
-			self::checked( $db->insert( self::table(), array(
-				'employee_no' => $code, 'active_employee_no' => $code, 'full_name' => $employee['full_name'],
-				'factory_code' => UMS_DB_Inventory::resolve_factory_code_for_employee( $employee ),
-				'notified_on' => $date, 'created_at' => current_time( 'mysql' ),
-			) ) );
-			$id = (int) $db->insert_id;
-			self::flag( $code, 1 );
-			self::event( $id, 'created', $actor, array( 'notified_on' => $date ) );
+			$id = self::insert_episode( $employee, $date, $actor );
 			self::checked( $db->query( 'COMMIT' ) );
 		} catch ( Throwable $e ) { $db->query( 'ROLLBACK' ); throw $e; }
 		self::sync_meta( $code, 1 );
 		return $id;
+	}
+
+	private static function insert_episode( $employee, $date, $actor, $request_id = 0 ) {
+		$code = strtoupper( trim( $employee['employee_no'] ) );
+		self::checked( self::db()->insert( self::table(), array(
+			'employee_no' => $code, 'active_employee_no' => $code, 'full_name' => $employee['full_name'],
+			'factory_code' => UMS_DB_Inventory::resolve_factory_code_for_employee( $employee ),
+			'notified_on' => $date, 'created_at' => current_time( 'mysql' ),
+		) ) );
+		$id = (int) self::db()->insert_id;
+		self::flag( $code, 1 );
+		self::event( $id, 'created', $actor, array( 'notified_on' => $date, 'request_id' => $request_id ) );
+		return $id;
+	}
+
+	public static function after_request_commit( $code ) {
+		self::$blocks = array();
+		self::sync_meta( $code, self::managed_flag( $code ) );
 	}
 
 	private static function sync_meta( $code, $value ) {
@@ -172,43 +197,56 @@ class UMS_Maternity extends UMS_DB_Base {
 		if ( array_sum( $totals ) === 0 ) { throw new RuntimeException( 'Cần có ít nhất một sản phẩm được duyệt.' ); }
 	}
 
-	public static function balance( $episode ) {
+	public static function balance( $episode, $lock = false ) {
 		$issued = array_fill_keys( array_keys( self::limits() ), 0 );
 		$last_date = (string) $episode['notified_on'];
+		$receipt_count = 0;
 		$events = self::db()->get_results( self::db()->prepare(
-			'SELECT payload FROM ' . self::event_table() . " WHERE episode_id = %d AND action = 'received' ORDER BY event_id ASC", $episode['episode_id']
+			'SELECT action, payload FROM ' . self::event_table() . " WHERE episode_id = %d AND action IN ('received', 'purchased') ORDER BY event_id ASC" . ( $lock ? ' FOR UPDATE' : '' ), $episode['episode_id']
 		), ARRAY_A );
 		if ( self::db()->last_error || ( $episode['received_on'] && ! $events ) ) {
 			throw new RuntimeException( 'Chưa đọc được đầy đủ lịch sử nhận đồ bầu; không thể xác định số lượng còn lại.' );
 		}
 		foreach ( $events as $event ) {
 			$payload = json_decode( (string) $event['payload'], true );
+			if ( $event['action'] === 'purchased' ) {
+				$last_date = max( $last_date, self::date( $payload['purchased_on'] ?? '' ) );
+				continue;
+			}
 			if ( ! is_array( $payload ) || ! isset( $payload['items'], $payload['received_on'] ) || ! is_array( $payload['items'] ) ) {
 				throw new RuntimeException( 'Lịch sử nhận đồ bầu không hợp lệ; cần HCNS kiểm tra.' );
 			}
 			self::validate_quantities( $payload['items'] );
+			$receipt_count++;
 			$last_date = max( $last_date, self::date( $payload['received_on'] ) );
 			foreach ( $payload['items'] as $line ) { $issued[ $line['group'] ] += (int) $line['quantity']; }
 		}
+		if ( $episode['received_on'] && ! $receipt_count ) { throw new RuntimeException( 'Thiếu lịch sử nhận đồ bầu miễn phí.' ); }
 		$remaining = array();
 		foreach ( self::limits() as $group => $limit ) { $remaining[ $group ] = max( 0, $limit - $issued[ $group ] ); }
-		return array( 'issued' => $issued, 'remaining' => $remaining, 'last_received_on' => $last_date, 'receipt_count' => count( $events ) );
+		return array( 'issued' => $issued, 'remaining' => $remaining, 'last_received_on' => $last_date, 'receipt_count' => $receipt_count );
 	}
 
-	public static function pending_items( $episode ) {
+	public static function pending_items( $episode, $lock = false ) {
 		if ( empty( $episode['approved_items'] ) || empty( $episode['approved_by'] ) ) { return array(); }
 		// Old episodes retained approved_items after receipt. Audit order distinguishes
 		// those consumed approvals from a new, pending supplementary issue.
-		$action = self::db()->get_var( self::db()->prepare(
-			'SELECT action FROM ' . self::event_table() . " WHERE episode_id = %d AND action IN ('approved', 'received') ORDER BY event_id DESC LIMIT 1", $episode['episode_id']
-		) );
+		$events = self::db()->get_results( self::db()->prepare(
+			'SELECT action, payload FROM ' . self::event_table() . " WHERE episode_id = %d AND action IN ('approved', 'received') ORDER BY event_id DESC" . ( $lock ? ' FOR UPDATE' : '' ), $episode['episode_id']
+		), ARRAY_A );
 		if ( self::db()->last_error ) { throw new RuntimeException( 'Không đọc được trạng thái duyệt đồ bầu.' ); }
-		return $action === 'approved' ? (array) json_decode( $episode['approved_items'], true ) : array();
+		foreach ( $events as $event ) {
+			$payload = json_decode( $event['payload'], true );
+			// A portal issue does not consume a separate HCNS approval awaiting pickup.
+			if ( $event['action'] === 'received' && ! empty( $payload['request_id'] ) ) { continue; }
+			return $event['action'] === 'approved' ? (array) json_decode( $episode['approved_items'], true ) : array();
+		}
+		return array();
 	}
 
-	private static function validate_remaining( $episode, $lines ) {
+	private static function validate_remaining( $episode, $lines, $lock = false ) {
 		self::validate_quantities( $lines );
-		$balance = self::balance( $episode );
+		$balance = self::balance( $episode, $lock );
 		$totals = array_fill_keys( array_keys( self::limits() ), 0 );
 		foreach ( $lines as $line ) {
 			$group = $line['group'];
@@ -233,7 +271,7 @@ class UMS_Maternity extends UMS_DB_Base {
 		}
 		self::validate_quantities( $lines );
 		self::change( $id, 'approved', $actor, function ( $episode ) use ( $lines, $actor ) {
-			self::validate_remaining( $episode, $lines );
+			self::validate_remaining( $episode, $lines, true );
 			self::checked( self::db()->update( self::table(), array( 'approved_items' => wp_json_encode( $lines ), 'approved_by' => $actor ), array( 'episode_id' => $episode['episode_id'] ) ) );
 			return $lines;
 		} );
@@ -255,49 +293,146 @@ class UMS_Maternity extends UMS_DB_Base {
 	public static function receive( $id, $date, $actor, $approval_hash ) {
 		$date = self::date( $date );
 		self::change( $id, 'received', $actor, function ( $episode ) use ( $date, $actor, $approval_hash ) {
-			$lines = self::pending_items( $episode );
+			$lines = self::pending_items( $episode, true );
 			if ( ! $lines ) { throw new RuntimeException( 'Không có số lượng chờ nhận. Cần duyệt lần cấp bổ sung trước khi xác nhận.' ); }
 			if ( ! hash_equals( hash( 'sha256', (string) $episode['approved_items'] ), (string) $approval_hash ) ) { throw new RuntimeException( 'Số lượng duyệt vừa thay đổi. Hãy tải lại hồ sơ và kiểm tra trước khi xác nhận nhận.' ); }
 			if ( $date < $episode['notified_on'] || $date > current_time( 'Y-m-d' ) ) { throw new RuntimeException( 'Ngày nhận phải từ ngày ghi nhận thai sản đến hôm nay.' ); }
-			$balance = self::validate_remaining( $episode, $lines );
+			$balance = self::validate_remaining( $episode, $lines, true );
 			if ( $date < $balance['last_received_on'] ) { throw new RuntimeException( 'Ngày nhận bổ sung không được trước ngày nhận gần nhất.' ); }
-			// Stable stock lock order; receipt and all movements commit together.
-			usort( $lines, function ( $a, $b ) { return $a['item_id'] <=> $b['item_id']; } );
-			self::$issuing = true;
-			try {
-				foreach ( $lines as &$line ) {
-					$item = UMS_DB_Inventory::get_by_id_for_update( $line['item_id'], $episode['factory_code'] );
-					if ( ! $item || self::product_group( $item ) !== $line['group'] || (int) $item['stock_qty'] < $line['quantity'] ) { throw new RuntimeException( 'Sản phẩm thay đổi hoặc kho nhà máy không đủ tồn: ' . $line['product'] ); }
-					$after = (int) $item['stock_qty'] - $line['quantity'];
-					self::checked( UMS_DB_Inventory::update( $line['item_id'], array( 'stock_qty' => $after ), $episode['factory_code'] ) );
-					self::checked( UMS_DB_Inventory_Movement::insert( array(
-						'item_id' => $line['item_id'], 'factory_code' => $episode['factory_code'], 'movement_type' => 'out',
-						'quantity' => $line['quantity'], 'before_qty' => $item['stock_qty'], 'after_qty' => $after,
-						'unit_price' => $item['base_price'], 'total_price' => $item['base_price'] * $line['quantity'],
-						'actor_user_id' => $actor, 'target_employee_no' => $episode['employee_no'],
-						'note' => 'Cấp miễn phí thai kỳ #' . $episode['episode_id'] . '; thực nhận ' . $date,
-					) ) );
-					$line['movement_id'] = (int) self::db()->insert_id;
-				}
-				unset( $line );
-			} finally { self::$issuing = false; }
-			// Only the first free receipt establishes the blocked periodic cycle.
-			list( $year, $month ) = $episode['received_on']
-				? array( (int) $episode['blocked_year'], (int) $episode['blocked_month'] )
-				: self::blocked_period( $date );
-			self::checked( self::db()->update( self::table(), array(
-				'received_on' => $episode['received_on'] ?: $date, 'blocked_year' => $year, 'blocked_month' => $month,
-				'approved_items' => null, 'approved_by' => null,
-			), array( 'episode_id' => $episode['episode_id'] ) ) );
-			return array( 'received_on' => $date, 'blocked_year' => $year, 'blocked_month' => $month, 'items' => $lines );
+			return self::issue_lines( $episode, $lines, $date, $actor );
 		} );
+	}
+
+	/** Caller owns the transaction and holds the episode row lock. */
+	private static function issue_lines( $episode, $lines, $date, $actor, $request_id = 0 ) {
+		// Stable stock lock order; receipt and all movements commit together.
+		usort( $lines, function ( $a, $b ) { return $a['item_id'] <=> $b['item_id']; } );
+		self::$issuing = true;
+		try {
+			foreach ( $lines as &$line ) {
+				$item = UMS_DB_Inventory::get_by_id_for_update( $line['item_id'], $episode['factory_code'] );
+				if ( ! $item || self::product_group( $item ) !== $line['group'] || (int) $item['stock_qty'] < $line['quantity'] ) { throw new RuntimeException( 'Sản phẩm thay đổi hoặc kho nhà máy không đủ tồn: ' . $line['product'] ); }
+				$after = (int) $item['stock_qty'] - $line['quantity'];
+				self::checked( UMS_DB_Inventory::update( $line['item_id'], array( 'stock_qty' => $after ), $episode['factory_code'] ) );
+				self::checked( UMS_DB_Inventory_Movement::insert( array(
+					'item_id' => $line['item_id'], 'factory_code' => $episode['factory_code'], 'movement_type' => 'out',
+					'request_id' => $request_id ?: null,
+					'quantity' => $line['quantity'], 'before_qty' => $item['stock_qty'], 'after_qty' => $after,
+					'unit_price' => $item['base_price'], 'total_price' => $item['base_price'] * $line['quantity'],
+					'actor_user_id' => $actor, 'target_employee_no' => $episode['employee_no'],
+					'note' => 'Cấp miễn phí thai kỳ #' . $episode['episode_id'] . '; thực nhận ' . $date,
+				) ) );
+				$line['movement_id'] = (int) self::db()->insert_id;
+			}
+			unset( $line );
+		} finally { self::$issuing = false; }
+		// Only the first free receipt establishes the blocked periodic cycle.
+		list( $year, $month ) = $episode['received_on']
+			? array( (int) $episode['blocked_year'], (int) $episode['blocked_month'] )
+			: self::blocked_period( $date );
+		$update = array(
+			'received_on' => $episode['received_on'] ?: $date, 'blocked_year' => $year, 'blocked_month' => $month,
+		);
+		if ( ! $request_id ) { $update['approved_items'] = null; $update['approved_by'] = null; }
+		self::checked( self::db()->update( self::table(), $update, array( 'episode_id' => $episode['episode_id'] ) ) );
+		return array( 'received_on' => $date, 'blocked_year' => $year, 'blocked_month' => $month, 'items' => $lines, 'request_id' => $request_id, 'factory_code' => $episode['factory_code'] );
+	}
+
+	/** Read-only at submission; run again with an episode lock on final approval. */
+	private static function request_context( $code, $details, $bound_id = null, $submitted_on = '', $lock = false, $free = true ) {
+		$code = strtoupper( trim( (string) $code ) );
+		$employee = UMS_DB_Organization::get_by_employee_no( $code );
+		$profile = UMS_DB_User::get_by_employee_code( $code );
+		if ( ! $employee || ! $profile || $profile['gender'] !== 'Nữ' ) { throw new RuntimeException( 'Phiếu đồ bầu chỉ áp dụng cho CNV nữ đang làm việc.' ); }
+		$lines = array();
+		foreach ( $details as $detail ) {
+			$item = UMS_DB_Inventory::get_by_id( $detail['item_id'] );
+			$group = $item ? self::product_group( $item ) : '';
+			if ( $group === '' ) { throw new RuntimeException( 'Không xác định được loại đồ bầu trong phiếu.' ); }
+			$quantity = filter_var( $detail['quantity'], FILTER_VALIDATE_INT );
+			if ( $quantity === false || $quantity < 1 ) { throw new RuntimeException( 'Số lượng đồ bầu không hợp lệ.' ); }
+			$lines[] = array( 'group' => $group, 'item_id' => (int) $item['item_id'], 'quantity' => $detail['quantity'], 'product' => $item['item_variant'], 'size' => $item['size'] );
+		}
+		if ( $free ) { self::validate_quantities( $lines ); }
+		$episode = self::db()->get_row( self::db()->prepare(
+			'SELECT * FROM ' . self::table() . ' WHERE employee_no = %s ORDER BY episode_id DESC LIMIT 1' . ( $lock ? ' FOR UPDATE' : '' ), $code
+		), ARRAY_A );
+		if ( self::db()->last_error ) { throw new RuntimeException( 'Không đọc được hồ sơ thai kỳ.' ); }
+		$closed_on = self::db()->get_var( self::db()->prepare( 'SELECT returned_on FROM ' . self::table() . ' WHERE employee_no = %s AND returned_on IS NOT NULL ORDER BY returned_on DESC LIMIT 1' . ( $lock ? ' FOR UPDATE' : '' ), $code ) );
+		if ( self::db()->last_error ) { throw new RuntimeException( 'Không đọc được lịch sử kết thúc thai kỳ.' ); }
+		$submitted_on = self::date( $submitted_on ?: current_time( 'Y-m-d' ) );
+		if ( $closed_on && $submitted_on <= $closed_on ) { throw new RuntimeException( 'Thai kỳ của phiếu này đã kết thúc. Cần tạo phiếu mới cho thai kỳ mới.' ); }
+		if ( $episode && $episode['returned_on'] ) { $episode = null; }
+		if ( $bound_id && ( ! $episode || (int) $episode['episode_id'] !== (int) $bound_id ) ) { throw new RuntimeException( 'Phiếu không còn thuộc thai kỳ đang mở; không được tự chuyển sang thai kỳ khác.' ); }
+		if ( $episode && $free ) {
+			// Reserve independently approved HCNS quantities, so another request cannot take them.
+			// Locking reads see the latest committed receipts even under REPEATABLE READ.
+			self::validate_remaining( $episode, array_merge( $lines, self::pending_items( $episode, $lock ) ), $lock );
+		}
+		return array( 'employee' => $employee, 'episode' => $episode, 'lines' => $lines, 'episode_id' => $episode ? (int) $episode['episode_id'] : 0 );
+	}
+
+	/** Called only by complete_approved_request inside its existing transaction. */
+	public static function fulfil_request( $request, $details, $actor ) {
+		$employee = UMS_DB_Organization::get_by_wp_user_id( (int) $request['target_user_id'] );
+		if ( ! $employee ) { throw new RuntimeException( 'Không tìm thấy CNV nhận đồ trong Sơ đồ tổ chức.' ); }
+		$paid = self::is_paid_request( $request['reason_type'], $request['payment_method'] );
+		if ( $paid ) {
+			$error = self::validate_paid_request( $details, $request['reason_type'], $request['payment_method'] );
+			if ( $error !== '' ) { throw new RuntimeException( $error ); }
+		} elseif ( ! in_array( (int) $request['reason_type'], array( 1, 2 ), true ) ) {
+			throw new RuntimeException( 'Đồ bầu không được tính tạm ứng kỳ định kỳ.' );
+		}
+		$context = self::request_context( $employee['employee_no'], $details, $request['maternity_episode_id'] ?? 0, substr( $request['created_at'], 0, 10 ), true, ! $paid );
+		$date = current_time( 'Y-m-d' );
+		$episode = $context['episode'];
+		if ( ! $episode ) {
+			$id = self::insert_episode( $context['employee'], $date, $actor, $request['request_id'] );
+			$episode = self::get( $id, true );
+		}
+		if ( $date < self::balance( $episode, true )['last_received_on'] ) { throw new RuntimeException( 'Ngày cấp phát trước lần nhận gần nhất.' ); }
+		$episode['factory_code'] = UMS_DB_Inventory::resolve_factory_code_for_employee( $context['employee'] );
+		if ( $paid ) {
+			// Paid stock movements remain in the request transaction, outside the free ledger.
+			self::event( $episode['episode_id'], 'purchased', $actor, array( 'request_id' => (int) $request['request_id'], 'purchased_on' => $date, 'items' => $context['lines'], 'factory_code' => $episode['factory_code'] ) );
+		} else {
+			$payload = self::issue_lines( $episode, $context['lines'], $date, $actor, (int) $request['request_id'] );
+			self::event( $episode['episode_id'], 'received', $actor, $payload );
+		}
+		self::flag( $employee['employee_no'], 1 );
+		self::checked( self::db()->update( UMS_DB_Request::table(), array( 'maternity_episode_id' => $episode['episode_id'] ), array( 'request_id' => $request['request_id'] ) ) );
+		return $employee['employee_no'];
+	}
+
+	public static function maternity_details( $details ) {
+		return array_values( array_filter( $details, function ( $detail ) {
+			$item = UMS_DB_Inventory::get_by_id( $detail['item_id'] );
+			return $item && self::product_group( $item ) !== '';
+		} ) );
+	}
+
+	public static function is_paid_request( $reason, $payment ) {
+		return (int) $reason === 3 && in_array( (int) $payment, array( 1, 2 ), true );
+	}
+
+	/** Existing reason/payment controls determine purchase versus free maternity issue. */
+	public static function validate_request( $code, $details, $reason, $payment ) {
+		$maternity = self::maternity_details( $details );
+		if ( ! $maternity ) { return null; }
+		if ( self::is_paid_request( $reason, $payment ) ) {
+			$error = self::validate_paid_request( $maternity, $reason, $payment );
+			if ( $error !== '' ) { throw new RuntimeException( $error ); }
+			return self::request_context( $code, $maternity, null, '', false, false );
+		}
+		if ( ! in_array( (int) $reason, array( 1, 2 ), true ) ) { throw new RuntimeException( 'Đồ bầu không áp dụng tạm ứng kỳ định kỳ. Cấp trong định mức chọn lý do 1 hoặc 2; mua thêm chọn thanh toán qua lương hoặc trực tiếp.' ); }
+		return self::request_context( $code, $maternity );
 	}
 
 	public static function finish( $id, $date, $actor ) {
 		$date = self::date( $date );
 		$code = '';
 		self::change( $id, 'returned', $actor, function ( $episode ) use ( $date, &$code ) {
-			$balance = self::balance( $episode );
+			$balance = self::balance( $episode, true );
 			if ( $date < $balance['last_received_on'] || $date > current_time( 'Y-m-d' ) ) { throw new RuntimeException( 'Ngày trở lại làm việc không hợp lệ.' ); }
 			self::checked( self::db()->update( self::table(), array( 'returned_on' => $date, 'active_employee_no' => null ), array( 'episode_id' => $episode['episode_id'] ) ) );
 			$code = $episode['employee_no'];
@@ -312,7 +447,7 @@ class UMS_Maternity extends UMS_DB_Base {
 			$item = UMS_DB_Inventory::get_by_id( $line['item_id'] );
 			if ( ! $item || self::product_group( $item ) === '' ) { continue; }
 			if ( (int) $reason !== 3 || ! in_array( (int) $payment, array( 1, 2 ), true ) ) {
-				return 'Đồ bầu miễn phí phải do HCNS duyệt tại mục Đồng phục bầu. Mua thêm chọn lý do 3 và thanh toán qua lương hoặc trực tiếp, không tạm ứng.';
+				return 'Đồ bầu trong định mức áp dụng lý do 1 hoặc 2. Mua thêm chọn lý do 3 và thanh toán qua lương hoặc trực tiếp, không tạm ứng.';
 			}
 			if ( (float) $item['base_price'] <= 0 || abs( (float) $line['price_at_request'] - (float) $item['base_price'] * (int) $line['quantity'] ) > 0.01 ) {
 				return 'Giá đồ bầu chưa được cập nhật hoặc đã thay đổi. Cần dùng đủ 100% đơn giá hiện hành do phòng Mua cung cấp.';

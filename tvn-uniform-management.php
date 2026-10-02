@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Hệ thống Quản lý Đồng phục UMS
  * Description:       Quản lý định mức, tồn kho và luồng phê duyệt cấp phát đồng phục điện tử.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Author:            UMS Team
  * Text Domain:       tvn-ums
  */
@@ -13,65 +13,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'UMS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'UMS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'UMS_ORGANIZATION_SYNC_CRON_HOOK', 'ums_daily_organization_sync' );
 
-/**
- * Đăng ký tác vụ đồng bộ sơ đồ tổ chức một lần mỗi ngày.
- */
-function ums_schedule_daily_organization_sync() {
-    if ( wp_next_scheduled( UMS_ORGANIZATION_SYNC_CRON_HOOK ) ) {
-        wp_clear_scheduled_hook( UMS_ORGANIZATION_SYNC_CRON_HOOK );
+// Legacy employee-return reminders stay disabled independently of connectors.
+add_action( 'init', function () {
+    if ( wp_next_scheduled( 'ums_daily_employee_exit_reminder' ) ) {
+        wp_clear_scheduled_hook( 'ums_daily_employee_exit_reminder' );
     }
-    ums_ensure_sheet_sync_token();
-    ums_ensure_auto_sync_bridge_token();
-
-	// Remove the legacy month-end return reminder schedule from older versions.
-	if ( wp_next_scheduled( 'ums_daily_employee_exit_reminder' ) ) {
-		wp_clear_scheduled_hook( 'ums_daily_employee_exit_reminder' );
-	}
-}
-
-/**
- * Tạo token nhận dữ liệu Google Sheet nếu hệ thống chưa có.
- */
-function ums_ensure_sheet_sync_token() {
-    $token = (string) get_option( 'ums_sheet_sync_token', '' );
-    if ( strlen( $token ) >= 32 ) {
-        return $token;
-    }
-
-    $token = wp_generate_password( 48, false, false );
-    update_option( 'ums_sheet_sync_token', $token, false );
-
-    return $token;
-}
-
-/**
- * Tạo token cho bridge tự động nội bộ nếu hệ thống chưa có.
- */
-function ums_ensure_auto_sync_bridge_token() {
-    $token = (string) get_option( 'ums_auto_sync_bridge_token', '' );
-    if ( strlen( $token ) >= 32 ) {
-        return $token;
-    }
-
-    $token = wp_generate_password( 48, false, false );
-    update_option( 'ums_auto_sync_bridge_token', $token, false );
-
-    return $token;
-}
-
-/**
- * Xóa lịch nền khi plugin bị vô hiệu hóa.
- */
-function ums_clear_daily_organization_sync() {
-    wp_clear_scheduled_hook( UMS_ORGANIZATION_SYNC_CRON_HOOK );
-	wp_clear_scheduled_hook( 'ums_daily_employee_exit_reminder' );
-}
-
-register_activation_hook( __FILE__, 'ums_schedule_daily_organization_sync' );
-register_deactivation_hook( __FILE__, 'ums_clear_daily_organization_sync' );
-add_action( 'init', 'ums_schedule_daily_organization_sync' );
+} );
 
 /**
  * Khởi tạo và nạp các phân hệ chính của hệ thống
@@ -106,9 +54,6 @@ function run_tvn_uniform_management() {
     // 2. Nạp helper chứa các hàm tiện ích
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-helper.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-password-sync.php';
-    require_once UMS_PLUGIN_DIR . 'includes/class-ums-organization-sync.php';
-    require_once UMS_PLUGIN_DIR . 'includes/class-ums-sheet-user-sync.php';
-    require_once UMS_PLUGIN_DIR . 'includes/class-ums-auto-sync-bridge.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-department-import.php';
     require_once UMS_PLUGIN_DIR . 'includes/class-ums-xlsx-reader.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-annual-allowance-import.php';
@@ -120,7 +65,6 @@ function run_tvn_uniform_management() {
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-inventory-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-newcomer-inventory-out-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-issue-registration-import.php';
-	require_once UMS_PLUGIN_DIR . 'includes/class-ums-allocation-sheet-sync.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-distribution-email.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-uniform-material-import.php';
 	require_once UMS_PLUGIN_DIR . 'includes/class-ums-pr-calculator.php';
@@ -129,10 +73,6 @@ function run_tvn_uniform_management() {
 	UMS_DB_Approval_Concurrent_Assignment::ensure_schema();
 	UMS_DB_Allocation_Calculation::ensure_schema();
 	UMS_Maternity::ensure_schema();
-    UMS_Sheet_User_Sync::init();
-    UMS_Organization_Sync::init();
-	UMS_Allocation_Sheet_Sync::init();
-    UMS_Auto_Sync_Bridge::init();
     
     // 3. Kích hoạt phân hệ Admin
     if ( is_admin() ) {
@@ -145,6 +85,9 @@ function run_tvn_uniform_management() {
 
     require_once UMS_PLUGIN_DIR . 'user/class-ums-user.php';
     UMS_User::init();
+
+    // Published only after the local data, business and admin APIs are available.
+    define( 'UMS_SHEETS_API_VERSION', '1.0.0' );
 }
 add_action( 'plugins_loaded', 'run_tvn_uniform_management' );
 

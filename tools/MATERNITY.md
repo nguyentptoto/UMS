@@ -5,6 +5,40 @@ administration modules). No email is sent by this module.
 
 ## Workflow
 
+### Employee Requests
+
+The existing request form and its three reasons remain unchanged. Products
+are detected on the server; no maternity checkbox, new reason or request type
+is added. Apply the rules to the recipient, not the employee creating the form.
+
+- Reasons 1 and 2: maternity lines use the free pregnancy allowance, not a
+  regular periodic advance. Check cumulative 3/3/3/1 limits on submission and
+  again at final approval, including quantities awaiting receipt under a
+  separate HCNS approval. Employees may request the unused balance later.
+- Reason 3, salary or direct payment: a purchase at full current price. This
+  also identifies the employee as pregnant, but never consumes the free
+  allowance or creates/extends a periodic lock. Maternity advances remain
+  disallowed; ordinary products retain the existing reason/payment rules.
+- Submitting or partially approving a request does not create an episode,
+  change maternity status, or issue stock. On successful final approval, reuse
+  the open episode or create one automatically and set `is_maternity`.
+- The existing final-approval operation also issues stock. Its local date is
+  therefore the free receipt date and determines the blocked cycle. This is
+  not a separate physical pickup confirmation. For manual HCNS issues, the
+  explicitly entered actual receipt date still applies.
+- Final approval commits the request, episode, flag, receipt/purchase audit
+  and factory stock movements in one transaction. Mixed regular/maternity
+  requests are supported. A failure rolls back the entire operation; repeating
+  a completed approval does not issue stock or consume allowance twice.
+- Requests link to `maternity_episode_id`. Requests from a closed pregnancy
+  cannot silently reopen it or move into a new pregnancy. History records the
+  source request ID and warehouse. Existing completed requests are not replayed.
+
+### Manual HCNS Processing
+
+The HCNS module remains available; automatic request processing does not
+require a prior manual registration.
+
 1. Register an active female employee from the TVN organization chart and the
    date HCNS recorded the pregnancy. Only one open episode per employee.
 2. Approve actual products/sizes and quantities, with independent caps of
@@ -47,20 +81,27 @@ products have explicit maternity names. They are excluded from regular
 periodic allowance products.
 
 Extra purchases use the existing request/approval flow: reason 3, salary or
-direct payment. Advance payment and free reasons are rejected for maternity
-products. Full positive inventory `base_price` is required and rechecked on
-issue. Purchasing staff must maintain that price. Purchases do not activate or
-extend the free-issue period lock. Manual employee issues of maternity goods
-must use the maternity receipt workflow or a valid paid request.
+direct payment. Full positive inventory `base_price` is required and rechecked
+on issue. Purchasing staff must maintain that price. Purchases register an
+episode if needed, but do not activate or extend the free-issue period lock.
+Manual employee issues of maternity goods must use the maternity receipt
+workflow or a valid paid request.
 
 ## Storage and Checks
 
 `UMS_Maternity::ensure_schema()` creates two InnoDB tables with the configured
 WordPress prefix: `uniform_maternity_episodes`, `uniform_maternity_events`.
+It also adds nullable `maternity_episode_id` to `uniform_requests`, guarded by
+the `ums_maternity_request_schema` option. No new request reason is stored.
 Existing inventory, personnel and allowance rows are not migrated or deleted.
 Previously recorded maternity flags alone do not invent a historical receipt.
 
 Run `php tools/test-maternity.php` for isolated SQLite-backed tests. They cover
 calendar boundaries, caps, episode lifecycle, receipt rollback/idempotency,
-warehouse isolation, paid purchases, report and Sheet preview integration.
+warehouse isolation, paid purchases, report and Sheet preview integration,
+automatic final approval, cumulative pending requests, mixed-request rollback,
+HCNS reservations, and stale requests after a pregnancy ends.
 They do not replace a WordPress/MySQL deployment smoke test or browser testing.
+The test adapter strips `FOR UPDATE`; real concurrent InnoDB locking still
+requires a MySQL integration test. Production final approval uses locking reads
+for the episode and ledger so a waiting transaction cannot use a stale snapshot.

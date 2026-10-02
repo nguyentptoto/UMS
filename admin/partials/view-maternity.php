@@ -34,7 +34,7 @@
 				<td><?php echo esc_html( $factories[ $row['factory_code'] ] ?? $row['factory_code'] ); ?></td>
 				<td><?php echo esc_html( $row['notified_on'] ); ?></td><td><?php echo esc_html( $row['received_on'] ?: '-' ); ?></td>
 				<td><?php echo esc_html( $row['blocked_month'] ? 'T' . $row['blocked_month'] . '/' . $row['blocked_year'] : '-' ); ?></td>
-				<td><?php echo esc_html( $row['returned_on'] ? 'Đã trở lại làm việc' : ( UMS_Maternity::pending_items( $row ) ? 'Đã duyệt, chờ nhận' : ( $row['received_on'] ? 'Đã nhận đồ' : 'Chờ duyệt' ) ) ); ?></td>
+				<td><?php echo esc_html( $row['returned_on'] ? 'Đã trở lại làm việc' : ( UMS_Maternity::pending_items( $row ) ? 'Đã duyệt, chờ nhận' : ( $row['received_on'] ? 'Đã nhận đồ' : 'Chưa cấp miễn phí' ) ) ); ?></td>
 				<td><a href="<?php echo esc_url( add_query_arg( array( 'page' => 'tvn-ums-maternity', 'episode_id' => $row['episode_id'] ), admin_url( 'admin.php' ) ) . '#ums-maternity-detail' ); ?>">Chi tiết</a></td>
 			</tr><?php endforeach; ?></tbody>
 		</table></div>
@@ -85,11 +85,13 @@
 		<div class="ums-table-scroll"><table class="widefat striped"><thead><tr><th>Thời điểm</th><th>Thao tác</th><th>Người xử lý</th><th>Nội dung</th></tr></thead><tbody>
 		<?php foreach ( $events as $event ) :
 			$actor = get_userdata( $event['actor_id'] );
-			$actions = array( 'created' => 'Ghi nhận thai kỳ', 'approved' => 'Duyệt số lượng', 'received' => 'Xác nhận nhận đồ', 'returned' => 'Trở lại làm việc' );
+			$actions = array( 'created' => 'Ghi nhận thai kỳ', 'approved' => 'Duyệt số lượng', 'received' => 'Xác nhận nhận đồ', 'purchased' => 'Mua thêm đồ bầu', 'returned' => 'Trở lại làm việc' );
 			$payload = json_decode( $event['payload'], true );
 			$notes = array();
+			if ( ! empty( $payload['request_id'] ) ) { $notes[] = 'Phiếu #' . (int) $payload['request_id']; }
+			if ( ! empty( $payload['factory_code'] ) ) { $notes[] = 'Kho: ' . ( $factories[ $payload['factory_code'] ] ?? $payload['factory_code'] ); }
 			foreach ( $event['action'] === 'approved' ? (array) $payload : (array) ( $payload['items'] ?? array() ) as $line ) { $notes[] = ( $line['product'] ?? '' ) . ' / ' . ( $line['size'] ?? '' ) . ': ' . ( $line['quantity'] ?? 0 ); }
-			foreach ( array( 'notified_on', 'received_on', 'returned_on' ) as $field ) { if ( isset( $payload[ $field ] ) ) { $notes[] = $payload[ $field ]; } }
+			foreach ( array( 'notified_on', 'received_on', 'purchased_on', 'returned_on' ) as $field ) { if ( isset( $payload[ $field ] ) ) { $notes[] = $payload[ $field ]; } }
 		?>
 			<tr><td><?php echo esc_html( $event['created_at'] ); ?></td><td><?php echo esc_html( $actions[ $event['action'] ] ?? $event['action'] ); ?></td><td><?php echo esc_html( $actor ? $actor->display_name : '#' . $event['actor_id'] ); ?></td><td><?php echo esc_html( implode( '; ', $notes ) ); ?></td></tr>
 		<?php endforeach; ?></tbody></table></div>

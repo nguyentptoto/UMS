@@ -2,6 +2,20 @@
 
 UMS là plugin WordPress quản lý hồ sơ nhân sự, phòng ban, chức danh, nhà máy, hợp đồng, danh mục sản phẩm đồng phục, tổng kho, định mức cấp phát hằng năm, phiếu yêu cầu cấp phát và luồng duyệt động theo phòng ban.
 
+## Google Sheets Connector (UMS 1.1.0)
+
+Các kết nối Google Sheet được tách thành plugin **UMS Google Sheets Connector**.
+Cài plugin này vào `wp-content/plugins/ums-google-sheets-connector/`, ngang hàng
+với `UMS/`, rồi kích hoạt trong WordPress. Link Sheet, token và API cũ được giữ
+nguyên. Tắt Connector không xóa dữ liệu đã đồng bộ; bảng nhân sự, định mức, kho,
+phiếu yêu cầu và import Excel vẫn thuộc UMS.
+
+Mã nguồn phát triển của plugin mới nằm tại `packages/ums-google-sheets-connector/`.
+Hướng dẫn nâng cấp, kiểm thử và quay lại bản cũ nằm trong README của thư mục đó.
+Chạy `php tools/build-plugin-packages.php` để tạo hai ZIP riêng trong `dist/`.
+Gói UMS không chứa source Connector, công cụ phát triển hoặc script có cấu hình
+token tại máy. Không phát hành nguyên repository như một gói plugin.
+
 ## Nguyên Tắc Database
 
 Toàn bộ cấu trúc bảng nằm trong `ums.sql`.
@@ -319,7 +333,7 @@ Plugin cung cấp receiver `POST /wp-json/ums/v1/sync-organization`. Endpoint x�
 
 Do Google Workspace có SSO và WordPress chạy nội bộ, hệ thống dùng mô hình Popup Bridge thay vì GAS trigger server-to-server. Admin bấm `Đồng bộ từ Google Sheet` trong trang `Sơ đồ tổ chức TVN`, plugin mở Google Apps Script Web App bằng `window.open()`, popup đọc Sheet bằng phiên SSO trình duyệt rồi `fetch()` JSON về endpoint nội bộ của WordPress. Nếu trình duyệt chặn POST trực tiếp từ popup, popup chuyển payload về trang Admin bằng `postMessage` để Admin POST cùng-origin vào UMS.
 
-Google Apps Script mẫu gồm `ums-organization-sync.gs` và `UmsTvnOrgIndex.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/`.
+Google Apps Script mẫu gồm `ums-organization-sync.gs` và `UmsTvnOrgIndex.html`, hướng dẫn cài đặt nằm tại `integrations/google-apps-script/` của plugin Connector.
 
 ### Auto Sync 1 Lần/Ngày Không Cần Đăng Nhập WP Admin
 
@@ -378,7 +392,6 @@ UMS/
 |-- includes/
 |   |-- class-ums-helper.php
 |   |-- class-ums-password-sync.php
-|   |-- class-ums-organization-sync.php
 |   `-- db/
 |       |-- class-ums-db-annual-allowance.php
 |       |-- class-ums-db-approval-flow.php

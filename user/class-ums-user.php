@@ -206,9 +206,10 @@ class UMS_User {
         }
 
         $edit_request_id = isset( $_POST['request_id'] ) ? absint( $_POST['request_id'] ) : 0;
-		$maternity_error = UMS_Maternity::validate_paid_request( $details, $reason_type, $payment_method );
-		if ( $maternity_error !== '' ) {
-			self::redirect_with_notice( $redirect_url, 'request_allowance_error', array( 'ums_notice_extra' => $maternity_error ) );
+		try {
+			$maternity_context = UMS_Maternity::validate_request( $target_profile['employee_code'], $details, $reason_type, $payment_method );
+		} catch ( Throwable $error ) {
+			self::redirect_with_notice( $redirect_url, 'request_allowance_error', array( 'ums_notice_extra' => $error->getMessage() ) );
 		}
 
 		$flows               = self::apply_request_organization_scope( $flows, $target_profile );
@@ -237,6 +238,9 @@ class UMS_User {
             if ( ! self::can_edit_created_request( $editing_request, $current_user_id ) ) {
                 self::redirect_with_notice( $redirect_url, 'request_not_editable' );
             }
+			if ( $maternity_context || ! empty( $editing_request['maternity_episode_id'] ) ) {
+				$request_data['maternity_episode_id'] = $maternity_context ? $maternity_context['episode_id'] : null;
+			}
 			if ( ! empty( $editing_request['approval_flow_snapshot'] ) ) {
 				$request_data['approval_flow_snapshot'] = $editing_request['approval_flow_snapshot'];
 				$flows = self::get_request_approval_flows( $editing_request, $flows );
@@ -252,6 +256,7 @@ class UMS_User {
             self::redirect_with_notice( $redirect_url, 'request_updated', array( 'request_id' => $edit_request_id, 'ums_page' => 'my-requests' ) );
         }
 
+		if ( $maternity_context ) { $request_data['maternity_episode_id'] = $maternity_context['episode_id']; }
         $request_id = UMS_DB_Request::insert_with_details( $request_data, $details );
 
         if ( ! $request_id ) {
@@ -347,7 +352,10 @@ class UMS_User {
             }
         }
 
-        self::redirect_with_notice( $redirect_url, ! $updated ? 'request_stock_error' : 'request_approved', array( 'ums_page' => 'my-requests' ) );
+        self::redirect_with_notice( $redirect_url, ! $updated ? 'request_stock_error' : 'request_approved', array(
+			'ums_page' => 'my-requests',
+			'ums_notice_extra' => ! $updated && $next_status === 'completed' ? UMS_DB_Request::get_completion_error() : '',
+		) );
     }
 
     public static function handle_reject_uniform_request() {
@@ -1093,7 +1101,7 @@ class UMS_User {
             'request_not_editable'    => array( 'error', 'Phiếu này không còn ở trạng thái cho phép sửa hoặc xóa.' ),
             'request_not_approvable'  => array( 'error', 'Bạn không có quyền duyệt phiếu ở bước hiện tại.' ),
             'request_reject_reason_required' => array( 'error', 'Vui lòng nhập lý do từ chối phiếu.' ),
-            'request_stock_error'     => array( 'error', 'Không thể ghi nhận xuất kho. Vui lòng kiểm tra tồn kho hoặc lịch sử xuất kho của phiếu.' ),
+            'request_stock_error'     => array( 'error', 'Chưa thể hoàn tất phiếu. Vui lòng kiểm tra tồn kho, lịch sử xuất kho và định mức đồ bầu còn lại trong thai kỳ (nếu có).' ),
             'request_invalid_profile' => array( 'error', 'Hồ sơ của bạn không hợp lệ hoặc tài khoản đang bị khóa.' ),
 			'request_no_permission'   => array( 'error', 'Tài khoản của bạn không có quyền tạo yêu cầu.' ),
 			'request_flow_missing'    => array( 'error', 'Không tìm thấy bước duyệt hợp lệ cho phòng ban và nhà máy của phiếu. Vui lòng liên hệ quản trị viên luồng duyệt.' ),

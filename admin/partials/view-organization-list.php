@@ -7,7 +7,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 $page_url = admin_url( 'admin.php?page=tvn-uniform-management' );
-$auto_start_sync = isset( $_GET['ums_auto_sync'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['ums_auto_sync'] ) );
 $grid_columns = array(
 	array( 'text' => 'STT', 'datafield' => 'sheet_stt', 'width' => 80 ),
 	array( 'text' => 'Mã nhân viên', 'datafield' => 'employee_no', 'width' => 130 ),
@@ -66,39 +65,17 @@ $grid_fields = array(
 						· Đồng bộ gần nhất: <?php echo esc_html( mysql2date( 'd/m/Y H:i:s', $last_synced_at ) ); ?>
 					<?php endif; ?>
 				</p>
-				<?php if ( ! empty( $cron_result['ended_at'] ) ) : ?>
-					<p class="description">
-						Lần đồng bộ Sheet gần nhất:
-						<?php echo esc_html( mysql2date( 'd/m/Y H:i:s', $cron_result['ended_at'] ) ); ?>
-						· Đã nhận <?php echo esc_html( number_format_i18n( $cron_result['total'] ?? 0 ) ); ?> nhân sự từ Google Sheet
-					</p>
-				<?php endif; ?>
+				<?php do_action( 'ums_organization_sync_summary' ); ?>
 			</div>
 
-			<button
-				type="button"
-				class="button button-primary ums-start-popup-sync"
-				id="ums-start-sheet-sync"
-				data-apps-script-url="<?php echo esc_attr( $apps_script_url ); ?>"
-				data-rest-endpoint="<?php echo esc_attr( $rest_endpoint ); ?>"
-				data-sync-token="<?php echo esc_attr( $sync_token ); ?>"
-				data-sync-mode="organization"
-				data-auto-start="<?php echo $auto_start_sync ? '1' : '0'; ?>"
-				<?php disabled( ! $table_ready || $apps_script_url === '' ); ?>
-			>
-				Đồng bộ từ Google Sheet
-			</button>
+			<?php do_action( 'ums_organization_sync_button', $table_ready ); ?>
 		</div>
 
-		<?php if ( $apps_script_url === '' ) : ?>
-			<div class="notice notice-warning inline">
-				<p>Chưa cấu hình Google Apps Script Web App URL. Hãy cấu hình tại menu <strong>Đồng bộ Sheet</strong> trước.</p>
-			</div>
-		<?php endif; ?>
-
-		<div class="ums-sync-log" id="ums-sheet-sync-log" aria-live="polite">
-			<div class="ums-sync-log-line">Sẵn sàng đồng bộ sơ đồ tổ chức từ Sheet Danh sách CNV.</div>
-		</div>
+		<?php if ( has_action( 'ums_organization_sync_status' ) ) {
+			do_action( 'ums_organization_sync_status' );
+		} else { ?>
+			<div class="notice notice-warning inline"><p>Chưa kích hoạt UMS Google Sheets Connector. Dữ liệu đã đồng bộ vẫn được giữ nguyên.</p></div>
+		<?php } ?>
 
 		<form method="get" class="ums-filter-bar ums-organization-filters">
 			<input type="hidden" name="page" value="tvn-uniform-management">
